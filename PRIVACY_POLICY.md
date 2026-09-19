@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective date:** September 15, 2026 (updated for Reddit V3 round 12; updated September 17, 2026 for the X V3 tweet-data fallback chain and the Arctic Shift search backup)
+**Effective date:** September 15, 2026 (updated for Reddit V3 round 12; updated September 17, 2026 for the X V3 tweet-data fallback chain and the Arctic Shift search backup; updated September 20, 2026 for the round-31 feed-token .json probe gate)
 **Applies to:** the *News Express* / *Citlali News* X (Twitter) + Reddit → Discord monitor
 ("the Service"), an open-source, self-hosted automation tool.
 
@@ -64,7 +64,7 @@ public URL being looked up):
 | **Arctic Shift** (arctic-shift.photon-reddit.com) | Reddit V3 archive: post-lookup JSON for crosspost originals, and — only for subreddits that returned no new RSS posts — one `/api/posts/search` per missing subreddit (public post data only, 48-hour window); soft-fails back to the RSS path on any error | https://arctic-shift.photon-reddit.com |
 | **redditez.com** (Reddit V1 default mirror) | No direct contact: the Service only *constructs* the mirror link from the public post path; **Discord's servers** fetch that URL to render the unfurled embed | https://www.redditez.com |
 | **embeddit.deltandy.me / vxreddit.com** (only if you switch `REDDIT_MIRROR`) | Same as above — link construction only; Discord fetches the mirror when rendering. Both are independent community projects, unaffiliated with this project | https://embeddit.deltandy.me |
-| **reddit.com** | Public subreddit RSS — all tracked subreddits in **one combined feed request per run** (`/r/a+b+c/new.rss?limit=100`), optionally carrying your personal feed token (sent only to reddit.com); plus per-post `.json` lookups in Reddit V3 (OAuth app token, or the feed token as a best-effort workaround) — public post data + public top-level comments only | https://www.reddit.com/policies/privacy-policy |
+| **reddit.com** | Public subreddit RSS — all tracked subreddits in **one combined feed request per run** (`/r/a+b+c/new.rss?limit=100`), optionally carrying your personal feed token (sent only to reddit.com); plus per-post `.json` lookups in Reddit V3 (OAuth app token when an app is configured, or the feed token as a best-effort workaround — round 31: only when an app exists or `REDDIT_JSON_PROBE=force`) — public post data + public top-level comments only | https://www.reddit.com/policies/privacy-policy |
 | **i.redd.it / preview.redd.it / v.redd.it** (Reddit's own CDNs) | V3 media verification only: one short HTTP range probe per candidate media file (images/videos) to check it exists and is playable; the signed `packaged-media.redd.it` masters (which expire in hours) are never used | https://www.reddit.com/policies/privacy-policy |
 | **proxy.embedez.com / vxreddit.com** | V3 video fallback only, and only when Reddit's own `v.redd.it` DASH files are unavailable: the *public video file URL* (no account data) is passed so they can return a muxed (video+audio) mp4 for the card | https://embedez.com / per-instance |
 | **seaof.glass** (quartz) | Only if you enable `YOUTUBE_MEDIA_EMBED=1` (default off): one range probe per YouTube video id to see if a playable mp4 exists — the video id only | per-service |

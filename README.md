@@ -113,6 +113,7 @@ and to [@dangered wolf](https://github.com/dangeredwolf), creator and lead devel
 ├── posted_tweets.json             # X cache (auto-committed) — start with: []
 ├── posted_reddit.json             # Reddit cache (auto-committed) — start with: []
 ├── proxy_health.json              # proxy warm-up results (auto-committed, round 13)
+├── pending_reddit.json            # Reddit re-check cache: skipped posts (auto-committed, round 30)
 ├── PRIVACY_POLICY.md              # privacy policy (the bot collects no personal data)
 ├── TERMS_OF_SERVICE.md            # terms of service / acceptable use
 ├── requirements.txt               # feedparser, aiohttp, python-dotenv
@@ -673,7 +674,8 @@ Discord channel.
     that were wrong without spammng the channel.
 * **Environment switches** (all optional — sane defaults without them):
   `YOUTUBE_MEDIA_EMBED` (default off), `REDDIT_OP_COMMENT` (default on),
-  `DISCOHOOK_PREVIEW` (default on), `FEEDTOKEN_JSON_STAGGER` (default 65 s).
+  `DISCOHOOK_PREVIEW` (default on), `FEEDTOKEN_JSON_STAGGER` (default 65 s),
+  `REDDIT_JSON_PROBE` (default `auto` — see the round-31 section).
 
 ### 🆕 Reddit V3 — round 13 (2026-09-16): proxy media services
 
@@ -967,6 +969,47 @@ card and run the explicit test post without dry-run. Test posts bypass dedup
 and the archive completeness gate, so do not assume a successful run proves
 all expected media were retrieved.
 
+### 🆕 Reddit V3 — round 31 (2026-09-20): the feed-token `.json` probe is skipped when there's no OAuth app
+
+**Why:** since round 12, every run that found new posts attempted each post's JSON once with the
+personal `REDDIT_FEED_TOKEN` (`www.reddit.com/comments/<id>.json?limit=25&raw_json=1&feed=…`,
+65 s `FEEDTOKEN_JSON_STAGGER` wait between attempts) — a FULL-MODE fallback for the no-OAuth-app
+case. Live-verified 2026-09-20: Reddit 403s that `.json` route from datacenter IPs (the feed
+token's documented role is the RSS rate tier — reddit.com's own docs: "For RSS, you can use the
+feed token … to get a higher rate limit"), so without an OAuth app the probe was 65 s of
+guaranteed 403 log noise per run with new posts (the first attempt; a 403 is remembered for the
+rest of the run). Steady-state runs (no new posts) never reached it — only runs with new posts
+paid.
+
+**What changed:** the probe now runs only when it can possibly work:
+
+| `REDDIT_JSON_PROBE` (repo **Variable**, optional — unset = `auto`) | Behavior |
+|---|---|
+| `auto` (default) | the probe runs **only when BOTH** `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET` are set — a real Reddit app exists. Without an app: **never** (no 65 s wait, no 403 log line — the code path is skipped). With a working app: the OAuth path serves the JSON anyway (no sleep) — the probe is only the legacy fallback if the app is misconfigured. |
+| `force` | legacy behavior — always try once per run with new posts (65 s wait) |
+| `off` | never, even with an app |
+
+**FULL MODE later = two secrets, zero code change.** `reddit_monitor.yml` now maps
+`REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` **live** (empty secrets are harmless — the script
+requires both non-empty). When Reddit's approval form (Responsible Builder Policy) accepts your
+app, set the two repo secrets and the next run is FULL MODE — OAuth JSON for every post:
+all photos, stats, 💬 OP comment, true crosspost embeds. In `auto` mode the feed-token probe
+also switches on as a harmless fallback.
+
+**Numbers (2026-09-20 live audit):** 18-post first run 213 s → ~148 s · 3-post run 121 s →
+~56 s · steady-state zero-post run 7 s → 7 s (untouched). The first Discord post in a run with
+new posts arrives ~65 s earlier.
+
+**Startup log (native mode, no app):** `No Reddit OAuth app secrets — V3 uses native RSS data;
+the feed token .json FULL-MODE probe is skipped (no OAuth app secrets — datacenter IPs 403 the
+.json route anyway, so the probe would only cost 65 s + a 403 log line per run with new posts).
+Set REDDIT_JSON_PROBE=force to re-enable, or add REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET for
+FULL MODE (reddit.com/prefs/apps -> type 'script') — no code change.`
+
+**Nothing else changed:** RSS (combined feed + fallbacks), the proxy media chain, the Arctic
+archive backup, YouTube, crossposts, the liveness/removal gates and the `pending_reddit.json`
+re-check (round 30) all run exactly as before.
+
 ### 🧪 Reddit V3 — final testing & verification procedure (round 12)
 
 **Step 0 — one-time: archive the OLD Reddit V1/V2 workflow (if previously enabled).**
@@ -1039,7 +1082,7 @@ To switch to V1 or V2, change the run line in `.github/workflows/reddit_monitor.
 | `REDDIT_FEED_TOKEN` *(optional — **recommended**)* | Your personal Reddit **feed token** (round 9): old.reddit.com → your username → **Preferences** (or `old.reddit.com/prefs/feeds`) → any feed link ends with `?feed=<token>` — copy just the token. Moves RSS requests to the logged-in rate tier, making multi-sub monitoring bulletproof. See the round-9 section below. |
 | `REDDIT_MIRROR` *(optional — set as a repo **Variable**, not a Secret)* | **V1 only.** Embed mirror host: `redditez.com` (default), `embeddit.deltandy.me`, or `vxreddit.com` |
 | `EMBEDEZ_API_KEY` | **V2 only** — from your embedez.com dashboard |
-| `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` *(optional — V3)* | Reddit **script app** (reddit.com/prefs/apps → type "script" → redirect `http://localhost`). Enables V3 **FULL MODE** reliably (all photos, stats, OP comment, true crosspost embeds) via OAuth. 2026 note: new API access may require Reddit's approval form — V3 works without it (feed-token `.json` attempt, then native mode). |
+| `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` *(optional — V3)* | Reddit **script app** (reddit.com/prefs/apps → type "script" → redirect `http://localhost`). Enables V3 **FULL MODE** reliably (all photos, stats, OP comment, true crosspost embeds) via OAuth. 2026 note: new API access may require Reddit's approval form — V3 works without it (native mode; the feed-token `.json` probe is skipped while no app exists — round 31). The workflow maps both secrets live: drop them in whenever you get the app and FULL MODE turns on with no code change. |
 | `DISCORD_WEBHOOK_URL` *(optional)* | Catch-all fallback |
 | `NITTER_RSS_TOKEN` *(optional — repo **Secret**, not a Variable)* | miningtcup's DogWAF token — unlocks the token-gated `nitter.miningtcup.me` RSS instance (X monitor) and `redlib.miningtcup.me` (Reddit V3, appended as `?token=`). Stored as a secret because GitHub masks secrets in every log line but prints variables in plain text. Empty = those instances just log a bot-check miss and the chain moves on (round-12 / round-24 sections). |
 
@@ -1052,11 +1095,16 @@ with none of them set):
 | `REDDIT_OP_COMMENT` | on | `0` = hide the 💬 OP comment line (FULL MODE) |
 | `DISCOHOOK_PREVIEW` | on | `0` = don't create/log the per-card Discohook share-link preview |
 | `FEEDTOKEN_JSON_STAGGER` | `65` | seconds between feed-token `.json` attempts (lower only if your token reliably works there) |
+| `REDDIT_JSON_PROBE` | `auto` | when the feed-token `.json` FULL-MODE probe runs: `auto` (default) = only when BOTH `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` exist; `force` = always try (legacy, 65 s per run with new posts); `off` = never (round 31) |
 
 ### The workflow (`.github/workflows/reddit_monitor.yml`)
 
 ```yaml
 name: Reddit Feed Monitor
+
+concurrency:                  # P0 double-post fix (2026-09-19): one run per branch
+  group: check-reddit-${{ github.ref }}
+  cancel-in-progress: false   # a run can sit between "posted" and "cache committed"
 
 on:
   workflow_dispatch:          # allows manual + external-cron triggering
@@ -1107,6 +1155,14 @@ jobs:
           WEBHOOK_REDDIT_WUTHERINGWAVESLEAKS: ${{ secrets.WEBHOOK_REDDIT_WUTHERINGWAVESLEAKS }}
           WEBHOOK_REDDIT_HONKAINEXUSANIMALEAKS: ${{ secrets.WEBHOOK_REDDIT_HONKAINEXUSANIMALEAKS }}
           WEBHOOK_REDDIT_ANANTALEAKS: ${{ secrets.WEBHOOK_REDDIT_ANANTALEAKS }}
+          # OPTIONAL (V3 FULL MODE): Reddit script app — 2026: new API access
+          # may require Reddit's approval form. Round 31: wired LIVE (empty
+          # secrets are harmless); set both = FULL MODE, no code change.
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          # Round 31: feed-token .json FULL-MODE probe — auto (default, only
+          # with the OAuth app above) | force (always, legacy 65 s) | off.
+          REDDIT_JSON_PROBE: ${{ vars.REDDIT_JSON_PROBE }}
         # While testing a new version, point this line at the test copy instead
         # (QUOTES REQUIRED — the folder name has a space):
         #   run: python "testing area/reddit_main_v3.py"
@@ -1115,16 +1171,18 @@ jobs:
         #   run: python "testing area/reddit_main_v2_embedez.py"  <- rich card (EmbedEZ key)
         run: python "testing area/reddit_main_v3.py"   # ← V3 (proxy media + native fallback)
 
-      - name: Commit and push updated caches (posted_reddit.json + proxy_health.json)
+      - name: Commit and push updated caches (posted_reddit.json + proxy_health.json + pending_reddit.json)
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add -f posted_reddit.json proxy_health.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "auto: update posted_reddit.json + proxy_health.json caches" && git push)
+          git add -f posted_reddit.json proxy_health.json pending_reddit.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "auto: update posted_reddit.json + proxy_health.json + pending_reddit.json caches" && git push)
 ```
 
 Create `posted_reddit.json` with `[]` as its initial content (first run posts only the newest item,
-by design). Proxy warm-up states are tracked in `proxy_health.json`.
+by design). Proxy warm-up states are tracked in `proxy_health.json`; skipped posts (removed /
+pending approval / media still missing) wait in `pending_reddit.json` and are re-checked live
+(round 30).
 
 ## 🆕 Reddit behaviors (2026-09-11 update)
 
@@ -1440,6 +1498,7 @@ REDDIT_MIRROR=redditez.com   # optional, V1 only: embeddit.deltandy.me | vxreddi
 EMBEDEZ_API_KEY=ez_...       # Reddit V2 only
 NITTER_RSS_TOKEN=            # optional — unlocks token-gated nitter/redlib instances
 REDDIT_FEED_TOKEN=           # optional (recommended) — old.reddit.com/prefs/feeds, the ?feed= value
+# REDDIT_JSON_PROBE=auto     # round 31: feed-token .json probe — auto | force | off
 ```
 
 Then run any engine:
@@ -1537,6 +1596,47 @@ Then run any engine:
 ---
 
 ## 🗒 Changelog
+
+* **2026-09-20 — Reddit V3 round 31: the feed-token `.json` probe is skipped
+  when there's no OAuth app (65 s of guaranteed 403s removed).** Live
+  2026-09-20 audit: the round-12 FULL-MODE probe (feed token on
+  `comments/<id>.json`, 65 s `FEEDTOKEN_JSON_STAGGER` wait) 403s from
+  datacenter IPs while no Reddit OAuth app exists — 65 s of log noise per
+  run with new posts, never a real fallback. New `REDDIT_JSON_PROBE` repo
+  Variable: `auto` (default) = probe runs only when BOTH `REDDIT_CLIENT_ID`
+  + `REDDIT_CLIENT_SECRET` are set; `force` = legacy always-try (65 s per
+  run with new posts); `off` = never. The workflow now maps the two OAuth
+  secrets LIVE (empty = harmless), so future FULL MODE = just set the two
+  secrets — no code or workflow change. Runs: 213 s → ~148 s (18-post first
+  run), 121 s → ~56 s (3-post run); steady-state zero-post runs (7 s)
+  untouched. 6 new offline smoke checks (probe-mode logic). Nothing else
+  changed: RSS, proxies, Arctic, YouTube, crossposts, liveness/removal
+  gates, pending-cache re-check — all exactly as before. See the round-31
+  section under the Reddit monitor.
+
+* **2026-09-19 — P0 double-post fix (shipped alongside round 29):**
+  `concurrency` guard in both production monitors
+  (`check-reddit-<branch>` / `check-twitter-<branch>`,
+  `cancel-in-progress: false`) — a 2nd trigger now QUEUES and checks out
+  the first run's fresh dedup cache instead of posting the same items
+  twice (2026-09-19 AnantaLeaks_1wkld9d / WutheringWavesLeaks_1wkldhu /
+  AnantaLeaks_1wkle5u double post). Cancelling stays disabled: a run can
+  sit between "Discord posted" and "cache committed".
+
+* **2026-09-19 — Reddit V3 round 30: pending cache — skipped posts are
+  remembered, re-checked live on a 30-minute throttle, and never cached as
+  posted.** Posts skipped for a transient reason (mod-queue pending
+  approval, soft removal that may be restored, media still missing /
+  partial gallery) now land in `pending_reddit.json` (auto-committed with
+  the other caches). The next runs re-check them live — the throttle sits
+  before any network work for that post — with a per-post
+  `PENDING_RECHECK_SECONDS` wait (default 1800 s); a post that posts
+  normally is cleared from the pending cache. Removed/deleted posts stay
+  unposted and un-cached as before. The X cache dump is also sorted, so an
+  identical id set produces byte-identical JSON (no junk cache commits).
+  Offline smoke checks cover the throttle, the four skip gates, the
+  pending save paths, the sorted X cache and the workflow concurrency
+  groups.
 
 * **2026-09-19 — Reddit V3 round 29: crosspost card cleanup — the
   mirror's crosspost notice is no longer the body, one photo listed
