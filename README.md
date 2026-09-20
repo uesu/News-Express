@@ -1010,6 +1010,56 @@ FULL MODE (reddit.com/prefs/apps -> type 'script') — no code change.`
 archive backup, YouTube, crossposts, the liveness/removal gates and the `pending_reddit.json`
 re-check (round 30) all run exactly as before.
 
+### 🆕 Reddit V3 — round 32 (2026-09-20): queued posts can no longer post early + reason-aware
+pending re-check
+
+**Why (all live-verified 2026-09-20):**
+
+1. **Live incident — a queued post was posted early (post `1wl41aj`, "Post is
+   awaiting moderator approval."):** the card hit Discord ~1 cron tick after creation while
+   the post was still in the mod queue. Root cause: the RSS feed delivers queued posts with
+   their **real content** (no banner in the feed text), and the round-20 liveness gate only
+   ran for **Arctic**-sourced posts — an RSS-sourced queued post passed every gate. (Arctic
+   already had the post, `approved_at_utc: null`; all three live proxies 403/404 it — probed
+   the same day — so only the RSS path saw it "clean".)
+2. **The 15–20 min zombie runs:** the round-30 pending cache re-checked ~19 **mod-removed**
+   posts through the full proxy chain (~13 s each) on **every 30-minute** cycle, until the
+   48-hour window expired them.
+3. **The approval delay:** queued posts rode the shared 30-min throttle — approval could sit
+   up to 30 min before Discord.
+
+**The fixes:**
+
+1. **Liveness gate for ALL sourced posts** (was Arctic-only): before posting, a live source
+   (redditez → vxreddit → embeddit, then the redlib post pages) must be able to retrieve the
+   post. For RSS candidates the fallback uses the **redlib post pages only** — the feed cannot
+   verify the feed (a queued post sits in the feed with real content). A queued post is now
+   skipped + **not** cached, re-checked on the short interval, and posted the moment a live
+   source can see it. Cost: +1 live probe per new post (~1–5 s — the per-run warm-up skips
+   dead services). If ALL live sources are down, new posts wait for recovery — safety first.
+2. **Reason-aware re-check** (`_pending_throttle_skip`):
+
+   | Pending reason | Re-check behavior |
+   |---|---|
+   | `removal_notice` / `removal notice` / `title marker` / `whole-body marker` / `removed by moderator` / `removed by moderators/filters` / `deleted by author` (removed / deleted) | **never re-verified** while the entry exists (self-expires at the 48 h window). A removed post cannot change state while removed — if a mod **restores** it, it re-enters via **RSS** with a fresh `updated` stamp, and the RSS path bypasses the skip so the full pipeline posts it (or re-queues it if a notice is still shown). |
+   | `not_live` / `pending approval` / `sources_down` (queued for approval, or a transient all-sources-down miss) | re-checked on the **short** `APPROVAL_RECHECK_SECONDS` interval (default **300 s = 5 min**, repo variable). A newly-approved post then posts on the next cron tick (~3–6 min worst case) instead of up to 30 min. The mod-queue banner itself is now an explicit reason (`pending approval`) — a queued post is never mistaken for live even when a source renders the banner. |
+   | `media_wait` / `partial_gallery` | unchanged round-30 behavior: at most every `PENDING_RECHECK_SECONDS` (30 min). |
+
+**No double posts:** a queued post is skipped and NOT added to the dedup cache; on approval
+it is posted exactly once and leaves the pending state (`posted.add` + `pending.pop`). The
+2026-09-19 P0 concurrency rule (one run per branch; a 2nd run queues and sees the fresh
+`posted_reddit.json`) is unchanged — and with runs back to ~7 s the overlap window that rule
+protects shrinks further.
+
+**Result (same logs):** the one-time first-detection wave (~19 × 13 s ≈ 2 min) is kept —
+that's the safety check proving a post is really removed — every later run returns to the
+~7 s steady state even with a removed-post backlog, and a queued post hits Discord ~one cron
+tick after approval.
+
+**Nothing else changed:** RSS, the proxy chain, Arctic search, YouTube, crossposts, the
+liveness/removal gates and the round-31 probe gate are byte-identical except the lines above.
+Only the "is this post live / is this pending post due for a re-check now?" decisions changed.
+
 ### 🧪 Reddit V3 — final testing & verification procedure (round 12)
 
 **Step 0 — one-time: archive the OLD Reddit V1/V2 workflow (if previously enabled).**
@@ -1596,6 +1646,25 @@ Then run any engine:
 ---
 
 ## 🗒 Changelog
+
+* **2026-09-20 — Reddit V3 round 32: queued posts can no longer post early
+  + reason-aware pending re-check.** Live incident: post `1wl41aj` ("Post
+  is awaiting moderator approval.") was posted to Discord ~1 cron tick
+  after creation while still queued — the RSS feed delivers queued posts
+  with real content, and the round-20 liveness gate was Arctic-only. Now:
+  the liveness gate runs for ALL sourced posts (RSS candidates verify
+  against the proxies + redlib post pages ONLY — the feed cannot verify
+  the feed); the mod-queue banner is an explicit reason (`pending
+  approval`); `not_live` / `pending approval` / `sources_down` re-check on
+  the new short `APPROVAL_RECHECK_SECONDS` interval (default 300 s, repo
+  variable) — a newly-approved post posts on the next cron tick instead of
+  waiting up to 30 min; removed/deleted reasons NEVER re-check (a restored
+  post re-enters via RSS with a fresh `updated` stamp and posts normally —
+  this also kills the 15–20 min zombie runs from the 2026-09-20 logs);
+  `media_wait` / `partial_gallery` keep the round-30 30-min throttle.
+  16 new offline smoke checks. Stdlib only, no new secrets; posting path
+  otherwise byte-identical; the P0 double-post concurrency rule is
+  unchanged. See the round-32 section under the Reddit monitor.
 
 * **2026-09-20 — Reddit V3 round 31: the feed-token `.json` probe is skipped
   when there's no OAuth app (65 s of guaranteed 403s removed).** Live
