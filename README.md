@@ -62,7 +62,7 @@ and to [@dangered wolf](https://github.com/dangeredwolf), creator and lead devel
   **`REDDIT_FEED_TOKEN`** makes it bulletproof. (See the round-9 section under the Reddit monitor.)
 - 🔘 **Link-style buttons** with emoji support (Unicode **or** custom server emoji IDs). Reddit
   buttons: **Read Post → the original `reddit.com` thread**, **▶️ YouTube** (only when a link is
-  detected), **Citlali News**, **Support**.
+  detected), **Citlali News**, **Donate**.
 - 🔗 **Clickable hashtags & mentions (X V2/V3)** — `#tag` → `x.com/hashtag/tag` and `@user` →
   `x.com/user` as masked links, exactly like fxtwitter auto-embeds.
 - 🎬 **Smart video handling (X V2/V3)** — Discord's media gallery can't play large video files, so
@@ -261,7 +261,7 @@ Fixes and formats added after real feed runs:
   to the original post correctly. Same for the `/en` translation fetch.
 * **"↩️ Replying to @user"** small line appears on replies (links to the parent post when known).
 * **New animated button emoji** on X *and* Reddit (per your spec): Read Post
-  `<a:starwardhmm:1472388018689282261>`, Citlali News `<a:starward11:1439878792653832253>`, Support
+  `<a:starwardhmm:1472388018689282261>`, Citlali News `<a:starward11:1439878792653832253>`, Donate
   `<a:starwardfans:1509026327548657914>`.
 * **Interactive campaign tweets** (multi-photo, e.g. the "mysterious manuscript" Wuthering post) —
   all 4 photos render in the gallery; verified against the live API.
@@ -596,7 +596,7 @@ READ_POST_LABEL = "Read Post"
 READ_POST_EMOJI = {"name": "📖"}        # Unicode emoji — or None
 STATIC_BUTTONS = [
     {"label": "Citlali News", "url": "https://discord.gg/HyrVP9wRXu", "emoji": {"name": "✨"}},
-    {"label": "Support",     "url": "https://ko-fi.com/jieunlatte",   "emoji": {"name": "☕"}},
+    {"label": "Donate",     "url": "https://ko-fi.com/jieunlatte",   "emoji": {"name": "☕"}},
 ]
 ```
 
