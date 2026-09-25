@@ -1060,6 +1060,37 @@ tick after approval.
 liveness/removal gates and the round-31 probe gate are byte-identical except the lines above.
 Only the "is this post live / is this pending post due for a re-check now?" decisions changed.
 
+### 🆕 Reddit V3 — round 33 (2026-09-25): URL-labelled links render clean (live 1wpejir + 1wpdxhs)
+
+**Why (live-verified 2026-09-25, r/Zenlesszonezeroleaks_):** two showcase posts —
+`1wpejir` (65k) and `1wpdxhs` (57k), M0W1/M2W1 Phoenix / Velina / Remielle vs Scorched
+Horizon — ended with a well-formed markdown link whose **label is a bare URL** and whose
+**target differs**:
+
+    …was gathered with the help of [https://zzzanalytics.vercel.app/](https://www.youtube.com/redirect?event=video_description&redir_token=…&q=https%3A%2F%2Fzzzanalytics.vercel.app%2F&v=…)
+
+The author copied the link from a YouTube video description — YouTube wraps such links in a
+`youtube.com/redirect` URL carrying a ~330-char token. Reddit renders the link fine (label
+only); the Discord card printed the **raw link literally** — label, brackets and the whole
+redirect blob. Rounds 15–22 intentionally leave descriptive links untouched (round 22 unwraps
+only the self-referential `[U](U)` class), so this class had no handler.
+
+**The fix** (in the same clean-line pre-pass as rounds 20/21/22, with round 22's identical
+mangle-residue guard, so mangled lines are still the round-20/21 repairers' alone):
+
+| Link shape (clean line) | Before (card) | After (card) |
+|---|---|---|
+| `[U](U)` — label = target (round 22) | bare `U` | unchanged |
+| `[U](V)` — label is a bare URL, target differs (**new**) | raw `[U](V…)` with the ~330-char redirect blob | bare `U` (Discord auto-links it; for a redirect-wrapper target `U` is the real site — the better link) |
+| `[label](youtube.com/redirect?…&q=ENCODED)` (**new**) | raw label + blob | `label (decoded destination)` via the wrapper's `q=`/`qp=` param |
+| `[label](https://normal-url)` | raw (unchanged by design) | unchanged |
+
+A whole-line `[U](redirect)` now feeds the existing round-21/22 bare-URL merge (joins under
+its label exactly like the round-22 class). Everything else is byte-identical: prose-labelled
+descriptive links, mangle residue, `[U](U)`, and every gate (liveness, removal, pending,
+dedup, concurrency). 8 new offline smoke checks pin the live shape end-to-end
+(`_clean_url_texted_links` + `_line_stage` on the exact 1wpejir/1wpdxhs line).
+
 ### 🧪 Reddit V3 — final testing & verification procedure (round 12)
 
 **Step 0 — one-time: archive the OLD Reddit V1/V2 workflow (if previously enabled).**
@@ -1646,6 +1677,26 @@ Then run any engine:
 ---
 
 ## 🗒 Changelog
+
+* **2026-09-25 — Reddit V3 round 33: URL-labelled links render clean (live
+  1wpejir + 1wpdxhs).** Two ZZZ showcase posts ended with a well-formed
+  markdown link whose LABEL is a bare URL and whose TARGET differs —
+  `[https://zzzanalytics.vercel.app/](https://www.youtube.com/redirect?…)`
+  (the author copied the link from a YouTube video description; YouTube
+  wraps it in a `youtube.com/redirect` URL with a ~330-char token). The
+  Discord card printed the raw link literally — label, brackets and the
+  whole redirect blob (Reddit rendered it fine, label only). Rounds 15–22
+  intentionally leave descriptive links untouched (round 22 unwraps only the
+  self-referential `[U](U)` class), so this class had no handler. Now (same
+  clean-line pre-pass, round 22's identical mangle-residue guard): a
+  URL-labelled link collapses to the bare URL (Discord auto-links it — for a
+  redirect-wrapper target the label is the real site, i.e. the better link);
+  a prose-labelled link whose target is a `youtube.com/redirect` wrapper
+  becomes `label (decoded destination)` via the wrapper's `q=`/`qp=` param.
+  Everything else byte-identical (prose-labelled descriptive links, mangle
+  residue, `[U](U)`, all gates, dedup, caches, concurrency). 8 new offline
+  smoke checks pin the live shape end-to-end. See the round-33 section under
+  the Reddit monitor.
 
 * **2026-09-20 — Reddit V3 round 32: queued posts can no longer post early
   + reason-aware pending re-check.** Live incident: post `1wl41aj` ("Post
