@@ -1060,6 +1060,84 @@ tick after approval.
 liveness/removal gates and the round-31 probe gate are byte-identical except the lines above.
 Only the "is this post live / is this pending post due for a re-check now?" decisions changed.
 
+### 🆕 Reddit V3 — round 34 (2026-09-28): the dedup cache can no longer silently evict a subreddit's keys (AnantaLeaks re-post loop fixed + 4 new guards)
+
+**Why (live incident 2026-09-28, proven from the prod `posted_reddit.json`
+commit history):** `AnantaLeaks_1wqhmw1`, `AnantaLeaks_1wqphp3` and
+`AnantaLeaks_1wriz86` posted to Discord on **every 5-minute cron run** while
+every other sub posted once. `save_posted` had always capped the cache with
+`sorted(posted)[-MAX_CACHE_SIZE:]` (`MAX_CACHE_SIZE = 500`) — a
+**lexicographic** eviction. Cache keys are `{sub}_{post_id}`, so once the six
+tracked subs crossed 500 total keys (the file grew from ~470 to 500 keys
+between 2026-09-25 and 2026-09-28), the slice dropped the alphabetically-FIRST
+keys on every save — and `AnantaLeaks_*` sorts before `Genshin_Impact_Leaks`,
+`Honkai*`, `WutheringWavesLeaks` and `Zenlesszonezeroleaks_`. Each Ananta post
+was added right after posting and **evicted in the same save**: the next run's
+`unique_key in posted` check missed, the card re-posted, it was re-added,
+re-evicted — a silent infinite loop (the save logs nothing). The commit
+history proves it: each 5-min save shows exactly `−1 oldest Genshin key, +1
+new key` (the Genshin evictions never re-post because those posts are outside
+the 48 h feed window), and no `AnantaLeaks_*` key has ever appeared in
+`posted_reddit.json` since the cap was crossed.
+
+**The fix — per-subreddit, newest-first retention:**
+
+| What | Pre-round-34 | Round 34 |
+|---|---|---|
+| Cap | one global 500 | **per sub** `MAX_CACHE_SIZE_PER_SUB` (default **250**) + global backstop `MAX_CACHE_SIZE_TOTAL` (default **10 000**) |
+| Eviction order | **alphabetical** (sub name first!) | **newest-first WITHIN each sub** (leet post ids sort chronologically within a subreddit) |
+| First sub to lose keys | AnantaLeaks (every save) | nobody — the oldest of an over-quota sub, and that sub alone |
+| Ananta's keys at the cap | gone every save | intact (~5 keys vs a 250 quota) |
+| Eviction log | none (silent) | a `dedup cache: evicted N oldest key(s)…` warning naming the keys |
+
+250/sub ≈ 8+ days at Genshin's peak rate (the 48 h window needs only days of
+history per sub); the 10 000 backstop is never expected to trigger
+(6 subs × 250 = 1500). All three knobs are optional repo **Variables** (not
+secrets): `MAX_CACHE_SIZE_PER_SUB`, `MAX_CACHE_SIZE_TOTAL`, `MAX_POSTS_PER_RUN`.
+
+**The extra guards ("what else could silently double-post" audit):**
+
+1. **`keep_newest` force-keep** — the save is told which keys were posted
+   THIS run and keeps them no matter what (belt and braces on top of the
+   per-sub rule, which already keeps newest-first).
+2. **Double dedup in the posting loop** — right before the expensive pipeline
+   the loop re-checks `unique_key in posted` (a key listed twice in one run's
+   feed — new + mod-queue listings — can no longer post twice in one run).
+   TEST POST rebuilds are exempt (re-testing a cached post is their whole
+   point).
+3. **Per-run flood cap** (`cap_new_posts`, `MAX_POSTS_PER_RUN`, default 25) —
+   if a run ever finds more than 25 new posts (stale-feed burst, cache loss),
+   it posts the **newest 25** and loudly logs the dropped oldest, which retry
+   next run inside the 48 h window. Any future cache-loss bug costs one capped
+   run + a loud log line instead of an all-night re-post storm.
+4. **Save verification** (`_verify_dedup_save`) — after every save (both call
+   sites: the no-new-posts early return and the normal tail) the script proves
+   the keys posted this run are on disk; a missing one logs a `DEDUP GUARD`
+   **error** naming the keys that will re-post. The 2026-09-28 loop would have
+   been caught on its very first save.
+5. **Load-time saturation warning** — when a sub is within 10 keys of its
+   quota (or the total within 10 % of the backstop) the run logs a warning, so
+   the next eviction burst is visible before it happens.
+
+**The X engine (twitter_v3.py) got the same treatment:** identical cap
+pattern (`sorted(posted_urls)[-MAX_CACHE_SIZE:]`), keys are
+`{account}_{tweet_id}` — so the alphabetically-first account (`Ananta_EN`)
+would have been the victim at the 500 cap, and the old "keeps the NEWEST
+500" comment was factually wrong. The cache was at ~143/500 keys when this
+landed (~2–3 weeks of headroom at current volume); it now keeps the newest
+250 per account (`MAX_CACHE_SIZE_PER_ACCOUNT`) with the same backstop,
+this-run force-keep, save verification (`DEDUP GUARD` error) and saturation
+warning.
+
+**Nothing else changed:** RSS (combined feed + fallbacks), the proxy media
+chain, the Arctic backup, YouTube, crossposts, the liveness/removal/pending
+gates (rounds 18–32) and the P0 double-post concurrency rule
+(`cancel-in-progress: false`) are byte-identical. 18 new offline smoke checks
+(11 Reddit + 7 X) pin: Ananta-first keys surviving eviction, the per-sub 250
+quota, this-run keys always surviving, an under-quota passthrough, the sorted
+byte-stable round-trip on disk, the flood cap (newest-25 of 40), and the
+wiring of both guards + both save sites.
+
 ### 🆕 Reddit V3 — round 33 (2026-09-25): URL-labelled links render clean (live 1wpejir + 1wpdxhs)
 
 **Why (live-verified 2026-09-25, r/Zenlesszonezeroleaks_):** two showcase posts —
@@ -1177,6 +1255,10 @@ with none of them set):
 | `DISCOHOOK_PREVIEW` | on | `0` = don't create/log the per-card Discohook share-link preview |
 | `FEEDTOKEN_JSON_STAGGER` | `65` | seconds between feed-token `.json` attempts (lower only if your token reliably works there) |
 | `REDDIT_JSON_PROBE` | `auto` | when the feed-token `.json` FULL-MODE probe runs: `auto` (default) = only when BOTH `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` exist; `force` = always try (legacy, 65 s per run with new posts); `off` = never (round 31) |
+| `MAX_CACHE_SIZE_PER_SUB` | `250` | round 34: newest dedup-cache keys kept **per subreddit** (the old single 500 global cap evicted AnantaLeaks keys alphabetically once crossed — the 2026-09-28 re-post loop) |
+| `MAX_CACHE_SIZE_TOTAL` | `10000` | round 34: global backstop for the dedup cache (never expected to trigger with 6 subs) |
+| `MAX_POSTS_PER_RUN` | `25` | round 34: per-run flood cap — the newest N new posts post, the rest retry next run inside the 48 h window (loud `POST FLOOD GUARD` log line) |
+| `MAX_CACHE_SIZE_PER_ACCOUNT` | `250` | round 34 (X engine): newest dedup-cache keys kept per account (same latent cap bug as Reddit — `Ananta_EN` would have been the victim at 500) |
 
 ### The workflow (`.github/workflows/reddit_monitor.yml`)
 
@@ -1580,6 +1662,10 @@ EMBEDEZ_API_KEY=ez_...       # Reddit V2 only
 NITTER_RSS_TOKEN=            # optional — unlocks token-gated nitter/redlib instances
 REDDIT_FEED_TOKEN=           # optional (recommended) — old.reddit.com/prefs/feeds, the ?feed= value
 # REDDIT_JSON_PROBE=auto     # round 31: feed-token .json probe — auto | force | off
+# MAX_CACHE_SIZE_PER_SUB=250       # round 34: dedup-cache retention, per subreddit
+# MAX_CACHE_SIZE_PER_ACCOUNT=250   # round 34 (X engine): dedup-cache retention, per account
+# MAX_CACHE_SIZE_TOTAL=10000       # round 34: global dedup-cache backstop
+# MAX_POSTS_PER_RUN=25             # round 34: per-run flood cap (newest N; the rest retry)
 ```
 
 Then run any engine:
@@ -1677,6 +1763,39 @@ Then run any engine:
 ---
 
 ## 🗒 Changelog
+
+* **2026-09-28 — Reddit V3 round 34: the dedup cache can no longer silently
+  evict a subreddit's keys (AnantaLeaks re-post loop fixed + 4 new guards).**
+  Live incident 2026-09-28: `AnantaLeaks_1wqhmw1` / `1wqphp3` / `1wriz86`
+  posted to Discord on EVERY 5-minute cron run. Root cause (proven against
+  the prod cache's commit history): `save_posted` capped the dedup cache at
+  500 keys with `sorted(posted)[-500:]` — a LEXICOGRAPHIC eviction. Keys are
+  `{sub}_{post_id}`, so once the six tracked subs crossed 500 total keys, the
+  alphabetically-first sub — `AnantaLeaks_*` sorts before Genshin / Honkai* /
+  WutheringWavesLeaks / Zenlesszonezeroleaks — was evicted on every save:
+  added right after posting, dropped in the same save, missing from the next
+  run's dedup check, re-posted, forever (each save's visible "1 deletion" was
+  the oldest Genshin key — those posts are outside the 48 h feed window, so
+  their loss was invisible). Now: retention is **per-subreddit, newest-first**
+  (`MAX_CACHE_SIZE_PER_SUB`, default 250 — leet post ids sort chronologically
+  within a sub) with a generous global backstop (`MAX_CACHE_SIZE_TOTAL`,
+  default 10 000). Extra guards: (1) keys posted THIS run are force-kept by
+  the save (`keep_newest` belt and braces); (2) the posting loop re-checks
+  the dedup cache right before the expensive pipeline (a key listed twice in
+  one feed batch can no longer post twice; TEST POST rebuilds exempt); (3) a
+  per-run flood cap (`MAX_POSTS_PER_RUN`, default 25) posts the newest 25 and
+  loudly logs the rest — any future cache loss causes one capped run, not an
+  all-night re-post storm; (4) after every save the script verifies the
+  just-posted keys are on disk and logs a `DEDUP GUARD` error if any are
+  missing — this failure mode can never again be silent — plus a load-time
+  saturation warning. 18 new offline smoke checks (11 Reddit + 7 X) pin the
+  retention rules. The SAME latent bug was found and fixed in the X engine
+  (twitter_v3.py): its cache keys are `{account}_{tweet_id}` too, so at the
+  cap `Ananta_EN` would have been the victim; its "keeps the NEWEST 500"
+  comment was factually wrong (the cache was at ~143/500 when this landed —
+  ~2–3 weeks of headroom at current volume). No secrets touched; the new
+  knobs are optional repo Variables; the P0 double-post concurrency rule is
+  unchanged. See the round-34 section under the Reddit monitor.
 
 * **2026-09-25 — Reddit V3 round 33: URL-labelled links render clean (live
   1wpejir + 1wpdxhs).** Two ZZZ showcase posts ended with a well-formed
