@@ -1138,6 +1138,42 @@ quota, this-run keys always surviving, an under-quota passthrough, the sorted
 byte-stable round-trip on disk, the flood cap (newest-25 of 40), and the
 wiring of both guards + both save sites.
 
+### 🆕 Reddit V3 — round 35 (2026-09-28): NSFW content gate
+
+A BopLeaks ring post (`Genshin_Impact_Leaks_1ws8huc`) reached Discord while
+it was still live; Reddit removed it seconds later. Its archive record carried
+Reddit's NSFW markers from creation (`over_18=true` and the `"nsfw"`
+thumbnail sentinel). A liveness check cannot close that timing window because
+it can only reject a post that has already been removed, so round 35 adds an
+earlier **content gate**.
+
+For a run with new posts, Reddit V3 makes one keyless, batched Arctic Shift
+`/api/posts/ids` request (up to 500 IDs; the monitor's run cap is 25) and reads
+exactly two fields from each returned post:
+
+* `over_18 == true`; or
+* `thumbnail == "nsfw"`.
+
+Either marker holds the post in `pending_reddit.json` with reason
+`nsfw_flag`; the post is not sent to Discord and a loud `NSFW GATE` warning
+records both marker values. The pending entry uses the existing 48-hour window
+and archive no-recheck path rather than the posted/dedup cache, so rejected
+spam cannot evict legitimate history. An RSS reappearance runs the gate again,
+allowing a post whose flag was corrected to proceed normally.
+
+The lookup is deliberately **fail-open**: an outage, malformed response or
+not-yet-archived ID produces an `NSFW SCAN ... unknown` line and follows the
+existing post path. `TEST_POST_ID` also bypasses the gate. For an exceptional
+false positive, the optional `NSFW_ALLOWLIST` repository Variable accepts
+comma-separated author names or post IDs; it is empty by default and is wired
+into the live workflow.
+
+**Spoilers are unchanged.** Reddit stores spoiler state in the separate
+`spoiler` field. The gate never reads that field, so a non-NSFW spoiler
+(`over_18=false` and no `"nsfw"` thumbnail sentinel) follows the same path as
+before. Clean, flagged, spoiler, unavailable-lookup, allowlist, batching,
+pending and main-loop wiring cases are pinned by offline smoke tests.
+
 ### 🆕 Reddit V3 — round 33 (2026-09-25): URL-labelled links render clean (live 1wpejir + 1wpdxhs)
 
 **Why (live-verified 2026-09-25, r/Zenlesszonezeroleaks_):** two showcase posts —
@@ -1259,6 +1295,7 @@ with none of them set):
 | `MAX_CACHE_SIZE_TOTAL` | `10000` | round 34: global backstop for the dedup cache (never expected to trigger with 6 subs) |
 | `MAX_POSTS_PER_RUN` | `25` | round 34: per-run flood cap — the newest N new posts post, the rest retry next run inside the 48 h window (loud `POST FLOOD GUARD` log line) |
 | `MAX_CACHE_SIZE_PER_ACCOUNT` | `250` | round 34 (X engine): newest dedup-cache keys kept per account (same latent cap bug as Reddit — `Ananta_EN` would have been the victim at 500) |
+| `NSFW_ALLOWLIST` | *(empty)* | round 35: optional comma-separated Reddit author names or post IDs that bypass the NSFW content gate; empty = no exceptions |
 
 ### The workflow (`.github/workflows/reddit_monitor.yml`)
 
@@ -1326,6 +1363,8 @@ jobs:
           # Round 31: feed-token .json FULL-MODE probe — auto (default, only
           # with the OAuth app above) | force (always, legacy 65 s) | off.
           REDDIT_JSON_PROBE: ${{ vars.REDDIT_JSON_PROBE }}
+          # Round 35: comma-separated NSFW-gate author/post-ID exceptions.
+          NSFW_ALLOWLIST: ${{ vars.NSFW_ALLOWLIST }}
         # While testing a new version, point this line at the test copy instead
         # (QUOTES REQUIRED — the folder name has a space):
         #   run: python "testing area/reddit_main_v3.py"
@@ -1666,6 +1705,7 @@ REDDIT_FEED_TOKEN=           # optional (recommended) — old.reddit.com/prefs/f
 # MAX_CACHE_SIZE_PER_ACCOUNT=250   # round 34 (X engine): dedup-cache retention, per account
 # MAX_CACHE_SIZE_TOTAL=10000       # round 34: global dedup-cache backstop
 # MAX_POSTS_PER_RUN=25             # round 34: per-run flood cap (newest N; the rest retry)
+# NSFW_ALLOWLIST=                  # round 35: optional NSFW-gate author/post-ID exceptions
 ```
 
 Then run any engine:
@@ -1763,6 +1803,19 @@ Then run any engine:
 ---
 
 ## 🗒 Changelog
+
+* **2026-09-28 — Reddit V3 round 35: NSFW content gate.** A BopLeaks ring
+  post (`1ws8huc`) reached Discord while it was still live and was removed by
+  Reddit seconds later. New posts are now checked in one batched Arctic Shift
+  request against Reddit's `over_18` flag and `"nsfw"` thumbnail sentinel
+  before media or webhook work. Flagged posts are held in the existing
+  48-hour pending cache (`nsfw_flag`) and never posted; unknown metadata fails
+  open, explicit test-post rebuilds bypass the gate, and the optional
+  `NSFW_ALLOWLIST` repository Variable provides an emergency author/post-ID
+  exception. Spoilers use a different field and remain untouched. Offline
+  smoke coverage pins both NSFW markers, the clean/spoiler and fail-open
+  paths, batching, pending behavior, allowlisting, workflow wiring and the
+  main-loop guard.
 
 * **2026-09-28 — Reddit V3 round 34: the dedup cache can no longer silently
   evict a subreddit's keys (AnantaLeaks re-post loop fixed + 4 new guards).**
