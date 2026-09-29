@@ -50,12 +50,14 @@ and to [@dangered wolf](https://github.com/dangeredwolf), creator and lead devel
   bodies, so non-English articles post in their original language.
 - 🎯 **Multi-webhook routing** — each tracked X account posts to its own Discord channel
   (`WEBHOOK_<ACCOUNT>` secrets), with an optional catch-all fallback webhook.
-- 📰 **Reddit monitor** with two engines:
+- 📰 **Reddit monitor** with three engines:
   - **V1** — free, no API key: posts the `redditez.com` link and lets Discord auto-embed it.
     If the thread links to YouTube, the bare YouTube URL is appended on its own line too, so a
     **playable YouTube player** appears next to the reddit embed.
   - **V2** — rich *Components V2* card built from the **EmbedEZ API** (title, media gallery, stats,
     🕐 Discord timestamp).
+  - **V3 (active)** — rich *Components V2* card built from public Reddit, Redlib, and media-proxy
+    fallbacks; no EmbedEZ API key is required.
 - 🧵 **Round 9 (2026-09-13): one combined RSS request** — all tracked subreddits are fetched in a
   single `/r/sub1+sub2+.../new.rss` feed, which fits inside Reddit's ~1 request/minute datacenter
   rate limit; automatic per-subreddit fallback if the combined feed ever fails. Optional personal
@@ -1156,6 +1158,35 @@ Quiet runs add no calls. New-post runs add at most one batched Arctic lookup. Se
 only delays; duplicate matching uses exact identities; the X engine is untouched.
 28 round-36 smoke checks cover behavior, fail-open paths, and workflow wiring.
 
+### 🆕 Reddit V3 — round 38d (2026-09-29): native zero-comment queue detection
+
+Round 37 correctly held posts that exposed the AutoModerator queue-request text, but
+some natively queued posts have **zero comments** and therefore no such text. They can
+still appear in the RSS/archive candidate data while remaining absent from the public
+`/new` listing. Round 38d closes that gap without changing the queue gate's safety
+model or adding a network request.
+
+For the existing post page and existing `/r/<sub>/new?limit=100` response, the monitor
+parses visible relative ages (`2h ago`, `2 hours ago`, and the compatible bare-element
+form). When all of the following are true, it records the existing `pending approval`
+reason and re-checks on the normal 300-second interval:
+
+1. the post ID is **not** in a readable `/new` listing;
+2. the page has no round-37 queue-request text (that established path is unchanged);
+3. the post header age and the listing's **oldest** visible age both parse; and
+4. the post age is younger than `oldest listing age + MOD_QUEUE_WINDOW_SECONDS`
+   (six hours by default).
+
+The window itself is the conservative tail margin and remains the hard fail-open cap in
+the main loop. There is deliberately **no third mod-queue repository Variable**. A
+missing page, blind listing, unparseable age, or post outside the proven span returns no
+hold; an ID visible in `/new` always releases immediately. Thus an approved
+post normally releases on the next short re-check, while a listing/parser failure remains
+the same fail-open behavior as round 37 and no hold can persist beyond the existing
+window. Fifteen offline smoke checks pin the native path, the round-37 compatibility
+path, every fail-open boundary, both age formats, the listing cache shape, and the
+reason wiring.
+
 ### 🆕 Reddit V3 — round 35 (2026-09-28): NSFW content gate
 
 A BopLeaks ring post (`Genshin_Impact_Leaks_1ws8huc`) reached Discord while
@@ -1728,8 +1759,9 @@ REDDIT_FEED_TOKEN=           # optional (recommended) — old.reddit.com/prefs/f
 # NSFW_ALLOWLIST=                  # round 35: optional NSFW-gate author/post-ID exceptions
 # POST_SETTLE_SECONDS=300          # round 36: settle window (0 = off)
 # DUP_MEDIA_GATE=1                 # round 36: exact-media duplicate gate (0 = off)
-# MOD_QUEUE_GATE=1                 # round 37: mod-queue gate (0 = off)
-# MOD_QUEUE_WINDOW_SECONDS=21600   # round 37: age/fail-open cap
+# MOD_QUEUE_GATE=1                 # rounds 37/38d: mod-queue gate (0 = off)
+# MOD_QUEUE_WINDOW_SECONDS=21600   # age/fail-open cap + 38d listing-tail margin
+#                                  # (there is no third mod-queue Variable)
 ```
 
 Then run any engine:
@@ -1827,6 +1859,16 @@ Then run any engine:
 ---
 
 ## 🗒 Changelog
+
+* **2026-09-29 — Reddit V3 round 38d: native zero-comment mod-queue hold.**
+  A post that is absent from a readable public `/new` listing can now be held
+  even when it has no AutoModerator queue comment, but only when the post and
+  listing ages prove it lies within the listing's visible span plus the
+  existing six-hour window. The earlier positive-comment path is unchanged;
+  an unparseable age, unavailable listing, or any other uncertainty fails
+  open. The parser reuses existing post/listing fetches, the window remains the
+  hard release cap, no workflow or repository Variable was added, and fifteen
+  offline smoke checks cover the new and legacy paths.
 
 * **2026-09-29 — Reddit V3 round 37: mod-queue gate.** Posts with positive
   AutoModerator queue evidence are held until they appear in the subreddit's

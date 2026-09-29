@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective date:** September 15, 2026 (updated for Reddit V3 round 12; updated September 17, 2026 for the X V3 tweet-data fallback chain and the Arctic Shift search backup; updated September 20, 2026 for the round-31 feed-token .json probe gate)
+**Effective date:** September 29, 2026 (last updated for Reddit V3 round 38d's public `/new` listing safety check)
 **Applies to:** the *News Express* / *Citlali News* X (Twitter) + Reddit → Discord monitor
 ("the Service"), an open-source, self-hosted automation tool.
 
@@ -53,7 +53,7 @@ public URL being looked up):
 | **GitHub Actions** | Hosts and runs the scripts | https://docs.github.com/en/site-policy/privacy-policies |
 | **Discord (webhooks)** | Delivers the generated messages | https://discord.com/privacy |
 | **Nitter mirrors** | Public RSS feeds for X/Twitter | per-instance |
-| **Redlib** | Reddit RSS fallback mirrors, and (Reddit V3) best-effort **post-page** fetches for multi-photo galleries and on-demand test posts — same instances as the RSS fallback, probed in parallel; all current instances sit behind anti-bot challenges (verified 2026-09-13), so requests typically fail fast and transfer no content | per-instance |
+| **Redlib** | Reddit RSS fallback mirrors and (Reddit V3) best-effort **post-page** fetches for multi-photo galleries, liveness checks, and on-demand test posts. The mod-queue safety gate also reads the public `/r/<subreddit>/new?limit=100` listing to determine whether a public post is visible; it sends only the public subreddit name in that URL. The same instances are probed in parallel where applicable; anti-bot challenges can make a request fail fast. | per-instance |
 | **FxTwitter / FxEmbed API** (incl. sister host **api.fixupx.com**) | **Primary** tweet metadata, media, translation; if the primary host can't answer, the same-engine fixupx host is tried (round 11) | https://fxtwitter.com |
 | **video.twimg.com / x.com (X CDN & post pages)** | HTTP HEAD probes of public video file sizes (X V2/V3 "smart video" check) and OpenGraph image lookups on public post pages — only meta tags are read, no content is downloaded | https://x.com |
 | **gif.fxtwitter.com** | 1st of the GIF converter chain (round 11): one HEAD probe per X GIF to check the animated WebP rendition exists before using it | https://fxtwitter.com |
@@ -80,8 +80,8 @@ only the identifiers of the **public** posts being rendered.
 
 ## 5. Data Retention
 
-* Post-ID caches live in your repository until you delete them (they self-trim to the latest 500
-  entries).
+* Post-ID caches live in your repository until you delete them. By default they retain the newest
+  250 keys per monitored source, with a 10,000-key global backstop.
 * Workflow run logs are retained by GitHub according to your repository's log-retention settings.
 * Nothing is retained anywhere else, because nothing else exists.
 
