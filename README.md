@@ -1138,6 +1138,24 @@ quota, this-run keys always surviving, an under-quota passthrough, the sorted
 byte-stable round-trip on disk, the flood cap (newest-25 of 40), and the
 wiring of both guards + both save sites.
 
+### 🆕 Reddit V3 — round 36 (2026-09-29): settle window + duplicate-media gate + restore logging
+
+Round 36 closes the gap where a post is live at check time but removed minutes later.
+
+1. **Settle window (`POST_SETTLE_SECONDS`, default 300).** Fresh posts wait without
+   state being written and are fully re-evaluated next run. Older and restored posts
+   proceed immediately; `TEST_POST_ID`/`DRY_RUN` bypass it; 0 disables it.
+2. **Duplicate-media gate (`DUP_MEDIA_GATE`, default on).** Exact reused `i.redd.it`
+   files or external destination URLs are compared with the same sub's newest 120
+   posted keys in one batched Arctic request. Only an already-posted post can win;
+   unknown identities fail open. Duplicates are held 48 h as `duplicate_media`.
+3. **Restore and audit visibility.** RSS restores log `RESTORED:` and pending entries
+   can include additive `source`, `title`, and `published_ts` fields.
+
+Quiet runs add no calls. New-post runs add at most one batched Arctic lookup. Settle
+only delays; duplicate matching uses exact identities; the X engine is untouched.
+28 round-36 smoke checks cover behavior, fail-open paths, and workflow wiring.
+
 ### 🆕 Reddit V3 — round 35 (2026-09-28): NSFW content gate
 
 A BopLeaks ring post (`Genshin_Impact_Leaks_1ws8huc`) reached Discord while
@@ -1296,6 +1314,8 @@ with none of them set):
 | `MAX_POSTS_PER_RUN` | `25` | round 34: per-run flood cap — the newest N new posts post, the rest retry next run inside the 48 h window (loud `POST FLOOD GUARD` log line) |
 | `MAX_CACHE_SIZE_PER_ACCOUNT` | `250` | round 34 (X engine): newest dedup-cache keys kept per account (same latent cap bug as Reddit — `Ananta_EN` would have been the victim at 500) |
 | `NSFW_ALLOWLIST` | *(empty)* | round 35: optional comma-separated Reddit author names or post IDs that bypass the NSFW content gate; empty = no exceptions |
+| `POST_SETTLE_SECONDS` | `300` | round 36: seconds a new post must survive before posting; 0 = off |
+| `DUP_MEDIA_GATE` | `1` | round 36: same-sub exact-media duplicate gate with posted-post-only winners; 0 = off |
 
 ### The workflow (`.github/workflows/reddit_monitor.yml`)
 
@@ -1706,6 +1726,8 @@ REDDIT_FEED_TOKEN=           # optional (recommended) — old.reddit.com/prefs/f
 # MAX_CACHE_SIZE_TOTAL=10000       # round 34: global dedup-cache backstop
 # MAX_POSTS_PER_RUN=25             # round 34: per-run flood cap (newest N; the rest retry)
 # NSFW_ALLOWLIST=                  # round 35: optional NSFW-gate author/post-ID exceptions
+# POST_SETTLE_SECONDS=300          # round 36: settle window (0 = off)
+# DUP_MEDIA_GATE=1                 # round 36: exact-media duplicate gate (0 = off)
 ```
 
 Then run any engine:
@@ -1803,6 +1825,13 @@ Then run any engine:
 ---
 
 ## 🗒 Changelog
+
+* **2026-09-29 — Reddit V3 round 36: settle window + duplicate-media gate +
+  restore logging.** New posts wait through a configurable survival window; exact
+  media already posted in the same sub is held with a posted-post-only winner;
+  restores are logged loudly and pending records gain additive audit fields. Quiet
+  runs add no calls, unknown duplicate identity fails open, and 28 smoke checks pin
+  the behavior and wiring.
 
 * **2026-09-28 — Reddit V3 round 35: NSFW content gate.** A BopLeaks ring
   post (`1ws8huc`) reached Discord while it was still live and was removed by
