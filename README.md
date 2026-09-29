@@ -1830,8 +1830,9 @@ Then run any engine:
   restore logging.** New posts wait through a configurable survival window; exact
   media already posted in the same sub is held with a posted-post-only winner;
   restores are logged loudly and pending records gain additive audit fields. Quiet
-  runs add no calls, unknown duplicate identity fails open, and 28 smoke checks pin
-  the behavior and wiring.
+  runs add no calls, unknown duplicate identity fails open, and 35 smoke checks pin
+  the behavior and wiring. Hotfix: empty GHA Variables (unset = empty string)
+  fall back to the code defaults — the first deploy crashed on int("").
 
 * **2026-09-28 — Reddit V3 round 35: NSFW content gate.** A BopLeaks ring
   post (`1ws8huc`) reached Discord while it was still live and was removed by
