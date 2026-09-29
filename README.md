@@ -1728,6 +1728,8 @@ REDDIT_FEED_TOKEN=           # optional (recommended) — old.reddit.com/prefs/f
 # NSFW_ALLOWLIST=                  # round 35: optional NSFW-gate author/post-ID exceptions
 # POST_SETTLE_SECONDS=300          # round 36: settle window (0 = off)
 # DUP_MEDIA_GATE=1                 # round 36: exact-media duplicate gate (0 = off)
+# MOD_QUEUE_GATE=1                 # round 37: mod-queue gate (0 = off)
+# MOD_QUEUE_WINDOW_SECONDS=21600   # round 37: age/fail-open cap
 ```
 
 Then run any engine:
@@ -1825,6 +1827,15 @@ Then run any engine:
 ---
 
 ## 🗒 Changelog
+
+* **2026-09-29 — Reddit V3 round 37: mod-queue gate.** Posts with positive
+  AutoModerator queue evidence are held until they appear in the subreddit's
+  redlib `/new` listing, then post exactly once. The gate requires both the
+  queue-request comment and absence from `/new`; every uncertainty fails open,
+  posts older than the six-hour window skip it, and holds use the existing
+  `pending approval` short re-check. `MOD_QUEUE_GATE` and
+  `MOD_QUEUE_WINDOW_SECONDS` are wired into the workflow; empty Variables keep
+  the safe defaults. TEST POST and DRY RUN bypass the gate.
 
 * **2026-09-29 — Reddit V3 round 36: settle window + duplicate-media gate +
   restore logging.** New posts wait through a configurable survival window; exact
