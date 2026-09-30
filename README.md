@@ -76,7 +76,9 @@ and to [@dangered wolf](https://github.com/dangeredwolf), creator and lead devel
   `<t:…:f>` timestamp; hover/tap for the post's exact date & time.
 - 🛡 **Mod-queue safe (Reddit)** — a 48-hour freshness window keyed on the RSS *updated* stamp means
   posts approved from a subreddit's moderator queue hours (or a day) later still get posted —
-  they're never left out.
+  they're never left out. Round 38e also uses the token-authenticated public RSS `/new` listing
+  as the primary release signal for native zero-comment queue posts, with the existing HTML
+  listing chain as a fallback and fail-open behavior preserved.
 - 📊 **Stats line** — replies/retweets/likes/views (X) or comments/shares/likes/views (Reddit V2).
 - 🕙 **Reliable 10-minute automation** via an external cron trigger (cron-job.org is the single
   scheduler since round 12 — the in-file GitHub `schedule:` is disabled because it raced the
@@ -112,6 +114,7 @@ and to [@dangered wolf](https://github.com/dangeredwolf), creator and lead devel
 │   └── video_diag.py              # X video tile diagnostic (round 10)
 ├── tests/
 │   └── test_smoke.py              # offline smoke test (run by ci.yml on every PR)
+├── CHANGELOG.md                   # release-level change history
 ├── posted_tweets.json             # X cache (auto-committed) — start with: []
 ├── posted_reddit.json             # Reddit cache (auto-committed) — start with: []
 ├── proxy_health.json              # proxy warm-up results (auto-committed, round 13)
@@ -1158,6 +1161,28 @@ Quiet runs add no calls. New-post runs add at most one batched Arctic lookup. Se
 only delays; duplicate matching uses exact identities; the X engine is untouched.
 28 round-36 smoke checks cover behavior, fail-open paths, and workflow wiring.
 
+### 🆕 Reddit V3 — round 38e (2026-09-30): RSS-backed native queue detection
+
+Round 38d added a conservative negative-space hold for native queued posts with no
+AutoModerator comment, but it depended on a readable HTML `/new` listing. GitHub Actions
+runner IPs often receive 403s or anti-bot challenges from those pages, so the safety signal
+was unavailable on the production path and queued posts such as `1wtpgne` could pass the
+intentional fail-open boundary.
+
+Round 38e tries the existing `REDDIT_FEED_TOKEN`-authenticated public RSS listings first:
+`/r/<subreddit>/new.rss?limit=100&feed=<token>` on `www.reddit.com` and
+`old.reddit.com`. It extracts the same `/comments/<id>/` IDs and uses exact RSS `pubDate`
+timestamps to calculate the oldest visible entry. A post that is absent from a readable RSS
+listing and still within the proven span is held as `pending approval`; a released post that
+appears in the listing proceeds immediately.
+
+The existing HTML listing chain remains the fallback, and every unavailable, malformed, or
+future-dated signal fails open exactly as before. The per-subreddit listing cache limits the
+new lookup to one attempt per run; the feed token is URL-encoded and never written to logs.
+No new secret, Variable, workflow input, or dependency is required. Offline smoke fixtures
+cover RSS ID extraction, CDATA and malformed dates, future-date fail-open behavior, token URL
+construction, and the live fetch/cache tuple.
+
 ### 🆕 Reddit V3 — round 38d (2026-09-29): native zero-comment queue detection
 
 Round 37 correctly held posts that exposed the AutoModerator queue-request text, but
@@ -1759,8 +1784,8 @@ REDDIT_FEED_TOKEN=           # optional (recommended) — old.reddit.com/prefs/f
 # NSFW_ALLOWLIST=                  # round 35: optional NSFW-gate author/post-ID exceptions
 # POST_SETTLE_SECONDS=300          # round 36: settle window (0 = off)
 # DUP_MEDIA_GATE=1                 # round 36: exact-media duplicate gate (0 = off)
-# MOD_QUEUE_GATE=1                 # rounds 37/38d: mod-queue gate (0 = off)
-# MOD_QUEUE_WINDOW_SECONDS=21600   # age/fail-open cap + 38d listing-tail margin
+# MOD_QUEUE_GATE=1                 # rounds 37/38d/38e: mod-queue gate (0 = off)
+# MOD_QUEUE_WINDOW_SECONDS=21600   # age/fail-open cap + listing-tail margin
 #                                  # (there is no third mod-queue Variable)
 ```
 
@@ -1849,7 +1874,8 @@ Then run any engine:
 ## 📄 Final notes
 
 * All engines are independent — mix and match freely (e.g. X on V3, Reddit on V1).
-* Legal docs are included: [Privacy Policy](PRIVACY_POLICY.md) · [Terms of Service](TERMS_OF_SERVICE.md)
+* Project docs include the [Changelog](CHANGELOG.md), [Privacy Policy](PRIVACY_POLICY.md),
+  and [Terms of Service](TERMS_OF_SERVICE.md)
   (summary: webhook-only and stateless — the bot collects **no** personal data).
 * Be nice to the free services this project uses: don't shorten the polling interval below 10 minutes,
   cache stays committed so nothing is fetched/posted twice, and consider donating to Nitter's author.
@@ -1859,6 +1885,15 @@ Then run any engine:
 ---
 
 ## 🗒 Changelog
+
+* **2026-09-30 — Reddit V3 round 38e: RSS-backed native queue detection.**
+  Token-authenticated public RSS `/new` listings are now the primary source for
+  the negative-space mod-queue signal, with exact `pubDate` span parsing and
+  URL-encoded reuse of the existing `REDDIT_FEED_TOKEN`. The prior HTML listing
+  chain remains a fallback; unavailable or malformed data still fails open. The
+  fetch is cached per subreddit for the run, does not add a setting or dependency,
+  and new offline smoke coverage verifies IDs, dates, token wiring, and fallback-safe
+  behavior. See [CHANGELOG.md](CHANGELOG.md) for the release-level history.
 
 * **2026-09-29 — Reddit V3 round 38d: native zero-comment mod-queue hold.**
   A post that is absent from a readable public `/new` listing can now be held
