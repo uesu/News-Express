@@ -17,7 +17,7 @@ Dependabot is **not** a bot you host, install, or pay for. It is a service
 **built into GitHub** that runs on GitHub's own infrastructure:
 
 1. **Scans** your repository's dependency files — here that means
-   `requirements.txt` (pip) and the `uses: actions/...@v4` lines in
+   `requirements.txt` (pip) and the `uses: actions/...@v7` lines in
    `.github/workflows/*.yml` (GitHub Actions).
 2. **Watches** the package registries (PyPI, the GitHub Actions marketplace)
    for new versions and published security advisories.
@@ -65,9 +65,23 @@ With the config in this repo (`.github/dependabot.yml`):
 * PRs are marked closed/replaced when the new version becomes the default.
 
 **What it will NOT do:** run your scripts, post to Discord, change any code
-other than version pins, push to `main`, merge anything, or consume your
-Actions minutes for the PR itself (public repos: runs entirely free; private
-repos: the check runs use your normal Actions minutes — a few seconds here).
+other than managed dependency/action version pins, change the workflow
+`python-version` input, push to `main`, or merge anything unless you enable the
+separate opt-in auto-merge gate. It does not consume Actions minutes for the PR
+itself (public repos: runs entirely free; private repos: the check runs use your
+normal Actions minutes — a few seconds here).
+
+## 3a. Does Dependabot auto-bump Python itself?
+
+**No.** Dependabot manages pip package manifests and `uses:` Action versions;
+`python-version: '3.14.7'` is a workflow setting, not a Dependabot ecosystem.
+That is intentional: floating `3.14` would silently take a newly released patch
+into a live posting run without a dedicated PR or a pre-merge runtime test.
+
+The repository uses an exact CPython pin and changes it deliberately in all
+three executable workflows. See [Python runtime policy](PYTHON_RUNTIME.md) for
+the current stable-version assessment, compatibility, performance limits, and
+the safe bump/rollback procedure.
 
 ## 4. How do I know it won't break anything? (the safety chain)
 
@@ -113,19 +127,20 @@ want **automatic merge to main once checks are green**, pick ONE of:
 ### Option B — the bundled auto-merge workflow (already in the repo)
 
 `.github/workflows/dependabot_auto_merge.yml` is included but **disabled**.
-To turn it on, create **one repository variable** (not a secret — it's a
-switch, not a credential):
+It runs from the trusted default branch **after the named CI workflow completes**;
+it does not check out or execute PR code. To turn it on, create **one repository
+variable** (not a secret — it's a switch, not a credential):
 
 * Repo → **Settings → Secrets and variables → Actions → Variables**
   → *New repository variable* → name **`AUTO_MERGE_DEPENDABOT`** = **`yes`**
 
-What it then does, on every Dependabot PR:
+What it then does after a CI run associated with a Dependabot PR completes:
 
 | Gate | Check |
 |---|---|
-| 0 | variable `AUTO_MERGE_DEPENDABOT=yes` **and** PR author is `dependabot[bot]` (human PRs are never touched) |
-| 1 | PR is not a draft and `mergeable_state` is `clean` (no conflicts) |
-| 2 | **at least one check has run** (safety — never merges blind) |
+| 0 | variable `AUTO_MERGE_DEPENDABOT=yes`, completed CI conclusion is `success`, and exactly one PR is associated with the run |
+| 1 | PR author is `dependabot[bot]`, it is open/not a draft, and `mergeable_state` is `clean` (human PRs are never touched) |
+| 2 | **at least one check has run** on the exact PR SHA (safety — never merges blind) |
 | 3 | **every check is success/skipped/neutral** (the CI workflow of §4 is that check) |
 | 4 | → squash-merge to `main` |
 
@@ -184,9 +199,10 @@ description): treat as higher priority — review the advisory, then merge.
   failure; hit *Revert* on the merge commit (or re-pin the old version) and
   it's back to green in one step. That's why the CI gate matters — it catches
   99% of these cases *before* they're merged.
-* **"Can it update the Reddit feed scripts' *code*?"** No. Code changes are
-  human work (that's what the `testing area/` process is for). Dependabot
-  only manages third-party package versions.
+* **"Can it update the Reddit feed scripts' *code* or Python version?"** No.
+  Code changes and the CPython runtime pin are deliberate human-reviewed work
+  (the `testing area/` process and CI are the gate). Dependabot only manages
+  third-party package/action versions. See [Python runtime policy](PYTHON_RUNTIME.md).
 * **"Do I get an email?"** Yes — PR notifications work like any PR. You can
   mute the `dependencies` label if it's noisy, but at weekly cadence with 6
   dependencies it's a handful of PRs a month at most.
@@ -199,5 +215,6 @@ description): treat as higher priority — review the advisory, then merge.
 
 *Files involved: `.github/dependabot.yml` (the switch),
 `.github/workflows/ci.yml` (the safety gate),
-`.github/workflows/dependabot_auto_merge.yml` (opt-in auto-merge),
-`tests/test_smoke.py` (the offline test the gate runs).*
+`.github/workflows/dependabot_auto_merge.yml` (opt-in auto-merge after CI),
+`tests/test_smoke.py` (the offline test the gate runs), and
+`docs/PYTHON_RUNTIME.md` (the deliberately managed CPython runtime pin).*

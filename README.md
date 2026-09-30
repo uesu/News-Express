@@ -17,13 +17,13 @@ please support them:
 | Project / Service | What it's used for | Links |
 |---|---|---|
 | **News-Flash-Bot** by [@cold-logic5](https://github.com/cold-logic5) | The original repository this project is based on (RSS → Discord webhook architecture) | [GitHub repo](https://github.com/cold-logic5/News-Flash-Bot) · [Author](https://github.com/cold-logic5) |
-| **Nitter** by [@zedeus](https://github.com/zedeus) | Free & open-source, privacy-focused X/Twitter front-end providing the RSS feeds | [GitHub](https://github.com/zedeus/nitter) · [status.d420.de instance tracker](https://status.d420.de/) · [nitter.jaydenha.uk](https://nitter.jaydenha.uk/) · [nitter.meowing.monster](https://nitter.meowing.monster/) · [nitter.click](https://nitter.click/) · [nitter.xitter.cc](https://nitter.xitter.cc/) · [nitter.miningtcup.me](https://nitter.miningtcup.me/) (RSS token) · [nitter.netbub.com](https://nitter.netbub.com/) · [shitter.thepixora.com](https://shitter.thepixora.com/) · [nitter.perennialte.ch](https://nitter.perennialte.ch/) · [nitter.privacydev.net](https://nitter.privacydev.net/) · [nitter.net](https://nitter.net/) · [xcancel.com](https://xcancel.com/) · 💖 [Donations](https://github.com/zedeus/nitter#donations) |
+| **Nitter** by [@zedeus](https://github.com/zedeus) | Free & open-source, privacy-focused X/Twitter front-end providing the RSS feeds | [GitHub](https://github.com/zedeus/nitter) · [status.d420.de instance tracker](https://status.d420.de/) · active fallback order reviewed 2026-09-30: [nitter.meowing.monster](https://nitter.meowing.monster/), [nitter.netbub.com](https://nitter.netbub.com/), [shitter.thepixora.com](https://shitter.thepixora.com/), [nitter.jaydenha.uk](https://nitter.jaydenha.uk/), [nitter.miningtcup.me](https://nitter.miningtcup.me/) (RSS token) · 💖 [Donations](https://github.com/zedeus/nitter#donations) |
 | **FxTwitter / FxEmbed** by [@dangered wolf](https://github.com/dangeredwolf) | Rich X/Twitter embeds (auto-unfurl) + the free API — **primary tweet-data source** (round 11; its same-engine sister client **fixupx.com** is the stand-by host) used for media, stats, translation, GIF re-rendering and the video proxy | [fxtwitter.com](https://fxtwitter.com) · [docs.fxembed.com](https://docs.fxembed.com/) · [FxEmbed GitHub](https://github.com/FxEmbed/FxEmbed) · [GitHub](https://github.com/dangeredwolf) · 💖 [Sponsor dangered wolf](https://github.com/sponsors/dangeredwolf) |
 | **vxtwitter (BetterTwitFix / fixvx)** | **Backup tweet-data API** (round 11, 3rd in the fallback chain — multi-photo tweets arrive as separate photos via its API) + its **gifconvert** GIF converter (round 11) | [vxtwitter.com](https://vxtwitter.com) · [API docs](https://vxtwitter.com/api.md) |
 | **EmbedEZ** | Rich Reddit embeds (redditez.com mirror) + the provider API used by Reddit V2 + **last-resort tweet-data source** behind twitterez.com (round 11) | [embedez.com](https://embedez.com/) · [redditez.com](https://embedez.com/reddit) · [twitterez.com](https://twitterez.com) · [API docs](https://embedez.com/docs) |
 | **Embeddit** by [@DeltAndy123](https://github.com/DeltAndy123) | Alternative Reddit embed mirror (credited — its button was removed in the 2026-09-11 trim) | [GitHub](https://github.com/DeltAndy123/Embeddit) |
 | **vxReddit** by [@dylanpdx](https://github.com/dylanpdx) | Alternative Reddit embed mirror (credited — its button was removed in the 2026-09-11 trim) | [GitHub](https://github.com/dylanpdx/vxReddit) · [vxreddit.com](https://vxreddit.com) |
-| **Redlib** (community instances) | Reddit front-end mirrors used as RSS fallback sources — official instance list, refreshed 2026-09-12; **redlib.miningtcup.me** (round 24) joins the V3 fallback fleet | [redlib-instances](https://github.com/redlib-org/redlib-instances) · [redlib](https://github.com/redlib-org/redlib) · [redlib.miningtcup.me](https://redlib.miningtcup.me/) (miningtcup — same operator as the nitter RSS token) |
+| **Redlib** (community instances) | Reddit front-end mirrors used as RSS fallback sources — refreshed from the official registry on 2026-09-30; **redlib.miningtcup.me** remains the optional token-backed V3 fallback | [redlib-instances](https://github.com/redlib-org/redlib-instances) · [redlib](https://github.com/redlib-org/redlib) · [redlib.miningtcup.me](https://redlib.miningtcup.me/) (miningtcup — same operator as the nitter RSS token) |
 | **Arctic Shift** by [@ArthurHeitmann](https://github.com/ArthurHeitmann) | Optional Reddit archive JSON for V3 crosspost originals, ordered galleries including GIFs, text/media fallbacks, and (round 17) the **per-subreddit search backup feed** when RSS yields no new posts. Archive availability and freshness vary; fallback counts are labelled as archived. | [GitHub](https://github.com/ArthurHeitmann/arctic_shift) · [Website](https://arctic-shift.photon-reddit.com/) · [Download tool](https://arctic-shift.photon-reddit.com/download-tool) |
 | **cron-job.org** | Free external scheduler that triggers the workflows reliably every 10 minutes | [cron-job.org](https://cron-job.org) |
 | **GitHub Actions** | Runs everything on a schedule, for free | — |
@@ -101,7 +101,8 @@ and to [@dangered wolf](https://github.com/dangeredwolf), creator and lead devel
 ├── docs/
 │   ├── DEPENDABOT.md              # full plain-English Dependabot explanation
 │   ├── DISCOHOOK.md               # Discohook: what it's for, fully optional, safe to disable
-│   └── CI_SMOKE.md                # ci.yml + test_smoke.py: the required offline safety gate
+│   ├── CI_SMOKE.md                # ci.yml + test_smoke.py: the required offline safety gate
+│   └── PYTHON_RUNTIME.md          # CPython pin, compatibility, performance, and update policy
 ├── testing area/                  # tested copies of every engine (see Testing area guide)
 │   ├── twitter_v1.py              # X/Twitter — V1 (plain, no API key)
 │   ├── twitter_v2_button_outside.py     # X V2 (buttons outside)
@@ -114,7 +115,6 @@ and to [@dangered wolf](https://github.com/dangeredwolf), creator and lead devel
 │   └── video_diag.py              # X video tile diagnostic (round 10)
 ├── tests/
 │   └── test_smoke.py              # offline smoke test (run by ci.yml on every PR)
-├── CHANGELOG.md                   # release-level change history
 ├── posted_tweets.json             # X cache (auto-committed) — start with: []
 ├── posted_reddit.json             # Reddit cache (auto-committed) — start with: []
 ├── proxy_health.json              # proxy warm-up results (auto-committed, round 13)
@@ -553,7 +553,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: '3.14.7'
           cache: 'pip'
 
       - name: Install dependencies
@@ -581,12 +581,52 @@ jobs:
         #   run: python "testing area/twitter_v3.py"
         run: python "testing area/twitter_v3.py"   # ← switch to testing area/twitter_v1.py / twitter_v2_button_outside.py here
 
-      - name: Commit and push updated posted_tweets.json cache
+      - name: Persist updated posted_tweets.json cache (retry safely on a concurrent main update)
+        env:
+          CACHE_BRANCH: ${{ github.ref_name }}
         run: |
+          set -o pipefail
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add -f posted_tweets.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "auto: update posted_tweets.json cache" && git push)
+
+          if git diff --cached --quiet; then
+            echo "No cache changes to push."
+          else
+            if ! git commit -m "auto: update posted_tweets.json cache"; then
+              echo "::error::CACHE COMMIT FAILED — dedup cache was not persisted; rerun this monitor after resolving the repository state."
+              exit 1
+            fi
+
+            cache_branch="${CACHE_BRANCH:-main}"
+            pushed=0
+            attempts=0
+            for attempt in 1 2 3; do
+              attempts="$attempt"
+              if git push origin "HEAD:${cache_branch}"; then
+                pushed=1
+                break
+              fi
+
+              # A remote cache commit may have landed between checkout and push.
+              # Rebase our single cache commit, then retry with bounded backoff.
+              if [ "$attempt" -lt 3 ]; then
+                echo "::warning::Cache push attempt $attempt/3 failed; rebasing ${cache_branch} before retry."
+                if ! git pull --rebase origin "$cache_branch"; then
+                  git rebase --abort || true
+                  echo "::error::CACHE PUSH RECOVERY FAILED — rebase could not complete; dedup cache was not persisted."
+                  break
+                fi
+                sleep "$((attempt * 15))"
+              fi
+            done
+
+            if [ "$pushed" -ne 1 ]; then
+              echo "::error::CACHE PUSH FAILED after ${attempts}/3 attempt(s) — dedup cache was not persisted; the next run may re-post. Rerun this monitor after GitHub recovers."
+              exit 1
+            fi
+          fi
+
 ```
 
 > Every webhook secret you add must get a matching `WEBHOOK_...` line in the `env:` block —
@@ -1409,7 +1449,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: '3.14.7'
           cache: 'pip'
 
       - name: Install dependencies
@@ -1449,12 +1489,52 @@ jobs:
         #   run: python "testing area/reddit_main_v2_embedez.py"  <- rich card (EmbedEZ key)
         run: python "testing area/reddit_main_v3.py"   # ← V3 (proxy media + native fallback)
 
-      - name: Commit and push updated caches (posted_reddit.json + proxy_health.json + pending_reddit.json)
+      - name: Persist updated caches (retry safely on a concurrent main update)
+        env:
+          CACHE_BRANCH: ${{ github.ref_name }}
         run: |
+          set -o pipefail
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add -f posted_reddit.json proxy_health.json pending_reddit.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "auto: update posted_reddit.json + proxy_health.json + pending_reddit.json caches" && git push)
+
+          if git diff --cached --quiet; then
+            echo "No cache changes to push."
+          else
+            if ! git commit -m "auto: update posted_reddit.json + proxy_health.json + pending_reddit.json caches"; then
+              echo "::error::CACHE COMMIT FAILED — dedup cache was not persisted; rerun this monitor after resolving the repository state."
+              exit 1
+            fi
+
+            cache_branch="${CACHE_BRANCH:-main}"
+            pushed=0
+            attempts=0
+            for attempt in 1 2 3; do
+              attempts="$attempt"
+              if git push origin "HEAD:${cache_branch}"; then
+                pushed=1
+                break
+              fi
+
+              # A remote cache commit may have landed between checkout and push.
+              # Rebase our single cache commit, then retry with bounded backoff.
+              if [ "$attempt" -lt 3 ]; then
+                echo "::warning::Cache push attempt $attempt/3 failed; rebasing ${cache_branch} before retry."
+                if ! git pull --rebase origin "$cache_branch"; then
+                  git rebase --abort || true
+                  echo "::error::CACHE PUSH RECOVERY FAILED — rebase could not complete; dedup cache was not persisted."
+                  break
+                fi
+                sleep "$((attempt * 15))"
+              fi
+            done
+
+            if [ "$pushed" -ne 1 ]; then
+              echo "::error::CACHE PUSH FAILED after ${attempts}/3 attempt(s) — dedup cache was not persisted; the next run may re-post. Rerun this monitor after GitHub recovers."
+              exit 1
+            fi
+          fi
+
 ```
 
 Create `posted_reddit.json` with `[]` as its initial content (first run posts only the newest item,
@@ -1576,7 +1656,7 @@ Both Reddit scripts now:
 A missed run loses nothing: the 48-hour window still catches any post on a later run. If Reddit
 ever blocks GitHub's datacenter IPs more aggressively, or a Redlib instance dies, the Actions log
 shows exactly which source answered what — just reorder/replace entries in `REDDIT_RSS_INSTANCES`
-(identical list in both Reddit scripts).
+(the V3 list additionally keeps the optional token-gated miningtcup host).
 
 ### 🆕 2026-09-13 — round 9: one combined RSS request + feed token + verified mirrors
 
@@ -1660,6 +1740,16 @@ This repo ships a ready-made, safe Dependabot setup:
 **only opens PRs — it never touches `main` until you merge** (or explicitly
 enable the gated auto-merge). Your monitor keeps running exactly as before in
 the meantime.
+
+### 🐍 Python runtime: deliberately pinned, not silently floated
+
+All executable workflows now use exact stable **CPython 3.14.7**. Dependabot
+updates pip packages and Action versions, but it does **not** update a
+workflow's `python-version` input; that runtime is intentionally reviewed in a
+normal PR and proven by CI before it reaches a live posting run. See
+[the Python runtime policy](docs/PYTHON_RUNTIME.md) for current-version status,
+compatibility, realistic performance expectations, rollback, and the complete
+safe-update procedure.
 
 ---
 
@@ -1874,9 +1964,9 @@ Then run any engine:
 ## 📄 Final notes
 
 * All engines are independent — mix and match freely (e.g. X on V3, Reddit on V1).
-* Project docs include the [Changelog](CHANGELOG.md), [Privacy Policy](PRIVACY_POLICY.md),
-  and [Terms of Service](TERMS_OF_SERVICE.md)
-  (summary: webhook-only and stateless — the bot collects **no** personal data).
+* Project docs include the [Privacy Policy](PRIVACY_POLICY.md), [Terms of Service](TERMS_OF_SERVICE.md),
+  and [Python runtime policy](docs/PYTHON_RUNTIME.md). The release history lives in the
+  [Changelog](#-changelog) section below.
 * Be nice to the free services this project uses: don't shorten the polling interval below 10 minutes,
   cache stays committed so nothing is fetched/posted twice, and consider donating to Nitter's author.
 * All trademarks belong to their respective owners; this project is an unofficial, non-affiliated
@@ -1886,6 +1976,17 @@ Then run any engine:
 
 ## 🗒 Changelog
 
+* **2026-09-30 — Runtime, delivery, and source hardening.** All executable
+  workflows now pin stable CPython **3.14.7**; CI installs, compiles, and smoke-tests
+  that exact interpreter before merge. Cache persistence uses an explicit
+  `HEAD:<branch>` push, bounded rebase retries (15 s / 30 s), and clear failure
+  annotations so a lost dedup update cannot be silent. The X fallback chain now
+  starts with the tracker-healthy RSS hosts, while the Reddit chains include the
+  current official Redlib registry's token-free non-Cloudflare mirrors. The
+  standalone `CHANGELOG.md` was retired; this in-README section is the single
+  release history. See [Python runtime policy](docs/PYTHON_RUNTIME.md) for the
+  compatibility, performance, and update/automation policy.
+
 * **2026-09-30 — Reddit V3 round 38e: RSS-backed native queue detection.**
   Token-authenticated public RSS `/new` listings are now the primary source for
   the negative-space mod-queue signal, with exact `pubDate` span parsing and
@@ -1893,7 +1994,7 @@ Then run any engine:
   chain remains a fallback; unavailable or malformed data still fails open. The
   fetch is cached per subreddit for the run, does not add a setting or dependency,
   and new offline smoke coverage verifies IDs, dates, token wiring, and fallback-safe
-  behavior. See [CHANGELOG.md](CHANGELOG.md) for the release-level history.
+  behavior.
 
 * **2026-09-29 — Reddit V3 round 38d: native zero-comment mod-queue hold.**
   A post that is absent from a readable public `/new` listing can now be held

@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective date:** September 30, 2026 (last updated for Reddit V3 round 38e's RSS-backed public `/new` listing safety check)
+**Effective date:** September 30, 2026 (last updated for runtime, cache-persistence, and source-fleet hardening)
 **Applies to:** the *News Express* / *Citlali News* X (Twitter) + Reddit → Discord monitor
 ("the Service"), an open-source, self-hosted automation tool.
 
@@ -13,7 +13,7 @@ and post new public X/Twitter and Reddit items into **your own Discord channels*
 webhooks. There is no hosted bot account, no gateway connection, no dashboard, and no central server
 operated by the author.
 
-**Short version: the Service collects, stores, and transmits no personal data.**
+**Short version:** the Service does not collect Discord member data, operator analytics, or account credentials. It necessarily processes **public post content** (which a public poster may choose to include personal information in), stores small delivery-state records, and sends rendered public content to the Discord webhooks you configure.
 
 ---
 
@@ -21,11 +21,11 @@ operated by the author.
 
 | Data | Where it lives | Why | Shared with anyone? |
 |---|---|---|---|
-| Post/tweet IDs (e.g. `TYPEII_EN_2098063866303504597`) | `posted_tweets.json` / `posted_reddit.json` **inside your own repository**, committed by `github-actions[bot]` | Deduplication only — prevents posting the same item twice | No |
-| Webhook URLs, API keys & the optional Reddit feed token | GitHub **encrypted repository secrets** in *your* repository | Authentication to Discord / EmbedEZ / Reddit | No (GitHub stores them; they are never logged or transmitted elsewhere — the feed token is sent only to reddit.com, never to any mirror or third party) |
-| Public post content (titles, text, media URLs, stats) | Processed **in memory** during a run, discarded immediately after | Rendering the Discord message | Only sent to the Discord webhook(s) *you* configured |
+| Delivery-state records: post/tweet IDs (e.g. `TYPEII_EN_2098063866303504597`), pending reasons, and proxy health | `posted_tweets.json`, `posted_reddit.json`, `pending_reddit.json`, and `proxy_health.json` **inside your own repository**, committed by `github-actions[bot]` | Deduplication, safe re-checks, and proxy fallback health | GitHub and anyone who can access your repository; a public repository makes these records public. They do not contain Discord member data or webhook URLs. |
+| Webhook URLs, API keys & optional feed/RSS tokens | GitHub **encrypted repository secrets** in *your* repository | Authentication to Discord, EmbedEZ, Reddit, or a token-gated mirror | GitHub stores the secrets. A value is sent only to its intended service when needed (for example, a webhook to Discord, a Reddit feed token to Reddit, or the Nitter token to miningtcup); it is not written to workflow logs. |
+| Public post content (titles, text, author names/handles, media URLs, stats) | Processed **in memory** during a run; rendered content is retained by the Discord channel under your control | Rendering the Discord message | Discord receives the rendered public content through the webhook(s) you configure. Relevant source services receive the public URL/account/subreddit requested. |
 
-No analytics, no tracking, no cookies, no databases, no telemetry, no advertising.
+No analytics, no tracking, no cookies, no separate database, no telemetry, and no advertising are added by this project.
 
 ---
 
@@ -53,7 +53,7 @@ public URL being looked up):
 | **GitHub Actions** | Hosts and runs the scripts | https://docs.github.com/en/site-policy/privacy-policies |
 | **Discord (webhooks)** | Delivers the generated messages | https://discord.com/privacy |
 | **Nitter mirrors** | Public RSS feeds for X/Twitter | per-instance |
-| **Redlib** | Reddit RSS fallback mirrors and (Reddit V3) best-effort **post-page** fetches for multi-photo galleries, liveness checks, and on-demand test posts. The mod-queue safety gate keeps the HTML `/r/<subreddit>/new?limit=100` fallback to determine whether a public post is visible; it sends only the public subreddit name in that URL. The same instances are probed in parallel where applicable; anti-bot challenges can make a request fail fast. | per-instance |
+| **Redlib** | Reddit RSS fallback mirrors and (Reddit V3) best-effort **post-page** fetches for multi-photo galleries, liveness checks, and on-demand test posts. This includes community-operated instances such as catsarch, nadeko, privadency, miningtcup, safereddit, artemislena, and privacyredirect; availability and operator policies vary. The mod-queue safety gate keeps the HTML `/r/<subreddit>/new?limit=100` fallback to determine whether a public post is visible; it sends only the public subreddit name in that URL. The same instances are probed in parallel where applicable; anti-bot challenges can make a request fail fast. | per-instance |
 | **FxTwitter / FxEmbed API** (incl. sister host **api.fixupx.com**) | **Primary** tweet metadata, media, translation; if the primary host can't answer, the same-engine fixupx host is tried (round 11) | https://fxtwitter.com |
 | **video.twimg.com / x.com (X CDN & post pages)** | HTTP HEAD probes of public video file sizes (X V2/V3 "smart video" check) and OpenGraph image lookups on public post pages — only meta tags are read, no content is downloaded | https://x.com |
 | **gif.fxtwitter.com** | 1st of the GIF converter chain (round 11): one HEAD probe per X GIF to check the animated WebP rendition exists before using it | https://fxtwitter.com |
@@ -73,32 +73,35 @@ public URL being looked up):
 | **GitHub (Dependabot, optional)** | If you keep `.github/dependabot.yml`, GitHub's built-in Dependabot opens **pull requests only** (never pushes to `main`); it sees your dependency files, nothing else — see `docs/DEPENDABOT.md` | https://docs.github.com/en/site-policy/privacy-policies |
 | **cron-job.org** (optional) | External schedule trigger | https://cron-job.org/en/privacy/ |
 
-The Service never sends these third parties anything about your Discord server's members or content —
-only the identifiers of the **public** posts being rendered.
+The Service never reads or sends these third parties Discord server-member data or private Discord content. It sends only the public post/account/subreddit identifiers needed to fetch a source; Discord receives the rendered public post content through the webhook you configured.
 
 ---
 
 ## 5. Data Retention
 
-* Post-ID caches live in your repository until you delete them. By default they retain the newest
-  250 keys per monitored source, with a 10,000-key global backstop.
+* Delivery-state files (`posted_tweets.json`, `posted_reddit.json`, `pending_reddit.json`, and
+  `proxy_health.json`) live in your repository until you delete them. Post-ID caches retain the
+  newest 250 keys per monitored source by default, with a 10,000-key global backstop.
+* Rendered messages and public content are retained by Discord under the retention/moderation
+  settings of the server you operate.
 * Workflow run logs are retained by GitHub according to your repository's log-retention settings.
-* Nothing is retained anywhere else, because nothing else exists.
+* The project adds no other database or telemetry store.
 
 ---
 
 ## 6. Your Responsibilities & Rights
 
 Because you operate your own instance, **you** are the data controller for it. You may inspect,
-modify, or delete every byte it holds (the two JSON cache files) at any time. Server members who
+modify, or delete every byte it holds (the four workflow-managed JSON state files) at any time. Server members who
 want messages removed can ask you (or any admin with *Manage Messages*) to delete them from Discord.
 
 ---
 
 ## 7. Children's Privacy
 
-The Service is not directed at children under 13 and collects no personal data from anyone of any
-age.
+The Service is not directed at children under 13 and does not collect Discord member data. Like any
+public-content relay, it may process public material that a source poster chose to publish; operators
+must use the Service only where permitted by applicable law and platform rules.
 
 ---
 
