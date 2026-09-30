@@ -15,7 +15,7 @@
 | Piece | What it is | What it runs |
 |---|---|---|
 | `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every push and PR** (public repo = free) | 3 steps: `pip install -r requirements.txt` → `python -m compileall` over every script → `python tests/test_smoke.py` |
-| `tests/test_smoke.py` | An **offline** test (no network, no secrets, no Discord): every monitor script must **import cleanly**, the Reddit V3 card pipeline and safety gates must still behave (body cleaning, media extraction/dedup, i.redd.it swap, redlib scoping, OP comment, components-v2 layout, buttons, proxy-service parsers, Arctic search backup — round 17, soft-removed post filter — round 18, raw plain-link mangle fix + label/URL pairs + clean auto-linked links — rounds 20/21/22, archive post liveness gate — round 20, and positive- and negative-space mod-queue decisions — rounds 37/38d), and the X V3 tweet-data path must still behave (GIF converter chain, vxtwitter normalization incl. multi-photo, twitterez og-page parsing, fallback-chain order — round 11) | `python tests/test_smoke.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
+| `tests/test_smoke.py` | An **offline** test (no network, no secrets, no Discord): every monitor script must **import cleanly**, the Reddit V3 card pipeline and safety gates must still behave (body cleaning, media extraction/dedup, i.redd.it swap, redlib scoping, OP comment, components-v2 layout, buttons, proxy-service parsers, Arctic search backup — round 17, soft-removed post filter — round 18, raw plain-link mangle fix + label/URL pairs + clean auto-linked links — rounds 20/21/22, archive post liveness gate — round 20, and positive- and negative-space mod-queue decisions, including RSS listing IDs, exact pubDate spans, token URL construction, and HTML fallback — rounds 37/38d/38e), and the X V3 tweet-data path must still behave (GIF converter chain, vxtwitter normalization incl. multi-photo, twitterez og-page parsing, fallback-chain order — round 11) | `python tests/test_smoke.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
 
 ## 2. Optional or required? — **Required (for how this repo is set up)**
 
@@ -46,6 +46,10 @@
   proxy-service parsers: Embeddit status-id codec, og-tag parsing, stats
   lines, the redditez/embeddit JSON shapes, fallback-chain skipping, and the
   `proxy_health.json` round-trip).
+* **Round 38e queue fixtures** — the test uses an in-memory RSS document to
+  verify `/comments/<id>/` extraction, CDATA/malformed/future date handling,
+  deterministic span calculation, URL-encoded reuse of `REDDIT_FEED_TOKEN`,
+  and the existing HTML fallback. It never contacts Reddit.
 * **Fail-loud** — any `FAIL` exits non-zero → red check → Dependabot PR
   (or your PR) cannot merge (or auto-merge).
 

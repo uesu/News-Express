@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Effective date:** September 29, 2026 (last updated for Reddit V3 round 38d's public listing safety check)
+**Effective date:** September 30, 2026 (last updated for Reddit V3 round 38e's RSS-backed public listing safety check)
 **Applies to:** the *News Express* / *Citlali News* X (Twitter) + Reddit → Discord monitor
 ("the Service"), an open-source, self-hosted automation tool.
 
@@ -36,7 +36,8 @@ You agree NOT to use the Service to:
 ## 4. Third-Party Dependencies
 
 The Service depends on free/community-run third parties — Nitter mirrors, Redlib (public Reddit
-RSS, post pages, and the public `/new` listings used by the mod-queue safety check), FxTwitter/FxEmbed
+RSS, post pages, and the public `/new` listings used by the mod-queue safety check, including
+reddit.com's token-authenticated per-subreddit RSS listing added in round 38e), FxTwitter/FxEmbed
 (primary tweet-data source, with its same-engine sister client fixupx.com as a stand-by), vxtwitter
 (BetterTwitFix — backup tweet-data API and its gifconvert.vxtwitter.com GIF converter), Arctic Shift
 (arctic-shift.photon-reddit.com — Reddit archive: crosspost originals and, since round 17, a
