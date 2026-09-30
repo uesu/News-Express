@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Effective date:** September 30, 2026 (last updated for Reddit V3 round 38e's RSS-backed public listing safety check)
+**Effective date:** September 30, 2026 (last updated for runtime, cache-persistence, and source-fleet hardening)
 **Applies to:** the *News Express* / *Citlali News* X (Twitter) + Reddit → Discord monitor
 ("the Service"), an open-source, self-hosted automation tool.
 
@@ -37,7 +37,8 @@ You agree NOT to use the Service to:
 
 The Service depends on free/community-run third parties — Nitter mirrors, Redlib (public Reddit
 RSS, post pages, and the public `/new` listings used by the mod-queue safety check, including
-reddit.com's token-authenticated per-subreddit RSS listing added in round 38e), FxTwitter/FxEmbed
+reddit.com's token-authenticated per-subreddit RSS listing added in round 38e; the fallback fleet
+may include catsarch, nadeko, privadency, miningtcup, safereddit, artemislena, and privacyredirect), FxTwitter/FxEmbed
 (primary tweet-data source, with its same-engine sister client fixupx.com as a stand-by), vxtwitter
 (BetterTwitFix — backup tweet-data API and its gifconvert.vxtwitter.com GIF converter), Arctic Shift
 (arctic-shift.photon-reddit.com — Reddit archive: crosspost originals and, since round 17, a
@@ -53,8 +54,9 @@ i.ytimg.com (YouTube thumbnails), discohook.app (optional per-card share-link pr
 default, keyless public API), GitHub Actions,
 cron-job.org, and Discord webhooks. **Availability is not
 guaranteed**: mirrors rotate or shut down, APIs change (EmbedEZ explicitly warns of breaking
-changes), GitHub's native scheduler is best-effort, and the EmbedEZ API may consume paid credits per
-its own pricing. The author of this project has no control over, and accepts no liability for, those
+changes), GitHub's native scheduler is best-effort, cache persistence can still fail after bounded
+retries (the workflow reports this as an error so the operator can rerun it), and the EmbedEZ API may
+consume paid credits per its own pricing. The author of this project has no control over, and accepts no liability for, those
 services. Optional extras (Discohook preview, Dependabot dependency-update PRs) may be disabled at
 any time without affecting the core monitor — see the README and `docs/DEPENDABOT.md`.
 
