@@ -1967,10 +1967,135 @@ Then run any engine:
 * Project docs include the [Privacy Policy](PRIVACY_POLICY.md), [Terms of Service](TERMS_OF_SERVICE.md),
   and [Python runtime policy](docs/PYTHON_RUNTIME.md). The release history lives in the
   [Changelog](#-changelog) section below.
-* Be nice to the free services this project uses: don't shorten the polling interval below 10 minutes,
-  cache stays committed so nothing is fetched/posted twice, and consider donating to Nitter's author.
+* Be nice to the free services this project uses: follow the per-engine polling guidance (Reddit V3's
+  practical cron floor is documented below), keep caches committed so nothing is fetched/posted twice,
+  and consider donating to Nitter's author.
 * All trademarks belong to their respective owners; this project is an unofficial, non-affiliated
   automation tool for personal servers.
+
+---
+
+## 🆕 Reddit V3 — rounds 42–45 (2026-10-01): delivery in one cron tick
+
+Reddit posts used to reach Discord 5–10 minutes after they appeared. They
+now arrive on the **first cron tick after the post is confirmed alive**,
+with no loss of safety.
+
+### The latency fix (round 42)
+
+Every post used to wait a flat `POST_SETTLE_SECONDS` (300 s) so a mod or
+AutoModerator had time to act. That wait was applied even to posts already
+proven live. It is now evidence-based:
+
+| Evidence this run | Wait before posting |
+|---|---|
+| Post present in `r/<sub>/new` | `POST_SETTLE_VERIFIED_SECONDS` = **60 s** |
+| Listing unreadable, or post absent | `POST_SETTLE_SECONDS` = **300 s** (unchanged) |
+
+A post visible in the public `/new` listing is by definition not filtered
+and not in the mod queue — the two things the 300 s wait protected against.
+60 s remains as an AutoModerator buffer. A confirmed post also skips the
+mod-queue page fetches entirely.
+
+**Result with a 5-minute cron:** average latency **7.5 min → ≈3.5 min**.
+A post at 4:51 PM now lands at ~4:55 instead of ~5:00–5:03. The fast path
+can never apply to a filtered, queued or removed post, because those are
+absent from `/new` by definition.
+
+### Fewer requests per run
+
+* the Redlib post page was fetched up to **3×** per post → now **1×**
+* the proxy chain ran **2×** per post → now **1×**
+* a post confirmed in `/new` skips up to **9** mod-queue instance requests
+* NSFW markers, duplicate identity and re-upload identity now ride on **one**
+  batched Arctic Shift call
+
+### NSFW gate — earlier, wider, fail-closed
+
+The gate runs **before** any Discord message, embed, thumbnail or media
+resolution — not just before sending. It rejects:
+
+* posts marked `over_18`
+* posts from communities marked `over18`
+* crossposts whose **source post or source community** is NSFW
+
+Missing, malformed or unfetchable metadata now **fails closed**: the post is
+held as `nsfw_unknown` and re-checked, never posted on a guess. A blocked
+post produces **no** Discord output of any kind — the log records only the
+post id and the reason. `NSFW_FAIL_OPEN=1` restores the old behaviour.
+
+**Round 45** keeps that strictness from costing speed: when the Arctic
+archive has no record of a brand-new post, the marker is read off the live
+Redlib post page instead of holding the post for another tick. The page is
+one the run already fetches, so it costs no extra request; a **spoiler**
+badge is never read as NSFW; an unreadable page still fails closed.
+
+| Archive | Live page | Result |
+|---|---|---|
+| has record | not consulted | unchanged |
+| no record | NSFW badge present | **blocked** |
+| no record | renders, no badge | **delivered this tick** |
+| no record | unreadable | held `nsfw_unknown` (fail closed) |
+
+### Author re-upload gate (round 43)
+
+Real case in `r/Genshin_Impact_Leaks`: post `1wukgrn` was deleted by its
+author ~9 minutes in and re-uploaded as `1wukoah` — same title, same author,
+new video file. The round-36 duplicate gate compares exact media URLs, and a
+re-upload always gets a brand-new `v.redd.it` id, so it could not see this.
+
+The gate now also compares a `sub|author|title` identity (case, punctuation,
+whitespace and zero-width normalised, then matched **exactly** — no fuzzy
+scoring) and skips a post already on Discord. An unknown author
+(`[deleted]`) or an empty title yields no identity and the gate fails open.
+It reuses the existing batched archive call, so it costs no extra request.
+
+### Dead-post retraction — shipped disabled (rounds 43/44)
+
+A delivered card whose Reddit post later dies can be rewritten in place as a
+tombstone. It **edits, never deletes**: per Discord's
+[Announcement Channel FAQ](https://support.discord.com/hc/en-us/articles/360032008192-Announcement-Channel-FAQ),
+an edit updates the message in every following server while a delete leaves
+a permanent `[Original Message Deleted]` note there — which matters because
+this channel is autopublished. Two independent proofs are required, and the
+post id stays in the dedup cache so a retraction can never cause a re-post.
+
+It is **off by default** (`RETRACT_DEAD_POSTS=0`) because it costs extra
+requests. When enabled it runs *after* the posting loop, so it adds no
+latency, and only then is `wait=true` appended to the webhook call.
+
+### New repository Variables (all optional)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `POST_SETTLE_VERIFIED_SECONDS` | `60` | wait for a post confirmed in `/new` |
+| `POST_SETTLE_SECONDS` | `300` | wait for an unverified post (unchanged) |
+| `NSFW_FAIL_OPEN` | off | `1` restores pre-round-42 fail-open NSFW |
+| `NSFW_REQUIRE_SUBREDDIT` | off | `1` also demands a readable community record |
+| `NSFW_PAGE_FALLBACK` | on | `0` disables the live-page NSFW fallback |
+| `REPOST_GATE` | on | `0` disables the author re-upload gate |
+| `REPOST_WINDOW_SECONDS` | `86400` | how far back the re-upload comparison reaches |
+| `RETRACT_DEAD_POSTS` | **off** | `1` enables tombstoning cards whose post died |
+| `RETRACT_MODE` | `edit` | `edit` / `delete` / `off` |
+| `RETRACT_WINDOW_SECONDS` | `21600` | how long a delivered card is watched |
+
+Nothing needs to be set to get the speed improvement.
+
+### Cron interval
+
+The settle window is no longer the bottleneck — the cron is. With the
+5-minute interval, latency is 1–6 min. Lowering it now pays off:
+
+| Interval | Average latency |
+|---|---|
+| 5 min | ≈3.5 min |
+| 3 min | ≈2.5 min |
+| 2 min | ≈2.0 min |
+
+Below ~2 minutes returns diminish (the 60 s AutoMod buffer becomes the
+floor) while cache-commit churn and mirror rate-limiting both rise. If you
+do lower it, set `APPROVAL_RECHECK_SECONDS` to match so held posts are
+re-evaluated on every tick.
 
 ---
 
