@@ -39,6 +39,7 @@ import asyncio
 import logging
 import weakref
 import html as html_lib
+import urllib.parse
 
 import aiohttp
 
@@ -104,6 +105,33 @@ def _env_float(name: str, default: float) -> float:
     except ValueError:
         return default
 
+
+# ---------------------------------------------------------------------------
+# ■ ROUND 53 (2026-10-01): THE SAME GUARD FOR *STRING* VARIABLES
+# Round 49b fixed the numeric readers but left the two STRING Variables on
+# bare os.getenv(name, default) — and that form only uses the default when the
+# variable is ABSENT. A workflow line `EMBEDDIT_INSTANCE: ${{ vars.X }}` with
+# no Variable set exports an EMPTY STRING, which is present, so the default
+# never applied:
+#
+#   EMBEDDIT_BASE  = ""  -> every request went to the RELATIVE url
+#                           "/api/v1/statuses/<id>", which aiohttp rejects with
+#                           InvalidURL before a socket is ever opened. The prod
+#                           log of 2026-10-01 23:13 shows exactly that:
+#                           "embeddit error: /api/v1/statuses/4f1y49…" for
+#                           EVERY post — Embeddit was effectively dead, not the
+#                           instance (the same status id returns valid JSON
+#                           when prefixed with the default host).
+#   WARMUP_POST_ID = ""  -> "PROXY_WARMUP_POST '' is invalid … Warm-up skipped"
+#                           on every run, so proxy_health.json was never
+#                           refreshed and dead services were never skipped.
+#
+# _env_str() treats unset AND empty/whitespace as "not configured".
+# ---------------------------------------------------------------------------
+def _env_str(name: str, default: str) -> str:
+    """GHA-safe string option: unset, empty and blank all mean the default."""
+    return (os.getenv(name) or "").strip() or default
+
 PROXY_WAVE_DELAY = _env_float("PROXY_WAVE_DELAY", 0.5)
 PROXY_GALLERY_GRACE = _env_float("PROXY_GALLERY_GRACE", 1.5)
 PROXY_MAX_CONCURRENCY = _env_int("PROXY_MAX_CONCURRENCY", 8)
@@ -139,7 +167,86 @@ VXREDDIT_STATS_RE = re.compile(r"u/(\S+) on r/(\S+) - ⬆️ (\d+)(?: \| 💬 (\
 # Mastodon-spoof API: GET /api/v1/statuses/<encoded-id> -> JSON. The encoded
 # id is Embeddit's idEncode of {"type": "post", "id": <post_id>, "merge":
 # true} (merge=true => the video comes back WITH audio, under ~50 MB).
-EMBEDDIT_BASE = os.getenv("EMBEDDIT_INSTANCE", "https://embeddit.deltandy.me").rstrip("/")
+EMBEDDIT_DEFAULT_BASE = "https://embeddit.deltandy.me"
+
+
+def _normalize_instance(raw: str, default: str, variable: str) -> str:
+    """Round 53: turn an operator-supplied instance value into a usable base
+    URL, or fall back to the documented default with ONE clear log line.
+
+    Accepted: "https://host", "http://host", "host", "host/" and any of those
+    with surrounding whitespace (the REDDIT_MIRROR Variable in this repo is
+    stored bare, as `embeddit.deltandy.me`, so a bare host must work here).
+    Rejected (-> default): empty, whitespace, a scheme other than http(s),
+    an embedded space, or anything with no host part.
+    """
+    value = (raw or "").strip().rstrip("/")
+    if not value:
+        return default
+    if (re.match(r"^[a-z][a-z0-9+.-]*:", value, re.I)
+            and not re.match(r"^[a-z][a-z0-9+.-]*:\d+(?:/|$)", value, re.I)):
+        candidate = value               # has an explicit scheme — keep it
+    else:
+        # bare host (possibly host:port — "localhost:3000" is a port, not a
+        # scheme) — assume https
+        candidate = f"https://{value}"
+    parts = urllib.parse.urlsplit(candidate)
+    if (parts.scheme.lower() not in ("http", "https") or not parts.netloc
+            or re.search(r"\s", candidate)):
+        logging.warning(
+            f"{variable} '{raw}' is not a usable http(s) host — "
+            f"falling back to {default}.")
+        return default
+    return candidate.rstrip("/")
+
+
+# EMBEDDIT_INSTANCE (repo Variable) overrides the host; empty/unset/invalid
+# keeps the public default instance (round 53).
+EMBEDDIT_BASE = _normalize_instance(
+    _env_str("EMBEDDIT_INSTANCE", EMBEDDIT_DEFAULT_BASE),
+    EMBEDDIT_DEFAULT_BASE, "EMBEDDIT_INSTANCE")
+EMBEDDIT_HOST = EMBEDDIT_BASE.split("://", 1)[-1]
+
+# ---------------------------------------------------------------------------
+# ■ ROUND 53: RUN-SCOPED EMBEDDIT AVAILABILITY
+# Embeddit PR #2 (DeltAndy123/Embeddit, open 2026-09-19) is a full rewrite to
+# Bun + Hono that replaces the Mastodon spoof with Discord Component Embeds.
+# When that ships, /api/v1/statuses/<id> stops existing on the hosted
+# instance. A MISSING ROUTE is permanent for the run, unlike a per-post miss:
+#   * the live instance answers an unknown/dead POST with Cloudflare 502
+#     (verified 2026-10-01), never 404 — so 404/410/501 can only mean
+#     "this instance does not serve the Mastodon API";
+#   * the same is true of a 200 that is not JSON (an HTML page).
+# In those cases the service is dropped for the REST OF THE RUN after one
+# explanatory line, instead of costing a request + a log line per post. Every
+# other outcome (timeout, 5xx, 429, parse miss) stays a normal per-post miss
+# and Embeddit is tried again on the next post, exactly as before.
+# ---------------------------------------------------------------------------
+_embeddit_unavailable: "str | None" = None
+
+
+def embeddit_unavailable_reason() -> "str | None":
+    """Why Embeddit is skipped for the rest of this run (None = available)."""
+    return _embeddit_unavailable
+
+
+def reset_embeddit_availability():
+    """Clear the run-scoped skip (used by the tests; a new process starts
+    clean anyway)."""
+    global _embeddit_unavailable
+    _embeddit_unavailable = None
+
+
+def _mark_embeddit_unavailable(reason: str):
+    global _embeddit_unavailable
+    if _embeddit_unavailable is None:
+        _embeddit_unavailable = reason
+        logging.warning(
+            f"embeddit: {EMBEDDIT_HOST} does not serve the Mastodon status API "
+            f"({reason}) — skipping embeddit for the rest of this run "
+            f"(redditez/vxreddit/native media are unaffected). Set the "
+            f"EMBEDDIT_INSTANCE Variable to an instance that still exposes "
+            f"/api/v1/statuses, or leave it unset once the service is back.")
 EMBEDDIT_ENCODE_CHARS = "1234567890abcdefghijklmnopqrstuvwxyz"
 # Footer line inside the content HTML: "⬆️ 305 • 💬 21"
 # (compact numbers occur too: "⬆️ 1.1K • 💬 108")
@@ -167,7 +274,8 @@ STATS_ICONS_RE = re.compile(r"💬\s*(\d[\d,]*)\s*🔁\s*(\d[\d,]*)\s*💜\s*(\d
 
 # Warm-up: one known-good single-image post used to probe all three
 # services once per run (override: PROXY_WARMUP_POST=<subreddit>/<post_id>).
-WARMUP_POST_ID = os.getenv("PROXY_WARMUP_POST", "HonkaiStarRail_leaks/1whbjbh").strip()
+DEFAULT_WARMUP_POST = "HonkaiStarRail_leaks/1whbjbh"
+WARMUP_POST_ID = _env_str("PROXY_WARMUP_POST", DEFAULT_WARMUP_POST)
 
 PROXY_TIMEOUT = aiohttp.ClientTimeout(total=20)
 
@@ -827,6 +935,8 @@ async def _fetch_embeddit(session, path: str, label: str = ""):
     """Mastodon-spoof JSON API — no bot UA needed, no redirects. The status
     id is computed from the post id alone (encode {"type":"post",...}), so
     the subreddit in the path is irrelevant here."""
+    if _embeddit_unavailable is not None:
+        return None
     m = re.search(r"/comments/([a-zA-Z0-9]+)/", path or "")
     if not m:
         return None
@@ -839,11 +949,28 @@ async def _fetch_embeddit(session, path: str, label: str = ""):
             timeout=PROXY_TIMEOUT,
         ) as resp:
             if resp.status != 200:
-                logging.info(f"[{label}] embeddit HTTP {resp.status}.")
+                # Round 53: 404/410/501 = the route itself is gone on this
+                # instance (a dead POST answers 502 here), so stop asking.
+                if resp.status in (404, 410, 501):
+                    _mark_embeddit_unavailable(f"HTTP {resp.status}")
+                else:
+                    logging.info(
+                        f"[{label}] embeddit HTTP {resp.status} from {EMBEDDIT_HOST}.")
                 return None
-            data = await resp.json(content_type=None)
+            try:
+                data = await resp.json(content_type=None)
+            except Exception as e:
+                _mark_embeddit_unavailable(
+                    f"non-JSON 200 response ({type(e).__name__})")
+                return None
     except Exception as e:
-        logging.info(f"[{label}] embeddit error: {e}")
+        # Round 53: name the host and the exception CLASS. The old line
+        # printed only str(e), which for aiohttp's InvalidURL is just the url
+        # — the 2026-10-01 incident looked like a remote failure when it was
+        # an empty EMBEDDIT_INSTANCE Variable building a relative url.
+        logging.info(
+            f"[{label}] embeddit error ({type(e).__name__}) "
+            f"for {EMBEDDIT_HOST}: {e}")
         return None
     result = parse_embeddit_post(data)
     if not result:
@@ -894,6 +1021,11 @@ def proxy_services_for(path: str | None) -> list:
     order = list(PROXY_SERVICES)
     if path and SHARE_LINK_RE.match(path) and len(order) > 1:
         order = [s for s in order if s != "redditez"]
+    # Round 53: an instance without the Mastodon status API stays dropped for
+    # the rest of the run (never to empty — a last remaining service is still
+    # asked, same rule the share-link drop uses).
+    if _embeddit_unavailable is not None and len(order) > 1:
+        order = [s for s in order if s != "embeddit"]
     return order
 
 
@@ -1162,13 +1294,23 @@ async def proxy_warmup(session, post_id: str | None = None) -> dict:
     skips services marked ok=false (unless all are dead). Any failure here
     only marks the service down for this run; posting never depends on the
     warm-up succeeding."""
-    raw = post_id or WARMUP_POST_ID
-    parts = raw.split("/", 1)
-    if len(parts) != 2 or not parts[0] or not parts[1]:
+    raw = (post_id or WARMUP_POST_ID or "").strip()
+
+    def _valid(value: str) -> bool:
+        parts = value.split("/", 1)
+        return len(parts) == 2 and bool(parts[0].strip()) and bool(parts[1].strip())
+
+    if not _valid(raw):
+        # Round 53: a malformed value no longer costs the whole warm-up — the
+        # built-in known-good post is used instead, so proxy_health.json stays
+        # fresh and dead services keep being skipped.
         logging.warning(f"PROXY_WARMUP_POST '{raw}' is invalid — use "
-                        f"<subreddit>/<post_id>. Warm-up skipped.")
-        return {}
-    sub, pid = parts
+                        f"<subreddit>/<post_id>. Falling back to "
+                        f"{DEFAULT_WARMUP_POST}.")
+        raw = DEFAULT_WARMUP_POST
+        if not _valid(raw):                                  # pragma: no cover
+            return {}
+    sub, pid = (p.strip() for p in raw.split("/", 1))
     path = f"/r/{sub}/comments/{pid}/"
     label = "proxy warm-up"
     # ROUND 49 FIX: the probes are built FROM the dispatch map, so the result

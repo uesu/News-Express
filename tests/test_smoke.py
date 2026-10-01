@@ -3709,6 +3709,127 @@ finally:
             os.environ[_name] = _value
 
 
+# ===========================================================================
+# ROUND 53 (2026-10-01) — empty STRING Variables must also mean "default".
+# Production incident 2026-10-01 23:13 UTC: the workflow wires
+# EMBEDDIT_INSTANCE / PROXY_WARMUP_POST as `${{ vars.X }}`; with no Variable
+# set they arrive as EMPTY STRINGS, which os.getenv(name, default) accepts as
+# real values. EMBEDDIT_BASE became "" and every Embeddit request went to the
+# RELATIVE url "/api/v1/statuses/<id>" — aiohttp raised InvalidUrlClientError
+# before opening a socket, logged as "embeddit error: /api/v1/statuses/4f1y…"
+# on EVERY post, and the warm-up logged "PROXY_WARMUP_POST '' is invalid —
+# Warm-up skipped" on every run. Same guard class as round 49b (numerics),
+# now for strings.
+# ===========================================================================
+_r53_names = ("EMBEDDIT_INSTANCE", "PROXY_WARMUP_POST", "SUBREDDITS", "ACCOUNTS")
+_r53_saved_env = {name: os.environ.get(name) for name in _r53_names}
+try:
+    os.environ.update({name: "" for name in _r53_names})
+    _r53_proxy = load_module("smoke_reddit_proxy_r53", "testing area/reddit_proxy.py")
+    check("r53: empty EMBEDDIT_INSTANCE keeps the default host (absolute url)",
+          _r53_proxy.EMBEDDIT_BASE == "https://embeddit.deltandy.me",
+          repr(_r53_proxy.EMBEDDIT_BASE))
+    check("r53: EMBEDDIT_BASE is always absolute http(s)",
+          _r53_proxy.EMBEDDIT_BASE.startswith(("http://", "https://")))
+    check("r53: empty PROXY_WARMUP_POST keeps the default warm-up post",
+          _r53_proxy.WARMUP_POST_ID == _r53_proxy.DEFAULT_WARMUP_POST ==
+          "HonkaiStarRail_leaks/1whbjbh", repr(_r53_proxy.WARMUP_POST_ID))
+    _r53_v3 = load_module("smoke_reddit_v3_r53", "testing area/reddit_main_v3.py")
+    check("r53: empty SUBREDDITS keeps the 6 default subreddits",
+          len(_r53_v3.SUBREDDITS) == 6, repr(_r53_v3.SUBREDDITS))
+    _r53_tw = load_module("smoke_twitter_v3_r53", "testing area/twitter_v3.py")
+    check("r53: empty ACCOUNTS keeps the 5 default accounts",
+          len(_r53_tw.ACCOUNTS) == 5, repr(_r53_tw.ACCOUNTS))
+
+    # Instance normalization: bare host (the way REDDIT_MIRROR is stored in
+    # this repo's Variables) gains https://, trailing slash is dropped, and
+    # garbage falls back to the default instead of producing a broken url.
+    _r53_default = "https://embeddit.deltandy.me"
+    _r53_norm_cases = (
+        ("embeddit.deltandy.me", _r53_default),
+        ("embeddit.deltandy.me/", _r53_default),
+        ("https://embeddit.deltandy.me/", _r53_default),
+        ("http://localhost:3000", "http://localhost:3000"),
+        ("localhost:3000", "https://localhost:3000"),
+        ("my.host:8080", "https://my.host:8080"),
+        ("ftp://bad.example", _r53_default),
+        ("https://", _r53_default),
+        ("not a url", _r53_default),
+        ("   ", _r53_default),
+    )
+    check("r53: EMBEDDIT_INSTANCE normalization (bare host/slash/garbage)",
+          all(_r53_proxy._normalize_instance(raw, _r53_default, "EMBEDDIT_INSTANCE") == want
+              for raw, want in _r53_norm_cases),
+          str([(raw, _r53_proxy._normalize_instance(raw, _r53_default, "EMBEDDIT_INSTANCE"))
+               for raw, want in _r53_norm_cases]))
+
+    # Run-scoped unavailability (Embeddit PR #2 readiness): a 404/410/501 on
+    # /api/v1/statuses means the route itself is gone on that instance (a
+    # dead post answers 502 there, never 404) — embeddit is then dropped from
+    # the dispatch order for the rest of the run, but never to an empty list.
+    _r53_proxy.reset_embeddit_availability()
+    check("r53: embeddit in the dispatch order while available",
+          _r53_proxy.proxy_services_for("/r/x/comments/abc/t/") ==
+          ["vxreddit", "redditez", "embeddit"])
+    _r53_proxy._mark_embeddit_unavailable("HTTP 404")
+    check("r53: unavailable embeddit is dropped from the dispatch order",
+          _r53_proxy.proxy_services_for("/r/x/comments/abc/t/") ==
+          ["vxreddit", "redditez"])
+    check("r53: share link + unavailable embeddit still leaves vxreddit",
+          _r53_proxy.proxy_services_for("/r/x/s/tok") == ["vxreddit"])
+    check("r53: unavailability reason is reported",
+          _r53_proxy.embeddit_unavailable_reason() == "HTTP 404")
+    import asyncio as _r53_asyncio
+    check("r53: _fetch_embeddit short-circuits without touching the network",
+          _r53_asyncio.run(_r53_proxy._fetch_embeddit(None, "/r/x/comments/abc/t/", "t")) is None)
+    _r53_proxy.reset_embeddit_availability()
+    check("r53: availability reset restores the full order",
+          _r53_proxy.proxy_services_for("/r/x/comments/abc/t/") ==
+          ["vxreddit", "redditez", "embeddit"]
+          and _r53_proxy.embeddit_unavailable_reason() is None)
+
+    # Warm-up resilience: a malformed PROXY_WARMUP_POST now probes the
+    # built-in default post instead of skipping the warm-up (which left
+    # proxy_health.json stale on every production run).
+    async def _r53_fake_fetch(session, path, label=""):
+        _r53_fake_fetch.paths.append(path)
+        return {"service": "fake", "title": "t", "author": None,
+                "subreddit": None, "body": "b", "stats": None, "media": []}
+    _r53_fake_fetch.paths = []
+    _r53_saved_fetchers = dict(_r53_proxy._PROXY_FETCHERS)
+    _r53_tmp = tempfile.mkdtemp()
+    _r53_cwd = os.getcwd()
+    try:
+        for _n in _r53_proxy._PROXY_FETCHERS:
+            _r53_proxy._PROXY_FETCHERS[_n] = _r53_fake_fetch
+        os.chdir(_r53_tmp)
+        _r53_services = _r53_asyncio.run(_r53_proxy.proxy_warmup(None, "garbage-no-slash"))
+        check("r53: invalid PROXY_WARMUP_POST falls back to the default post",
+              bool(_r53_services) and all(
+                  p == "/r/HonkaiStarRail_leaks/comments/1whbjbh/"
+                  for p in _r53_fake_fetch.paths),
+              str(_r53_fake_fetch.paths))
+        check("r53: the fallback warm-up still writes proxy health",
+              all(v.get("ok") for v in _r53_services.values()), str(_r53_services))
+    finally:
+        os.chdir(_r53_cwd)
+        _r53_proxy._PROXY_FETCHERS.update(_r53_saved_fetchers)
+        shutil.rmtree(_r53_tmp, ignore_errors=True)
+
+    # The guard class itself: no bare os.getenv("NAME", "non-empty default")
+    # may remain for the two Variables this round fixed.
+    _r53_src = open(os.path.join(ROOT, "testing area/reddit_proxy.py")).read()
+    check("r53: EMBEDDIT_INSTANCE / PROXY_WARMUP_POST no longer use bare os.getenv defaults",
+          'os.getenv("EMBEDDIT_INSTANCE", ' not in _r53_src
+          and 'os.getenv("PROXY_WARMUP_POST", ' not in _r53_src)
+finally:
+    for _name, _value in _r53_saved_env.items():
+        if _value is None:
+            os.environ.pop(_name, None)
+        else:
+            os.environ[_name] = _value
+
+
 if failures:
     print(f"SMOKE TEST FAILURES ({len(failures)}): {failures}")
     sys.exit(1)
