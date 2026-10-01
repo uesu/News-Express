@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Effective date:** September 30, 2026 (last updated for runtime, cache-persistence, and source-fleet hardening)
+**Effective date:** October 1, 2026 (last updated for repository tracking, optional retraction state, and configuration documentation)
 **Applies to:** the *News Express* / *Citlali News* X (Twitter) + Reddit → Discord monitor
 ("the Service"), an open-source, self-hosted automation tool.
 
@@ -17,6 +17,13 @@ A set of open-source Python scripts that fetch **public** X/Twitter and Reddit c
 mirrors and repost links, text excerpts, and media into Discord channels **you control**, using
 Discord webhooks triggered from your own GitHub repository. There is no hosted bot and no service
 operated by the author on your behalf — you run your own instance.
+
+The Reddit V3 monitor's dead-post retraction feature is **disabled by default**. If you enable
+`RETRACT_DEAD_POSTS`, the monitor requests Discord message IDs (`wait=true`), stores the public card
+payload and delivery metadata in `posted_messages.json`, and may edit or delete a card only after its
+configured independent removal checks pass. You are responsible for choosing `RETRACT_MODE`, keeping
+that state file private when appropriate, and ensuring that any automated edit/delete behavior fits
+your Discord server's rules and moderation practice.
 
 ## 3. Acceptable Use
 

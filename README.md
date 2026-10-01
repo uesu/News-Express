@@ -97,12 +97,19 @@ and to [@dangered wolf](https://github.com/dangeredwolf), creator and lead devel
 │       ├── twitter_monitor.yml    # X/Twitter — runs testing area/twitter_v3.py (V3)
 │       ├── reddit_monitor.yml     # Reddit (ACTIVE) — runs testing area/reddit_main_v3.py
 │       ├── ci.yml                 # PR gate: install + compile + offline smoke test
-│       └── dependabot_auto_merge.yml  # opt-in auto-merge for Dependabot PRs (repo Variable)
+│       ├── dependabot_auto_merge.yml  # opt-in auto-merge for Dependabot PRs (repo Variable)
+│       └── python_version_bump.yml    # verified CPython patch/minor bump workflow
 ├── docs/
+│   ├── REPOSITORY_TRACKING.md     # current file/config/policy inventory and audit record
+│   ├── ROUND_51.md                # profile-crosspost and vxReddit shell behavior record
+│   ├── ROUND_50.md                # proxy decisive-exit regression record
+│   ├── ROUND_49.md                # parallel proxy dispatch and telemetry record
+│   ├── ROUND_49_REPLAY_TESTS.md   # production-card replay fixture instructions
 │   ├── DEPENDABOT.md              # full plain-English Dependabot explanation
 │   ├── DISCOHOOK.md               # Discohook: what it's for, fully optional, safe to disable
-│   ├── CI_SMOKE.md                # ci.yml + test_smoke.py: the required offline safety gate
-│   └── PYTHON_RUNTIME.md          # CPython pin, compatibility, performance, and update policy
+│   ├── CI_SMOKE.md                # ci.yml + offline safety-gate explanation
+│   ├── PYTHON_RUNTIME.md          # CPython pin, compatibility, performance, and update policy
+│   └── other round/patch records  # historical implementation and validation notes
 ├── testing area/                  # tested copies of every engine (see Testing area guide)
 │   ├── twitter_v1.py              # X/Twitter — V1 (plain, no API key)
 │   ├── twitter_v2_button_outside.py     # X V2 (buttons outside)
@@ -111,19 +118,23 @@ and to [@dangered wolf](https://github.com/dangeredwolf), creator and lead devel
 │   ├── reddit_main.py             # Reddit V1 (free, mirror auto-embed)
 │   ├── reddit_main_v2_embedez.py  # Reddit V2 (Components V2 via EmbedEZ API)
 │   ├── reddit_main_v3.py          # Reddit V3 (proxy media + native fallback — ACTIVE)
-│   ├── reddit_proxy.py            # Reddit V3 proxy services (round 13: redditez/vxreddit/embeddit)
-│   └── video_diag.py              # X video tile diagnostic (round 10)
+│   ├── reddit_proxy.py            # Reddit V3 proxy services and health state
+│   ├── reddit_signals.py          # pure Reddit gate/decision functions
+│   └── video_diag.py              # X video tile diagnostic
 ├── tests/
-│   └── test_smoke.py              # offline smoke test (run by ci.yml on every PR)
+│   ├── test_smoke.py              # offline smoke test (run by ci.yml on every PR)
+│   ├── test_reddit_signals.py     # pure Reddit gate/unit suite
+│   └── fixtures/posted_cards.py   # production-card replay fixtures
 ├── posted_tweets.json             # X cache (auto-committed) — start with: []
 ├── posted_reddit.json             # Reddit cache (auto-committed) — start with: []
-├── proxy_health.json              # proxy warm-up results (auto-committed, round 13)
-├── pending_reddit.json            # Reddit re-check cache: skipped posts (auto-committed, round 30)
-├── PRIVACY_POLICY.md              # privacy policy (the bot collects no personal data)
+├── proxy_health.json              # proxy warm-up results (auto-committed)
+├── pending_reddit.json            # Reddit re-check cache (auto-committed)
+├── posted_messages.json           # optional retraction state; created only when enabled
+├── PRIVACY_POLICY.md              # privacy policy and state/recipient disclosure
 ├── TERMS_OF_SERVICE.md            # terms of service / acceptable use
 ├── requirements.txt               # feedparser, aiohttp, python-dotenv
-├── .env.example                   # local testing template
-└── .gitignore                     # (keep the posted_*.json force-add exception in workflow)
+├── .env.example                   # local testing template and active switches
+└── .gitignore                     # ignores local/runtime state; workflows force-add caches
 ```
 
 > **Engine layout note:** by default, production workflows run proven engines directly
@@ -720,7 +731,12 @@ Discord channel.
 * **Environment switches** (all optional — sane defaults without them):
   `YOUTUBE_MEDIA_EMBED` (default off), `REDDIT_OP_COMMENT` (default on),
   `DISCOHOOK_PREVIEW` (default on), `FEEDTOKEN_JSON_STAGGER` (default 65 s),
-  `REDDIT_JSON_PROBE` (default `auto` — see the round-31 section).
+  `REDDIT_JSON_PROBE` (default `auto`), `PROXY_MEDIA` (default on),
+  `PROXY_WARMUP_POST`, `EMBEDDIT_INSTANCE`, `YOUTUBE_LINK_MESSAGE` (default
+  on), `PENDING_RECHECK_SECONDS` (default 1800 s), and the round-42–50 gate,
+  listing, and proxy timing switches shown in [`.env.example`](.env.example).
+  That template is the source of truth for the complete local switch list and
+  its matching GitHub Actions repository Variables.
 
 ### 🆕 Reddit V3 — round 13 (2026-09-16): proxy media services
 
@@ -1540,7 +1556,10 @@ jobs:
 Create `posted_reddit.json` with `[]` as its initial content (first run posts only the newest item,
 by design). Proxy warm-up states are tracked in `proxy_health.json`; skipped posts (removed /
 pending approval / media still missing) wait in `pending_reddit.json` and are re-checked live
-(round 30).
+(round 30). If `RETRACT_DEAD_POSTS=1` is enabled, the Reddit workflow also persists
+`posted_messages.json` with the Discord message ID, delivery metadata, and payload needed for an
+optional edit/delete tombstone. It is pruned by `RETRACT_WINDOW_SECONDS`, is ignored locally, and
+is force-added only by the workflow.
 
 ## 🆕 Reddit behaviors (2026-09-11 update)
 
@@ -2100,6 +2119,22 @@ re-evaluated on every tick.
 ---
 
 ## 🗒 Changelog
+
+* **2026-10-01 — Repository tracking and configuration audit.** The active
+  workflow paths, legacy engines, tests, state files, runtime policy, Privacy
+  Policy, Terms of Service, and historical round records were reviewed against
+  the fetched `main` tree. The repository map now includes the Python bump
+  workflow, Reddit signal suite, replay fixture, and optional
+  `posted_messages.json` retraction state. `.env.example` now includes every
+  active V3 proxy/recheck switch (`PENDING_RECHECK_SECONDS`, `PROXY_MEDIA`,
+  `PROXY_WARMUP_POST`, `EMBEDDIT_INSTANCE`, and `YOUTUBE_LINK_MESSAGE`), and
+  the active workflows now pass the documented tuning Variables instead of
+  leaving them as comments. Empty true-by-default Variables retain their code
+  defaults, including the NSFW live-page fallback. The optional retraction
+  cache is ignored locally so enabling it cannot leave an accidental
+  working-tree file. The policy files now disclose the conditional Discord
+  message-ID/payload cache and its retention purpose. See the
+  [consolidated tracking record](docs/REPOSITORY_TRACKING.md).
 
 * **2026-10-02 — Profile-crosspost and fallback observability hardening.**
   Reddit V3 now renders crossposts whose original is a user profile post from
