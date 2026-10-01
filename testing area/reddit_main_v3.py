@@ -385,6 +385,10 @@ POSTED_MESSAGES_FILE = "posted_messages.json"
 MOD_QUEUE_GATE = os.getenv("MOD_QUEUE_GATE", "1").strip().lower() not in ("0", "false", "no", "off")
 MOD_QUEUE_WINDOW_SECONDS = _env_int("MOD_QUEUE_WINDOW_SECONDS", 6 * 3600)
 MOD_QUEUE_REQUEST_RE = re.compile(r"respond to this comment with|temporarily sent to the moderators for review", re.I)
+MOD_QUEUE_STRONG_RE = re.compile(r"awaiting (?:moderator )?approval|pending (?:moderator )?approval|sent to the moderators for review|awaiting mod", re.I)
+MOD_QUEUE_WEAK_GRACE_SECONDS = _env_int("MOD_QUEUE_WEAK_GRACE_SECONDS", 900)
+LISTING_TIMEOUT_SECONDS = _env_int("LISTING_TIMEOUT_SECONDS", 8)
+LISTING_HTML_GRACE_SECONDS = _env_int("LISTING_HTML_GRACE_SECONDS", 2)
 MOD_QUEUE_LISTING_ID_RE = re.compile(r"/comments/([a-z0-9]+)/", re.I)
 
 # Round 38d (2026-09-29): a post can be natively queued with no AutoModerator
@@ -466,30 +470,25 @@ def _rss_oldest_age(xml, now=None):
             best = age
     return best
 
-def mod_queue_decision(page_html, listing_ids, post_id, listing_oldest_age=None):
-    """Return ``pending approval`` only for an evidenced queue hold.
-
-    Round 37 keeps its positive AutoModerator signal. Round 38d additionally
-    handles zero-comment native queue posts through negative space. Round 41
-    ensures positive hold text/banners hold the post even if the /new listing
-    fetch timed out, only releasing once confirmed present in /new.
-    """
+def mod_queue_decision(page_html, listing_ids, post_id, listing_oldest_age=None,
+                       listing_source=None, post_age_seconds=None):
     if not page_html or not post_id:
         return None
-    if listing_ids is not None and post_id.lower() in listing_ids:
-        return None  # Present in the public listing: it was released.
-    if MOD_QUEUE_REQUEST_RE.search(page_html) or re.search(r"awaiting (?:moderator )?approval", page_html, re.I):
-        return "pending approval"  # Positive AutoMod/banner hold signal.
+    return reddit_signals.queue_verdict(
+        strong_hold_text=bool(MOD_QUEUE_STRONG_RE.search(page_html)),
+        weak_hold_text=bool(MOD_QUEUE_REQUEST_RE.search(page_html)),
+        in_listing=None if listing_ids is None else post_id.lower() in listing_ids,
+        listing_source=listing_source or reddit_signals.LISTING_HTML,
+        listing_oldest_age=listing_oldest_age,
+        page_age_seconds=(_redlib_ages_seconds(page_html) or [None])[0],
+        post_age_seconds=post_age_seconds,
+        tail_margin_seconds=MOD_QUEUE_TAIL_MARGIN_SECONDS,
+        weak_grace_seconds=MOD_QUEUE_WEAK_GRACE_SECONDS)
 
-    # Round 38d: no queue text (native queue, zero comments).
-    if listing_ids is None or listing_oldest_age is None:
-        return None
-    post_ages = _redlib_ages_seconds(page_html)
-    if not post_ages:
-        return None
-    if post_ages[0] < listing_oldest_age + MOD_QUEUE_TAIL_MARGIN_SECONDS:
-        return "pending approval"
-    return None
+def _listing_parts(listing):
+    if not listing:
+        return None, None, None
+    return listing[0], listing[1] if len(listing) > 1 else None, listing[2] if len(listing) > 2 else reddit_signals.LISTING_HTML
 
 async def _fetch_new_listing(session, subreddit):
     if subreddit in _mod_queue_listing_cache:
@@ -518,7 +517,7 @@ async def _fetch_new_listing(session, subreddit):
         if xml and _RSS_DOCUMENT_RE.search(xml):
             ids = _listing_post_ids(xml)
             if ids:
-                result = (ids, _rss_oldest_age(xml))
+                result = (ids, _rss_oldest_age(xml), reddit_signals.LISTING_RSS)
                 logging.info(f"MODQUEUE-LISTING: r/{subreddit} /new listing via rss "
                              f"({len(ids)} entries).")
                 break
@@ -545,7 +544,7 @@ async def _fetch_new_listing(session, subreddit):
                 if ids:
                     # Keep the listing's oldest visible age with its IDs. A
                     # missing age is intentional: round 38d then fails open.
-                    result = (ids, _listing_oldest_age(html))
+                    result = (ids, _listing_oldest_age(html), reddit_signals.LISTING_HTML)
                     logging.info(f"MODQUEUE-LISTING: r/{subreddit} /new listing via html "
                                  f"({len(ids)} entries).")
                     break
@@ -559,11 +558,11 @@ async def _fetch_new_listing(session, subreddit):
 def _listing_confirms_post(listing, post_id: str) -> bool:
     if not listing or not post_id:
         return False
-    listing_ids, _listing_oldest_age = listing
-    return listing_ids is not None and post_id.lower() in listing_ids
+    listing_ids, _listing_oldest_age, listing_source = _listing_parts(listing)
+    return reddit_signals.listing_proves_release(listing_ids is not None and post_id.lower() in listing_ids, listing_source)
 
 
-async def mod_queue_reason(session, subreddit, path, label=""):
+async def mod_queue_reason(session, subreddit, path, label="", post_age_seconds=None):
     pages = await asyncio.gather(*[_fetch_redlib_post_page(session, inst, path) for inst in REDDIT_RSS_INSTANCES])
     # Preserve the round-37 positive signal wherever it was rendered. For a
     # zero-comment native queue post, prefer a page that actually exposes a
@@ -576,9 +575,9 @@ async def mod_queue_reason(session, subreddit, path, label=""):
     if not page:
         return None
     listing = await _fetch_new_listing(session, subreddit)
-    listing_ids, listing_oldest_age = (None, None) if listing is None else listing
+    listing_ids, listing_oldest_age, listing_source = _listing_parts(listing)
     return mod_queue_decision(page, listing_ids, extract_post_id(path) or "",
-                              listing_oldest_age=listing_oldest_age)
+                              listing_oldest_age=listing_oldest_age, listing_source=listing_source, post_age_seconds=post_age_seconds)
 
 # ---------------------------------------------------------------------------
 # ■ RSS SOURCES
@@ -3553,7 +3552,7 @@ async def retract_dead_posts(session, posted_messages: dict, now: float) -> None
         path = record.get("path") or ""
         post_id = extract_post_id(path) or unique_key.rsplit("_", 1)[-1]
         listing = await _fetch_new_listing(session, subreddit)
-        listing_ids, listing_oldest_age = (None, None) if listing is None else listing
+        listing_ids, listing_oldest_age, _listing_source = _listing_parts(listing)
         reason = await live_removal_reason(session, path, label=f"retract {unique_key}")
         decision = reddit_signals.retraction_decision(
             enabled=RETRACT_DEAD_POSTS,
@@ -4152,7 +4151,7 @@ async def main():
                     logging.info(f"MODQUEUE: {unique_key} — confirmed in /new; "
                                  f"skipping mod-queue instance checks")
                 else:
-                    _mq = await mod_queue_reason(session, subreddit, path, unique_key)
+                    _mq = await mod_queue_reason(session, subreddit, path, unique_key, post_age_seconds=now - published_ts)
                     if not _mq:
                         logging.info(f"MODQUEUE: {unique_key} — no queue hold — proceeding")
                     if _mq:
