@@ -75,8 +75,8 @@ from a benchmark claim that ignores the network.
 
 ## Is the Python runtime auto-bumped?
 
-**No, and that is intentional.** The shipped Dependabot configuration has two
-update ecosystems:
+**Not by Dependabot — by a dedicated workflow, since round 46.** The shipped
+Dependabot configuration has two update ecosystems:
 
 | Managed automatically (as PRs) | Not managed automatically |
 |---|---|
@@ -90,10 +90,30 @@ can merge a **green Dependabot dependency PR**; it never changes the Python
 runtime itself.
 
 Using `python-version: '3.14'` would float automatically to a later 3.14 patch,
-but it would trade away reproducibility and pre-merge validation. This project
-chooses the safer model: an explicit, reviewed runtime-bump PR followed by CI
-and a monitor dry-run. Do not auto-jump major/minor versions in a live posting
-workflow.
+but it would trade away reproducibility and pre-merge validation: the new
+interpreter would first be seen by a **live posting run**, untested.
+
+`.github/workflows/python_version_bump.yml` closes that gap without giving up
+the exact pin. Weekly (and on demand) it works out the next CPython version —
+the newest stable patch of the current series, or, when the series is
+exhausted, the newest patch of the **next** series, never skipping a series —
+then proves the repository on it *before* proposing anything:
+
+| Gate | Why |
+|---|---|
+| version exists in the `actions/python-versions` manifest with a linux-x64 build | that manifest is exactly what `setup-python` resolves; a version absent from it breaks every workflow |
+| `pip install --only-binary=:all: -r requirements.txt` | `aiohttp` and its C dependencies (`multidict`, `yarl`, `frozenlist`, `propcache`) ship per-ABI wheels. A brand-new CPython minor has none for days or weeks; without this flag pip would silently compile from source. No wheels ⇒ the bump is **deferred**, not merged |
+| soak period, minor bumps only (`PYTHON_BUMP_SOAK_DAYS`, default 30) | an `x.y.0` is the least-tested build of its line; security patches skip the soak on purpose |
+| `compileall` + `test_smoke.py` + `test_reddit_signals.py` under the new interpreter | the real CI gate, run on the candidate |
+| the same three, **again**, after the pin is rewritten | the rewrite edits `tests/test_smoke.py` itself (the round-39 pin guard), so the rewritten tree has to be re-proved |
+
+A pull request is only created when all of that is green. Merging is opt-in
+through the repository Variable `AUTO_MERGE_PYTHON_BUMP`: unset means the PR
+simply waits, `yes` merges green **patch** bumps, `all` merges green minor
+bumps too. `yes` is the recommended setting — a minor bump also leaves prose in
+this file naming the old series, which no script should rewrite blind (a
+series-wide replace would corrupt unrelated numbers such as `aiohttp>=3.14.3`),
+so those leftovers are listed in the PR body for a human instead.
 
 ## Safe update procedure
 
