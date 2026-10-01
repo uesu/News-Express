@@ -2306,7 +2306,7 @@ try:
     v3._mod_queue_listing_cache.clear()
     _r38d_listing = asyncio.run(v3._fetch_new_listing(_R38dListingSession(), "QueueTest"))
     check("r38d: listing fetch caches IDs with its parsed oldest age",
-          _r38d_listing == ({"other1", "other2"}, 12 * 3600), str(_r38d_listing))
+          _r38d_listing == ({"other1", "other2"}, 12 * 3600, v3.reddit_signals.LISTING_HTML), str(_r38d_listing))
 finally:
     v3._mod_queue_listing_cache.clear()
     v3._mod_queue_listing_cache.update(_r38d_cache_before)
@@ -2400,7 +2400,7 @@ try:
     v3.REDDIT_FEED_TOKEN = "smoke token"
     _r38e_session = _R38eSession()
     _r38e_listing = asyncio.run(v3._fetch_new_listing(_r38e_session, "RssTest"))
-    _r38e_ids, _r38e_span = _r38e_listing
+    _r38e_ids, _r38e_span, _r38e_source = _r38e_listing
     check("r38e: RSS listing is tried first and returns IDs plus a span",
           _r38e_ids == {"aaa111", "bbb222", "ccc333"}
           and _r38e_span is not None
