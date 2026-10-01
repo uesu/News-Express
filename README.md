@@ -2101,6 +2101,21 @@ re-evaluated on every tick.
 
 ## 🗒 Changelog
 
+* **2026-10-02 — Profile-crosspost and fallback observability hardening.**
+  Reddit V3 now renders crossposts whose original is a user profile post from
+  `/user/<name>/comments/...`, `/u/<name>/comments/...`, or Reddit's
+  `/r/u_<name>/...` alias as
+  `🔁 Crosspost of [u/<name>](https://www.reddit.com/user/<name>/) Profile`.
+  Ordinary subreddit crosspost rendering is unchanged. A media-less vxReddit
+  response whose normalized title is only `vxReddit` is now a fetch miss, so
+  the fallback chain cannot use the mirror shell as a post title; a result
+  carrying media is still accepted. A cached `TEST_TWEET_ID` keeps the exact
+  existing dedup skip and now logs that the skip is intentional. This release
+  adds offline fixtures for every profile route, the vxReddit shell, and the
+  cache-skip invariant. No secrets, Variables, network request types, cache
+  formats, retention, or data-processing behavior changed; the policy files
+  remain current. See [Round 51 audit record](docs/ROUND_51.md).
+
 * **2026-09-30 — Runtime, delivery, and source hardening.** All executable
   workflows now pin stable CPython **3.14.7**; CI installs, compiles, and smoke-tests
   that exact interpreter before merge. Cache persistence uses an explicit
