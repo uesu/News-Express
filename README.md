@@ -2120,6 +2120,18 @@ re-evaluated on every tick.
 
 ## 🗒 Changelog
 
+* **2026-10-02 — Round 56: media heal targets videos only.** The round-47
+  self-heal re-edited three photo posts whose image tiles came back from
+  Discord with cold metadata, even though the photos already rendered fine
+  (only the mp4 player actually needs resolved metadata — the sole broken
+  tile ever confirmed was a video). `heal_eligible_items()` now limits the
+  heal pass to video renditions (`.mp4/.m4v/.mov/.webm/.m3u8` or
+  video.twimg.com, which keeps X "GIF" tweet_video mp4s covered); photos
+  and converted `.gif`/`.webp` files are left alone. Set the Variable
+  `MEDIA_HEAL_SCOPE=all` to restore healing for every media type — no code
+  change. Log wording fixed ("the media now renders").
+  See [Round 56](docs/ROUND_56.md).
+
 * **2026-10-02 — Round 55: mod-queue page evidence must render this post.**
   A 200 Cloudflare/JavaScript shell could masquerade as a Reddit post page
   when the banner sources were unavailable, allowing a queued post to pass
