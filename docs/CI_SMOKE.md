@@ -61,8 +61,8 @@ policy: [Python runtime policy](PYTHON_RUNTIME.md).
   `proxy_health.json` round-trip, — round 55 — the mod-queue page-identity
   check (`page_is_post_page`) and the 1wvlsz0 shell-page scenario
   end-to-end, — round 56 — the videos-only media-heal scope
-  (`is_video_media_url`/`heal_eligible_items` + `MEDIA_HEAL_SCOPE=all`
-  restore), and — rounds 53/54 — the GHA-safe string
+  (`is_video_media_url`/`heal_eligible_items` + the `MEDIA_HEAL_SCOPE`
+  value matrix `video`/`on`/`all`/`off`), and — rounds 53/54 — the GHA-safe string
   Variable defaults, the Embeddit-rewrite Component-Embed page parser, and
   the Mastodon→component→unavailable mode machine).
 * **Round 38e queue fixtures** — the test uses an in-memory RSS document to

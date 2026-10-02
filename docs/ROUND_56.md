@@ -28,9 +28,9 @@
 
 ## Why images do not need the heal
 
-An image tile renders from its raw/proxy URL even while Discord's media
-probe is still cold — the client just fetches the picture. A **video** tile
-is different: the player will not start without resolved metadata, which is
+An image tile renders from its raw/proxy URL even while Discord's media probe
+is still cold — the client just fetches the picture. A **video** tile is
+different: the player will not start without resolved metadata, which is
 exactly what round 47 hit. In production, cold-image metadata has never
 produced a visibly broken tile; cold-video metadata has.
 
@@ -50,14 +50,29 @@ produced a visibly broken tile; cold-video metadata has.
   "the video now plays" was hardcoded from the round-47 incident); the
   queue line reports `heal-eligible` items and the active scope.
 
+## Variable values (round 56b)
+
+`MEDIA_HEAL_SCOPE` (Settings → Secrets and variables → Actions →
+Variables, Twitter prod repo) accepts three modes — no code change
+needed for any of them:
+
+| Value             | Mode    | Behaviour                                        |
+|-------------------|---------|--------------------------------------------------|
+| `video` (default) | `video` | Heal video renditions only                        |
+| `on` (or `all`)   | `all`   | Full round-47 behaviour: heal every media type    |
+| `off`             | `off`   | Never re-edit anything (heal pass fully disabled) |
+
+Normalisation is forgiving (`media_heal_scope()`): any casing and
+surrounding whitespace is accepted; `none`/`no`/`0`/`false`/`disabled`
+also mean `off`; anything unknown, empty, or unset falls back to the safe
+default `video` (GHA empty-string pitfall, round 53 pattern). `off` here and
+the round-47 master switch `MEDIA_HEAL=off` are equivalent — either one
+disables the heal pass.
+
 ## If a photo/GIF/webp tile IS ever seen broken
 
-Set the repository **Variable** `MEDIA_HEAL_SCOPE=all` (Settings →
-Secrets and variables → Actions → Variables) in the Twitter prod repo —
-no code change needed. That restores the full round-47 behaviour: every
-unresolved media item of any type is healed. The default (`video`) also
-survives an empty/unset Variable (GHA empty-string pitfall, round 53
-pattern: `(os.getenv(...) or "video").strip().lower() or "video"`).
+Set `MEDIA_HEAL_SCOPE=on` (or `all`) — that restores the full round-47
+behaviour: every unresolved media item of any type is healed.
 
 ## What did NOT change
 
@@ -74,4 +89,7 @@ webm with fragment), image exclusion (jpg/png/gif/webp/empty/None), mixed
 cold message heals only the video, photos-only cold message queues nothing
 (the 2026-10-02 case), video-only message unchanged vs round 47,
 `MEDIA_HEAL_SCOPE=all` restores images, `unresolved_media_items` unchanged,
-and the default scope is `video`.
+and the default scope is `video`. Round 56b adds the value matrix
+(`on`/`all` → all, `off`/`none`/`0`/`false`/`disabled` → off,
+`video`/unset/empty/unknown → video, any casing) and verifies that scope
+off never queues a heal even for a cold video.
