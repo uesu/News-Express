@@ -2120,6 +2120,15 @@ re-evaluated on every tick.
 
 ## 🗒 Changelog
 
+* **2026-10-02 — Round 55: mod-queue page evidence must render this post.**
+  A 200 Cloudflare/JavaScript shell could masquerade as a Reddit post page
+  when the banner sources were unavailable, allowing a queued post to pass
+  with no hold text. `page_is_post_page()` now requires the post's own
+  `/comments/<id>` marker before page HTML can feed the mod-queue verdict.
+  Shells route into the existing no-page branch: young posts hold unless an
+  API-backed listing proves release, while healthy rendered posts retain the
+  zero-latency path. See [Round 55](docs/ROUND_55.md).
+
 * **2026-10-02 — Embeddit incident root cause + rewrite readiness (rounds
   53–54).** The 2026-10-01 23:13 UTC production runs logged
   `embeddit error: /api/v1/statuses/…` on every post and
