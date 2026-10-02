@@ -209,8 +209,8 @@ EMBEDDIT_HOST = EMBEDDIT_BASE.split("://", 1)[-1]
 
 # ---------------------------------------------------------------------------
 # ■ ROUND 53: RUN-SCOPED EMBEDDIT AVAILABILITY
-# ■ ROUND 54: COMPONENT-EMBED READINESS (Embeddit PR #2 auto-adaptation)
-# Embeddit PR #2 (DeltAndy123/Embeddit, draft, branch `rewrite`, read
+# ■ ROUND 54: COMPONENT-EMBED READINESS (Embeddit rewrite auto-adaptation)
+# The Embeddit rewrite (DeltAndy123/Embeddit, branch `rewrite`, sources read
 # 2026-10-02) is a full rewrite to Bun + Hono that REMOVES the Mastodon spoof:
 # the rewrite's router has no /api/v1/statuses route at all (src/index.ts:
 # only /r/*, /u/*, /user/*, /test). Instead, the post page itself — the SAME
@@ -292,7 +292,7 @@ def _mark_embeddit_component_mode(reason: str):
         logging.warning(
             f"embeddit: {EMBEDDIT_HOST} no longer serves the Mastodon status "
             f"API ({reason}) but DOES serve the rewrite's Component-Embed "
-            f"page (Embeddit PR #2) — switched to the component parser for "
+            f"page (the Embeddit rewrite) — switched to the component parser for "
             f"the rest of this run. Caveats unchanged from the field table: "
             f"video is the audio-less fallback stream and galleries cap at "
             f"10 items, so embeddit remains the last-resort service.")
@@ -318,7 +318,7 @@ def _compact_int(s: str) -> int:
 # account.display_name = "u/<author> (@ r/<subreddit>)"
 EMBEDDIT_AUTHOR_RE = re.compile(r"u/(\S+) \(@ (r/[^\s)]+)")
 
-# --- embeddit rewrite (PR #2) Component-Embed page (round 54) ----------------
+# --- embeddit rewrite Component-Embed page (round 54) ------------------------
 # The bot page's only payload. Attribute order is as emitted by EmbedPage.tsx
 # today, but the regex tolerates any order/quoting around the id.
 EMBEDDIT_COMPONENT_SCRIPT_RE = re.compile(
@@ -875,7 +875,7 @@ def _component_media_kind(url: str) -> str:
 
 
 def parse_embeddit_component_page(page_html: str):
-    """Embeddit-rewrite (PR #2) bot page -> the SAME normalized dict every
+    """Embeddit-rewrite bot page -> the SAME normalized dict every
     other parser in this module emits (or None).
 
     The page is an HTML shell whose only payload is the
@@ -1166,7 +1166,7 @@ async def _fetch_embeddit(session, path: str, label: str = ""):
     the subreddit in the path is irrelevant here.
 
     Round 54: when this run already proved the instance migrated to the
-    PR #2 rewrite, the Component-Embed page is fetched instead; when it
+    rewrite, the Component-Embed page is fetched instead; when it
     already proved the instance serves neither, this is a no-op."""
     if _embeddit_unavailable is not None:
         return None

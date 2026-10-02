@@ -1,22 +1,21 @@
-# Round 54 — Embeddit rewrite (PR #2) readiness: Component-Embed auto-adaptation (2026-10-02)
+# Round 54 — Embeddit rewrite readiness: Component-Embed auto-adaptation (2026-10-02)
 
 ## Why now
 
-[DeltAndy123/Embeddit PR #2](https://github.com/DeltAndy123/Embeddit/pull/2)
-("Rewrite project", draft, branch `rewrite`, read 2026-10-02) is a complete
-rewrite of the hosted instance this monitor uses as its rank-3 proxy-media
-service:
+[The Embeddit rewrite](https://github.com/DeltAndy123/Embeddit/pull/2)
+(branch `rewrite`, sources read 2026-10-02) is a complete rewrite of the
+hosted instance this monitor uses as its rank-3 proxy-media service:
 
 * Bun + Hono replace Express;
 * Discord **Component Embeds** replace the Mastodon spoof;
 * the rewrite's router (`src/index.ts`) exposes only `/r/*`, `/u/*`,
   `/user/*` and `/test` — **`/api/v1/statuses/<id>` no longer exists.**
 
-The operator can deploy it to `embeddit.deltandy.me` at any time. Without
-preparation, the day that happens every status-API request would 404 and
-round 53 would drop Embeddit for every run until this repo shipped a new
-parser. Round 54 removes that future outage: the monitor detects the
-migration **at runtime** and keeps using the instance through its new page.
+The instance can migrate to it at any time. Without preparation, the day
+that happens every status-API request would 404 and round 53 would drop
+Embeddit for every run until this repo shipped a new parser. Round 54
+removes that future outage: the monitor detects the migration **at
+runtime** and keeps using the instance through its new page.
 
 ## What the rewrite serves (verified against the `rewrite` branch sources)
 
@@ -112,11 +111,11 @@ builders byte-for-byte:
 
 ## Operator notes
 
-* **No action needed before, during, or after the Embeddit rewrite
-  deploys.** The switch is automatic, per-run, and logged with one WARNING
+* **No action needed before, during, or after the instance migrates
+  to the rewrite.** The switch is automatic, per-run, and logged with one WARNING
   line (`embeddit: … switched to the component parser …`).
-* If the rewrite's final shipped format differs from the draft, the probe
-  simply fails to parse and the round-53 behavior (drop for the run,
-  vxreddit/redditez/native unaffected) applies — the monitor can never do
-  worse than it does today. Update `parse_embeddit_component_page` to the
-  shipped format then.
+* If the instance's live format ever differs from the one read on
+  2026-10-02, the probe simply fails to parse and the round-53 behavior
+  (drop for the run, vxreddit/redditez/native unaffected) applies — the
+  monitor can never do worse than it does today. Update
+  `parse_embeddit_component_page` to the live format then.

@@ -3763,7 +3763,7 @@ try:
           str([(raw, _r53_proxy._normalize_instance(raw, _r53_default, "EMBEDDIT_INSTANCE"))
                for raw, want in _r53_norm_cases]))
 
-    # Run-scoped unavailability (Embeddit PR #2 readiness): a 404/410/501 on
+    # Run-scoped unavailability (Embeddit rewrite readiness): a 404/410/501 on
     # /api/v1/statuses means the route itself is gone on that instance (a
     # dead post answers 502 there, never 404) — embeddit is then dropped from
     # the dispatch order for the rest of the run, but never to an empty list.
@@ -3824,8 +3824,8 @@ try:
           and 'os.getenv("PROXY_WARMUP_POST", ' not in _r53_src)
 
     # =======================================================================
-    # ROUND 54 (2026-10-02) — Embeddit PR #2 (rewrite) readiness.
-    # The rewrite (Bun + Hono, draft branch `rewrite`) REMOVES the Mastodon
+    # ROUND 54 (2026-10-02) — Embeddit rewrite readiness.
+    # The rewrite (Bun + Hono, branch `rewrite`) REMOVES the Mastodon
     # /api/v1/statuses route; the post page itself serves bots an HTML shell
     # whose payload is <script id="discord:component-embed"
     # type="application/json">{"component": {Components-V2 container}}

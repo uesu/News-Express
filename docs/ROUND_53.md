@@ -62,10 +62,10 @@ This is the same bug class round 36 / round 49b fixed for *numeric* reads
    `embeddit error (InvalidUrlClientError) for embeddit.deltandy.me: …`.
    The 2026-10-01 incident looked like a remote failure precisely because
    `str(e)` alone printed only the url.
-5. **Run-scoped route-gone detection (Embeddit PR #2 readiness)** —
-   DeltAndy123/Embeddit PR #2 is a full rewrite (Bun + Hono, Discord
-   Component Embeds instead of the Mastodon spoof). If/when the hosted
-   instance ships it, `/api/v1/statuses/<id>` stops existing. A missing
+5. **Run-scoped route-gone detection (Embeddit rewrite readiness)** —
+   the Embeddit rewrite (Bun + Hono, Discord Component Embeds instead of
+   the Mastodon spoof) has no `/api/v1/statuses/<id>` route, so on an
+   instance running it that path stops existing. A missing
    route is permanent for the run, unlike a per-post miss: the live
    instance answers an unknown/dead post with a Cloudflare **502**
    (verified 2026-10-01), never 404 — so `404/410/501`, or a 200 that is
