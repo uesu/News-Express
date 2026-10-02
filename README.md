@@ -2137,9 +2137,8 @@ re-evaluated on every tick.
   `PROXY_WARMUP_POST` probe the built-in default post instead of skipping
   the warm-up, and applies the same empty-means-default rule to the
   `SUBREDDITS`/`ACCOUNTS` secrets. Round 54 prepares for
-  [the Embeddit rewrite](https://github.com/DeltAndy123/Embeddit/pull/2)
-  (Bun + Hono, Discord Component Embeds — it **removes** the Mastodon
-  status API): on
+  the Embeddit rewrite (Bun + Hono, Discord Component Embeds — it
+  **removes** the Mastodon status API): on
   route-gone evidence (404/410/501 or a non-JSON 200 — a dead post answers
   502 on the live instance, never 404) the monitor probes the rewrite's
   `discord:component-embed` bot page with the same post and, if it parses,

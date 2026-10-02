@@ -2,9 +2,9 @@
 
 ## Why now
 
-[The Embeddit rewrite](https://github.com/DeltAndy123/Embeddit/pull/2)
-(branch `rewrite`, sources read 2026-10-02) is a complete rewrite of the
-hosted instance this monitor uses as its rank-3 proxy-media service:
+The Embeddit rewrite (upstream branch `rewrite`, sources read 2026-10-02)
+is a complete rewrite of the hosted instance this monitor uses as its
+rank-3 proxy-media service:
 
 * Bun + Hono replace Express;
 * Discord **Component Embeds** replace the Mastodon spoof;
