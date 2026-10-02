@@ -2120,6 +2120,34 @@ re-evaluated on every tick.
 
 ## 🗒 Changelog
 
+* **2026-10-02 — Embeddit incident root cause + rewrite readiness (rounds
+  53–54).** The 2026-10-01 23:13 UTC production runs logged
+  `embeddit error: /api/v1/statuses/…` on every post and
+  `PROXY_WARMUP_POST '' is invalid … Warm-up skipped` on every run. Root
+  cause: an **unset-but-wired GitHub Variable arrives as an empty string**,
+  which `os.getenv(name, default)` accepts as a real value — `EMBEDDIT_BASE`
+  became `""`, every Embeddit request targeted a **relative** URL, and
+  aiohttp raised `InvalidUrlClientError` before opening a socket (the hosted
+  instance was never at fault; the exact status id from the log returns
+  valid JSON against the default host). Round 53 adds the string counterpart
+  of the round-49b numeric guard (`_env_str`), normalizes
+  `EMBEDDIT_INSTANCE` to an always-absolute http(s) base (bare host,
+  host:port, trailing slash accepted; garbage → default + one warning),
+  logs the exception class + host on embeddit errors, lets an invalid
+  `PROXY_WARMUP_POST` probe the built-in default post instead of skipping
+  the warm-up, and applies the same empty-means-default rule to the
+  `SUBREDDITS`/`ACCOUNTS` secrets. Round 54 prepares for
+  [Embeddit PR #2](https://github.com/DeltAndy123/Embeddit/pull/2) (the
+  Bun + Hono rewrite that **removes** the Mastodon status API): on
+  route-gone evidence (404/410/501 or a non-JSON 200 — a dead post answers
+  502 on the live instance, never 404) the monitor probes the rewrite's
+  `discord:component-embed` bot page with the same post and, if it parses,
+  **auto-switches to the component parser for the rest of the run** (one
+  WARNING line, embeddit stays in the dispatch order); if it doesn't parse,
+  the round-53 drop applies — the chain can never do worse than today.
+  No new secrets or Variables; no workflow changes. See
+  [Round 53](docs/ROUND_53.md) and [Round 54](docs/ROUND_54.md).
+
 * **2026-10-01 — Repository tracking and configuration audit.** The active
   workflow paths, legacy engines, tests, state files, runtime policy, Privacy
   Policy, Terms of Service, and historical round records were reviewed against

@@ -53,7 +53,8 @@ per-subreddit search backup feed), the independent "fastgif" GIF converter
 (fastgif-production.up.railway.app, used only as a probe-verified last-resort fallback — offline as
 of 2026-09-17), EmbedEZ (Reddit V2, redditez.com, and — since round 11 — last-resort tweet data via
 twitterez.com), the redditez.com /
-Embeddit (embeddit.deltandy.me) / vxReddit (vxreddit.com) Reddit-embed mirrors (V1 switchable),
+Embeddit (embeddit.deltandy.me) / vxReddit (vxreddit.com) Reddit-embed mirrors (V1 switchable; also
+Reddit V3 proxy-media sources fetched directly for public post data),
 reddit.com RSS and Reddit's own media CDNs (i.redd.it / preview.redd.it / v.redd.it), the
 proxy.embedez.com / vxreddit.com video-muxing fallbacks (Reddit V3, used only when Reddit's own
 video files are unavailable), seaof.glass (optional YouTube playback, off by default),

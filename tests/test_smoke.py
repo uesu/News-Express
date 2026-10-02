@@ -3822,6 +3822,171 @@ try:
     check("r53: EMBEDDIT_INSTANCE / PROXY_WARMUP_POST no longer use bare os.getenv defaults",
           'os.getenv("EMBEDDIT_INSTANCE", ' not in _r53_src
           and 'os.getenv("PROXY_WARMUP_POST", ' not in _r53_src)
+
+    # =======================================================================
+    # ROUND 54 (2026-10-02) — Embeddit PR #2 (rewrite) readiness.
+    # The rewrite (Bun + Hono, draft branch `rewrite`) REMOVES the Mastodon
+    # /api/v1/statuses route; the post page itself serves bots an HTML shell
+    # whose payload is <script id="discord:component-embed"
+    # type="application/json">{"component": {Components-V2 container}}
+    # </script>. When the status API answers route-gone evidence the monitor
+    # must probe that page and, if it parses, auto-switch for the run —
+    # otherwise fall back to the round-53 drop.  Fixtures below mirror the
+    # rewrite's builders (src/embed/builders/post.ts, parts.ts,
+    # components.ts) read 2026-10-02.
+    # =======================================================================
+    def _r54_page(embed):
+        return ('<html lang="en"><head><script id="discord:component-embed" '
+                'type="application/json">' + json.dumps(embed) +
+                '</script></head><body></body></html>')
+
+    _r54_gallery = {"component": {"type": 17, "accent_color": 16729344, "components": [
+        {"type": 10, "content": "-# in **[r/Genshin_Impact_Leaks](https://reddit.com/r/Genshin_Impact_Leaks/)**  \u2022  by **[u/AsleepBrilliant8939](https://reddit.com/u/AsleepBrilliant8939)**"},
+        {"type": 14, "divider": True},
+        {"type": 10, "content": "### About the main 7.2 event by USC"},
+        {"type": 12, "items": [
+            {"media": {"url": "https://preview.redd.it/a1.jpeg?auto=webp&s=x"}, "description": "(1/3)"},
+            {"media": {"url": "https://preview.redd.it/a2.gif?s=y"}, "description": "(2/3) cap"},
+            {"media": {"url": "https://preview.redd.it/a3.png"}, "description": "(3/3)"}]},
+        {"type": 10, "content": "Main event is part of the AQ."},
+        {"type": 14, "divider": False},
+        {"type": 10, "content": "**<:u:1551647045155291238>  1.1K   \u2022   <:c:1551647065585750123>  56**"},
+        {"type": 1, "components": [{"type": 2, "style": 5, "label": "View on Reddit", "url": "https://reddit.com/r/x/comments/1wvcysk/t/"}]},
+        {"type": 14, "divider": True, "spacing": 2},
+        {"type": 10, "content": "-# Posted <t:1759363000:R>  \u2022  Crossposted from **[r/Other](https://reddit.com/r/Other/comments/zzz/)**"},
+    ]}}
+    _r54 = _r53_proxy.parse_embeddit_component_page(_r54_page(_r54_gallery))
+    check("r54: component gallery page parses to the normalized shape",
+          _r54 is not None and _r54["service"] == "embeddit"
+          and _r54["title"] == "About the main 7.2 event by USC"
+          and _r54["author"] == "AsleepBrilliant8939"
+          and _r54["subreddit"] == "Genshin_Impact_Leaks", str(_r54))
+    check("r54: compact stats line parses through the custom-emoji markup",
+          _r54 is not None and _r54["stats"] == {"ups": 1100, "comments": 56},
+          str(_r54 and _r54["stats"]))
+    check("r54: body excludes header/footer/stats small lines",
+          _r54 is not None and _r54["body"] == "Main event is part of the AQ.")
+    check("r54: gallery media kinds detected (image/gif/image)",
+          _r54 is not None and [m["kind"] for m in _r54["media"]] ==
+          ["image", "gif", "image"], str(_r54 and _r54["media"]))
+
+    _r54_video = {"component": {"type": 17, "components": [
+        {"type": 10, "content": "-# in **[r/HSR](https://reddit.com/r/HSR/)**  \u2022  by **[u/leaker](https://reddit.com/u/leaker)**"},
+        {"type": 10, "content": "### New animation"},
+        {"type": 12, "items": [{"media": {"url": "https://v.redd.it/abc123/DASH_720.mp4?source=fallback"}}]},
+        {"type": 10, "content": "**<:u:1551647045155291238>  168   \u2022   <:c:1551647065585750123>  56**"}]}}
+    _r54v = _r53_proxy.parse_embeddit_component_page(_r54_page(_r54_video))
+    check("r54: video post media is kind=video (DASH fallback url)",
+          _r54v is not None and _r54v["media"] ==
+          [{"kind": "video", "url": "https://v.redd.it/abc123/DASH_720.mp4?source=fallback"}],
+          str(_r54v and _r54v["media"]))
+
+    _r54_link = {"component": {"type": 17, "components": [
+        {"type": 10, "content": "-# in **[r/S](https://reddit.com/r/S/)**  \u2022  by **[u/a](https://reddit.com/u/a)**"},
+        {"type": 10, "content": "### Link post"},
+        {"type": 9, "components": [{"type": 10, "content": "[example.com/page](https://example.com/page)"}],
+         "accessory": {"type": 11, "media": {"url": "https://external-preview.redd.it/th.png"}}},
+        {"type": 10, "content": "**<:u:1551647045155291238>  5   \u2022   <:c:1551647065585750123>  0**"}]}}
+    _r54l = _r53_proxy.parse_embeddit_component_page(_r54_page(_r54_link))
+    check("r54: link post keeps the section text and the preview thumbnail",
+          _r54l is not None
+          and _r54l["media"] == [{"kind": "image", "url": "https://external-preview.redd.it/th.png"}]
+          and "[example.com/page](https://example.com/page)" in _r54l["body"],
+          str(_r54l))
+
+    _r54_tricky = {"component": {"type": 17, "components": [
+        {"type": 10, "content": "### T"},
+        {"type": 10, "content": "**5 \u2022 6** extra words so it is not a stats line"}]}}
+    _r54t = _r53_proxy.parse_embeddit_component_page(_r54_page(_r54_tricky))
+    check("r54: a body line containing a bullet is NOT mistaken for stats",
+          _r54t is not None and _r54t["stats"] is None
+          and "extra words" in _r54t["body"], str(_r54t))
+
+    check("r54: escaped \\u003c JSON (escapeJsonForScript) still parses",
+          (_r53_proxy.parse_embeddit_component_page(
+              _r54_page(_r54_video).replace("<:u:", "\\u003c:u:"))
+           or {}).get("stats") == {"ups": 168, "comments": 56})
+    check("r54: page without the component script parses to None",
+          _r53_proxy.parse_embeddit_component_page("<html><body>no embed</body></html>") is None
+          and _r53_proxy.parse_embeddit_component_page("") is None)
+
+    # --- the run-scoped mode machine, with a fake aiohttp session ----------
+    class _R54Resp:
+        def __init__(self, status, body):
+            self.status, self._body = status, body
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def json(self, content_type=None):
+            return json.loads(self._body)
+        async def text(self):
+            return self._body
+
+    class _R54Session:
+        def __init__(self, routes):
+            self.routes, self.calls = routes, []
+        def get(self, url, **kw):
+            self.calls.append(url)
+            for frag, resp in self.routes.items():
+                if frag in url:
+                    return _R54Resp(*resp)
+            return _R54Resp(502, "bad gateway")
+
+    _r54_path = "/r/Genshin_Impact_Leaks/comments/1wvcysk/about/"
+
+    # A) rewrite deployed: status API 404, the SAME post's page parses ->
+    #    auto-switch; embeddit STAYS in the dispatch order; later lookups go
+    #    straight to the page (exactly one request).
+    _r53_proxy.reset_embeddit_availability()
+    _r54_sess = _R54Session({"/api/v1/statuses/": (404, "Not Found"),
+                             _r54_path: (200, _r54_page(_r54_gallery))})
+    _r54r = _r53_asyncio.run(_r53_proxy._fetch_embeddit(_r54_sess, _r54_path, "t"))
+    check("r54: route-gone + parseable page auto-switches and returns the post",
+          _r54r is not None and _r54r["title"] == "About the main 7.2 event by USC"
+          and _r53_proxy.embeddit_component_mode()
+          and _r53_proxy.embeddit_unavailable_reason() is None)
+    check("r54: component mode keeps embeddit in the dispatch order",
+          _r53_proxy.proxy_services_for(_r54_path) ==
+          ["vxreddit", "redditez", "embeddit"])
+    _r54_n = len(_r54_sess.calls)
+    _r54r2 = _r53_asyncio.run(_r53_proxy._fetch_embeddit(_r54_sess, _r54_path, "t"))
+    check("r54: later lookups in component mode cost exactly one page request",
+          _r54r2 is not None and len(_r54_sess.calls) == _r54_n + 1
+          and _r54_path in _r54_sess.calls[-1])
+
+    # B) both routes dead -> the round-53 drop, reason preserved.
+    _r53_proxy.reset_embeddit_availability()
+    _r54_sess = _R54Session({"/api/v1/statuses/": (404, "Not Found"),
+                             _r54_path: (404, "nope")})
+    _r54r = _r53_asyncio.run(_r53_proxy._fetch_embeddit(_r54_sess, _r54_path, "t"))
+    check("r54: route gone AND page unusable -> round-53 unavailable drop",
+          _r54r is None and _r53_proxy.embeddit_unavailable_reason() == "HTTP 404"
+          and not _r53_proxy.embeddit_component_mode()
+          and _r53_proxy.proxy_services_for(_r54_path) == ["vxreddit", "redditez"])
+
+    # C) healthy Mastodon instance: byte-for-byte today's behavior, one call.
+    _r53_proxy.reset_embeddit_availability()
+    _r54_mastodon = json.dumps({
+        "id": "x", "account": {"display_name": "u/a (@ r/S)"},
+        "content": "T\u2b06\ufe0f 10 \u2022 \U0001f4ac 2",
+        "media_attachments": [{"type": "image", "url": "https://i.redd.it/x.png"}]})
+    _r54_sess = _R54Session({"/api/v1/statuses/": (200, _r54_mastodon)})
+    _r54r = _r53_asyncio.run(_r53_proxy._fetch_embeddit(_r54_sess, _r54_path, "t"))
+    check("r54: a healthy Mastodon instance keeps today's single-request path",
+          _r54r is not None and _r54r["media"]
+          and not _r53_proxy.embeddit_component_mode()
+          and _r53_proxy.embeddit_unavailable_reason() is None
+          and len(_r54_sess.calls) == 1)
+
+    # D) transient 502 stays a per-post miss — no mode change, retried later.
+    _r53_proxy.reset_embeddit_availability()
+    _r54_sess = _R54Session({"/api/v1/statuses/": (502, "bad gateway")})
+    _r54r = _r53_asyncio.run(_r53_proxy._fetch_embeddit(_r54_sess, _r54_path, "t"))
+    check("r54: a transient 502 is a per-post miss, never a mode change",
+          _r54r is None and not _r53_proxy.embeddit_component_mode()
+          and _r53_proxy.embeddit_unavailable_reason() is None)
+    _r53_proxy.reset_embeddit_availability()
 finally:
     for _name, _value in _r53_saved_env.items():
         if _value is None:
