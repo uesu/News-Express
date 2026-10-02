@@ -59,8 +59,10 @@ policy: [Python runtime policy](PYTHON_RUNTIME.md).
   proxy-service parsers: Embeddit status-id codec, og-tag parsing, stats
   lines, the redditez/embeddit JSON shapes, fallback-chain skipping, the
   `proxy_health.json` round-trip, — round 55 — the mod-queue page-identity
-  check (`page_is_post_page`) and the 1wvlsz0 shell-page scenario end-to-end,
-  and — rounds 53/54 — the GHA-safe string
+  check (`page_is_post_page`) and the 1wvlsz0 shell-page scenario
+  end-to-end, — round 56 — the videos-only media-heal scope
+  (`is_video_media_url`/`heal_eligible_items` + `MEDIA_HEAL_SCOPE=all`
+  restore), and — rounds 53/54 — the GHA-safe string
   Variable defaults, the Embeddit-rewrite Component-Embed page parser, and
   the Mastodon→component→unavailable mode machine).
 * **Round 38e queue fixtures** — the test uses an in-memory RSS document to
