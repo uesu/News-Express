@@ -58,7 +58,9 @@ policy: [Python runtime policy](PYTHON_RUNTIME.md).
   components-v2 layout + button set, 4000-char budget, and — round 13 — the
   proxy-service parsers: Embeddit status-id codec, og-tag parsing, stats
   lines, the redditez/embeddit JSON shapes, fallback-chain skipping, the
-  `proxy_health.json` round-trip, and — rounds 53/54 — the GHA-safe string
+  `proxy_health.json` round-trip, — round 55 — the mod-queue page-identity
+  check (`page_is_post_page`) and the 1wvlsz0 shell-page scenario end-to-end,
+  and — rounds 53/54 — the GHA-safe string
   Variable defaults, the Embeddit-rewrite Component-Embed page parser, and
   the Mastodon→component→unavailable mode machine).
 * **Round 38e queue fixtures** — the test uses an in-memory RSS document to

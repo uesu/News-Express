@@ -4013,6 +4013,24 @@ try:
         check("r55: shell pages + unavailable listing hold a young post",
               _r55_result == "pending approval", repr(_r55_result))
 
+        # The hold stays bounded: past the weak grace the post releases.
+        _r55_result = _r53_asyncio.run(v3.mod_queue_reason(
+            None, "WutheringWavesLeaks", _r55_path,
+            post_age_seconds=v3.MOD_QUEUE_WEAK_GRACE_SECONDS + 60))
+        check("r55: shells past the weak grace release (hold stays bounded)",
+              _r55_result is None, repr(_r55_result))
+
+        # A real rendered page with the AutoModerator sticky still holds
+        # (rounds 37/48 behaviour is intact behind the identity gate).
+        async def _r55_fetch_sticky(*_args, **_kwargs):
+            return (_r55_real + "<p>It has not been deleted, but it has been "
+                    "temporarily sent to the moderators for review.</p>")
+        v3._fetch_redlib_post_page = _r55_fetch_sticky
+        _r55_result = _r53_asyncio.run(v3.mod_queue_reason(
+            None, "WutheringWavesLeaks", _r55_path, post_age_seconds=300))
+        check("r55: real page + AutoModerator sticky still holds (r37/48 intact)",
+              _r55_result == "pending approval", repr(_r55_result))
+
         async def _r55_fetch_real(*_args, **_kwargs):
             return _r55_real
 
