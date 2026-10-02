@@ -57,8 +57,10 @@ policy: [Python runtime policy](PYTHON_RUNTIME.md).
   post-area scoping, test-post native base, OP comment selection,
   components-v2 layout + button set, 4000-char budget, and — round 13 — the
   proxy-service parsers: Embeddit status-id codec, og-tag parsing, stats
-  lines, the redditez/embeddit JSON shapes, fallback-chain skipping, and the
-  `proxy_health.json` round-trip).
+  lines, the redditez/embeddit JSON shapes, fallback-chain skipping, the
+  `proxy_health.json` round-trip, and — rounds 53/54 — the GHA-safe string
+  Variable defaults, the Embeddit-rewrite Component-Embed page parser, and
+  the Mastodon→component→unavailable mode machine).
 * **Round 38e queue fixtures** — the test uses an in-memory RSS document to
   verify `/comments/<id>/` extraction, CDATA/malformed/future date handling,
   deterministic span calculation, URL-encoded reuse of `REDDIT_FEED_TOKEN`,
