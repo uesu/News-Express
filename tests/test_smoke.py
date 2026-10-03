@@ -2573,7 +2573,7 @@ check("r59: kitter mirror is ahead of token host", _r59_fleet.index("https://tw.
 check("r59: walled tail is retained at the end", _r59_fleet[-2:] == _r59_x_walled_tail)
 _r59_token_env = _literal_list_constant("testing area/twitter_v3.py", "RSS_TOKEN_ENV")
 check("r59: miningtcup token mapping unchanged", _r59_token_env == {"https://nitter.miningtcup.me": "NITTER_RSS_TOKEN"})
-with open("testing area/twitter_v3.py", encoding="utf-8") as _r59_f:
+with open(os.path.join(ROOT, "testing area", "twitter_v3.py"), encoding="utf-8") as _r59_f:
     _r59_src = _r59_f.read()
 check("r59: tracker method retired note recorded", "tracker method retired" in _r59_src)
 check("r59: demoted-not-deleted rationale recorded", "demoted, not deleted" in _r59_src)
