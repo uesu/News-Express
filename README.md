@@ -2123,16 +2123,27 @@ keep the checks:
 | **Fast** | 2 min | *none* | ~2–5 min | none — only the retry grid shrinks; zero behavior change |
 | **Faster** (recommended) | 2 min | `POST_SETTLE_SECONDS=120`, `APPROVAL_RECHECK_SECONDS=120` | ~2–4 min | unverified posts settle in 2 min instead of 5 |
 | **Fastest** ⚠️ | 1–2 min | `POST_SETTLE_SECONDS=60`, `APPROVAL_RECHECK_SECONDS=60`, `MOD_QUEUE_WEAK_GRACE_SECONDS=300`, `RETRACT_DEAD_POSTS=1` | ~1–3 min | see notice below |
+| **Instant** ⚠️ (old-speed feel, cron unchanged) | 5 min | `POST_SETTLE_SECONDS=0`, `POST_SETTLE_VERIFIED_SECONDS=0`, `MOD_QUEUE_WEAK_GRACE_SECONDS=0`, `RETRACT_DEAD_POSTS=1` | 0–5 min (avg ~2.5) | posts on first sighting — the pre-round-36 pipeline feel; see notice below |
 
-> ⚠️ **Fastest preset notice.** Shrinking the settle window and weak-evidence
+> ⚠️ **Fastest / Instant preset notice.** Shrinking the settle window and weak-evidence
 grace means a post a moderator kills 2–10 minutes after creation can reach
-Discord first. That is why this preset requires `RETRACT_DEAD_POSTS=1`: the
+Discord first. That is why these presets require `RETRACT_DEAD_POSTS=1`: the
 retraction pass tombstones (edits or deletes, per `RETRACT_MODE`) delivered
 cards whose posts die within `RETRACT_WINDOW_SECONDS` (6 h by default). The
-dedup cache still guarantees a retracted post can never repost. Run **Fastest**
+dedup cache still guarantees a retracted post can never repost. Run **Fastest** or **Instant**
 only with the seatbelt on. Below roughly 2 minutes, returns diminish: the
 60-second AutoMod buffer becomes the floor while cache-commit churn and mirror
 rate-limiting rise.
+
+**Instant** reproduces the pre-round-36 "post on first sighting" pipeline
+without touching the cron: for a clean post, latency is the cron offset alone
+(0–5 min at the 5-minute interval, ~2.5 min on average — the original
+2026-early feel). The NSFW gate stays fully armed — it is an in-run check and
+adds no latency to clean posts — and strong mod-queue evidence (a literal
+"awaiting moderator approval" banner) still holds. For one notch more caution
+at nearly the same feel, set `POST_SETTLE_VERIFIED_SECONDS=0` with
+`POST_SETTLE_SECONDS=60`: posts confirmed public in `/new` go instantly and
+only unconfirmable ones wait a single minute.
 
 What **not** to change in any preset:
 
@@ -2146,6 +2157,15 @@ back to 5 minutes.
 ---
 
 ## 🗒 Changelog
+
+* **2026-10-03 — Docs: Instant preset (old-speed combo at the 5-minute cron).**
+  No code change. The Speed presets table gains **Instant**: cron unchanged at
+  5 minutes, `POST_SETTLE_SECONDS=0` + `POST_SETTLE_VERIFIED_SECONDS=0` +
+  `MOD_QUEUE_WEAK_GRACE_SECONDS=0` + the `RETRACT_DEAD_POSTS=1` seatbelt —
+  the pre-round-36 "post on first sighting" latency (cron offset only) with
+  the NSFW gate and all in-run checks still armed. The ⚠️ notice now covers
+  both Fastest and Instant, plus a softer variant
+  (`POST_SETTLE_VERIFIED_SECONDS=0`, `POST_SETTLE_SECONDS=60`).
 
 * **2026-10-03 — Docs: latency-tuning presets + three missing Variable rows.**
   No code change. The Variables table gains the three round-46/46b settings
