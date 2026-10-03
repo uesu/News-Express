@@ -1259,7 +1259,7 @@ reason and re-checks on the normal 300-second interval:
    (six hours by default).
 
 The window itself is the conservative tail margin and remains the hard fail-open cap in
-the main loop. There is deliberately **no third mod-queue repository Variable**. A
+the main loop. The weak-evidence hold has a separate `MOD_QUEUE_WEAK_GRACE_SECONDS` repository Variable; there is deliberately no third mod-queue **signal** or repository source. A
 missing page, blind listing, unparseable age, or post outside the proven span returns no
 hold; an ID visible in `/new` always releases immediately. Thus an approved
 post normally releases on the next short re-check, while a listing/parser failure remains
@@ -1895,7 +1895,9 @@ REDDIT_FEED_TOKEN=           # optional (recommended) — old.reddit.com/prefs/f
 # DUP_MEDIA_GATE=1                 # round 36: exact-media duplicate gate (0 = off)
 # MOD_QUEUE_GATE=1                 # rounds 37/38d/38e: mod-queue gate (0 = off)
 # MOD_QUEUE_WINDOW_SECONDS=21600   # age/fail-open cap + listing-tail margin
-#                                  # (there is no third mod-queue Variable)
+# MOD_QUEUE_WEAK_GRACE_SECONDS=900 # weak-evidence hold (0 = off)
+# LISTING_TIMEOUT_SECONDS=8        # /new listing request timeout
+# LISTING_HTML_GRACE_SECONDS=2     # JSON-vs-HTML listing tie-breaker
 ```
 
 Then run any engine:
@@ -2097,28 +2099,60 @@ latency, and only then is `wait=true` appended to the webhook call.
 | `RETRACT_DEAD_POSTS` | **off** | `1` enables tombstoning cards whose post died |
 | `RETRACT_MODE` | `edit` | `edit` / `delete` / `off` |
 | `RETRACT_WINDOW_SECONDS` | `21600` | how long a delivered card is watched |
+| `NSFW_ALLOWLIST` | *(empty)* | comma-separated Reddit author names or post IDs that bypass the NSFW gate; empty = no exceptions |
+| `DUP_MEDIA_GATE` | `1` | exact-media duplicate gate with posted-post-only winners; `0` = off |
+| `MOD_QUEUE_GATE` | `1` | native mod-queue gate; `0` = off |
+| `MOD_QUEUE_WINDOW_SECONDS` | `21600` | age/fail-open cap and listing-tail margin |
+| `MOD_QUEUE_WEAK_GRACE_SECONDS` | `900` | benefit-of-the-doubt hold for weak evidence only; `0` = weak signals never hold |
+| `LISTING_TIMEOUT_SECONDS` | `8` | per-request timeout for `/r/<sub>/new` listing fetches |
+| `LISTING_HTML_GRACE_SECONDS` | `2` | extra time an API-backed listing gets to beat the HTML fallback |
 
 Nothing needs to be set to get the speed improvement.
 
-### Cron interval
+### Speed presets
 
-The settle window is no longer the bottleneck — the cron is. With the
-5-minute interval, latency is 1–6 min. Lowering it now pays off:
+Latency for a **clean** post is **cron offset + settle window** — nothing else.
+The other gates check in-line and only hold posts that trigger them, so disabling
+them buys no speed for normal posts; it only lets bad posts through. Every hold
+rounds up to a full cron cycle because the run does not sleep. Tune the waits,
+keep the checks:
 
-| Interval | Average latency |
-|---|---|
-| 5 min | ≈3.5 min |
-| 3 min | ≈2.5 min |
-| 2 min | ≈2.0 min |
+| Preset | Cron | Variables to set | Typical arrival | Trade-off |
+|---|---|---|---|---|
+| **Default** (ships like this) | 5 min | *none* | ~5–10 min | maximum caution; every hold costs a 5-min cycle |
+| **Fast** | 2 min | *none* | ~2–5 min | none — only the retry grid shrinks; zero behavior change |
+| **Faster** (recommended) | 2 min | `POST_SETTLE_SECONDS=120`, `APPROVAL_RECHECK_SECONDS=120` | ~2–4 min | unverified posts settle in 2 min instead of 5 |
+| **Fastest** ⚠️ | 1–2 min | `POST_SETTLE_SECONDS=60`, `APPROVAL_RECHECK_SECONDS=60`, `MOD_QUEUE_WEAK_GRACE_SECONDS=300`, `RETRACT_DEAD_POSTS=1` | ~1–3 min | see notice below |
 
-Below ~2 minutes returns diminish (the 60 s AutoMod buffer becomes the
-floor) while cache-commit churn and mirror rate-limiting both rise. If you
-do lower it, set `APPROVAL_RECHECK_SECONDS` to match so held posts are
-re-evaluated on every tick.
+> ⚠️ **Fastest preset notice.** Shrinking the settle window and weak-evidence
+grace means a post a moderator kills 2–10 minutes after creation can reach
+Discord first. That is why this preset requires `RETRACT_DEAD_POSTS=1`: the
+retraction pass tombstones (edits or deletes, per `RETRACT_MODE`) delivered
+cards whose posts die within `RETRACT_WINDOW_SECONDS` (6 h by default). The
+dedup cache still guarantees a retracted post can never repost. Run **Fastest**
+only with the seatbelt on.
+
+What **not** to change in any preset:
+
+* the NSFW gate — never disable it;
+* `MOD_QUEUE_GATE`, `DUP_MEDIA_GATE`, and `REPOST_GATE` — leave them on (`1`);
+* strong mod-queue evidence always holds; only weak-evidence grace is tunable.
+
+Rollback is trivial: clear the Variables (empty = default) and set the cron
+back to 5 minutes.
 
 ---
 
 ## 🗒 Changelog
+
+* **2026-10-03 — Docs: latency-tuning presets + three missing Variable rows.**
+  No code change. The Variables table gains the three round-46/46b settings
+  (`MOD_QUEUE_WEAK_GRACE_SECONDS`, `LISTING_TIMEOUT_SECONDS`, and
+  `LISTING_HTML_GRACE_SECONDS`) that were wired into `.env.example` and the
+  workflow but missing from this table. The stale “no third mod-queue Variable”
+  notes are corrected, and a **Speed presets** section documents Default, Fast,
+  Faster, and Fastest cron-plus-Variable combinations. Fastest requires the
+  `RETRACT_DEAD_POSTS=1` seatbelt.
 
 * **2026-10-03 — Round 60: YouTube link posts — destination-first.** Reddit
   link posts can now contain body text with multiple YouTube URLs, so
