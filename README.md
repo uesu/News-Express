@@ -2130,7 +2130,9 @@ Discord first. That is why this preset requires `RETRACT_DEAD_POSTS=1`: the
 retraction pass tombstones (edits or deletes, per `RETRACT_MODE`) delivered
 cards whose posts die within `RETRACT_WINDOW_SECONDS` (6 h by default). The
 dedup cache still guarantees a retracted post can never repost. Run **Fastest**
-only with the seatbelt on.
+only with the seatbelt on. Below roughly 2 minutes, returns diminish: the
+60-second AutoMod buffer becomes the floor while cache-commit churn and mirror
+rate-limiting rise.
 
 What **not** to change in any preset:
 
