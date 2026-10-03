@@ -2566,6 +2566,17 @@ _r39_x_expected = [
     "https://shitter.thepixora.com",
 ]
 _r59_x_walled_tail = ["https://nitter.netbub.com", "https://nitter.jaydenha.uk"]
+_r59_fleet = _literal_list_constant("testing area/twitter_v3.py", "RSS_INSTANCES")
+check("r59: operator pair remains in slots 1-2", _r59_fleet[:2] == ["https://nitter.cf", "https://xitter.cf"])
+check("r59: kareem mirror is ahead of token host", _r59_fleet.index("https://nitter.kareem.one") < _r59_fleet.index("https://nitter.miningtcup.me"))
+check("r59: kitter mirror is ahead of token host", _r59_fleet.index("https://tw.eir-nya.gay") < _r59_fleet.index("https://nitter.miningtcup.me"))
+check("r59: walled tail is retained at the end", _r59_fleet[-2:] == _r59_x_walled_tail)
+_r59_token_env = _literal_list_constant("testing area/twitter_v3.py", "RSS_TOKEN_ENV")
+check("r59: miningtcup token mapping unchanged", _r59_token_env == {"https://nitter.miningtcup.me": "NITTER_RSS_TOKEN"})
+with open("testing area/twitter_v3.py", encoding="utf-8") as _r59_f:
+    _r59_src = _r59_f.read()
+check("r59: tracker method retired note recorded", "tracker method retired" in _r59_src)
+check("r59: demoted-not-deleted rationale recorded", "demoted, not deleted" in _r59_src)
 for _r39_rel, _r39_expected in (
     ("testing area/twitter_v1.py", _r39_x_expected + _r59_x_walled_tail),
     ("testing area/twitter_v2_button_outside.py", _r39_x_expected + ["https://nitter.miningtcup.me"] + _r59_x_walled_tail),

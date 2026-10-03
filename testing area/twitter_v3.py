@@ -150,6 +150,7 @@ MAX_CACHE_SIZE = 500
 MAX_AGE_SECONDS = 3 * 3600
 
 # Round 39 (2026-09-30): refresh from status.d420.de at 06:06 UTC.
+# Round 59 (2026-10-03): tracker method retired; audit RSS response bodies.
 # The first three hosts were healthy with RSS enabled and 87–96% all-time
 # availability; jaydenha was healthy/RSS-enabled but runs an older build, so it
 # remains a fallback. The previous unlisted, RSS-disabled, stale, or suspended
