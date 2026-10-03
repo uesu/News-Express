@@ -2120,6 +2120,27 @@ re-evaluated on every tick.
 
 ## 🗒 Changelog
 
+* **2026-10-03 — Round 58: AGENTS.md — agent onboarding.** New root-level
+  [`AGENTS.md`](AGENTS.md) (the emerging standard file AI coding agents
+  read first) encoding the repository's operational knowledge: the
+  three-repo dev/prod architecture and manual deployment flow, the file
+  map, how to test, the nine never-violate invariants (NSFW gate,
+  gates-never-guess, Variable wiring + empty-string safety, the P0
+  concurrency rule, …), the deliberate-behavior landmine list, key
+  Variable defaults, and writing conventions. Docs only — zero code or
+  behavior change.
+
+* **2026-10-03 — Round 57: workflow hardening.** Supply chain: every
+  `uses:` in every workflow is now pinned to an immutable 40-hex commit SHA
+  (mutable tags like `@v7` can be repointed — the 2025 `tj-actions`
+  compromise, CVE-2025-30066); Dependabot keeps the pins fresh via reviewed
+  PRs. Outage cap: every job now declares `timeout-minutes` (monitors 15)
+  — previously a single hung network call could hold a run for GitHub's
+  6-hour default and, because the P0 concurrency guard queues instead of
+  cancelling, silence the monitor behind it. Zero engine/behavior change;
+  smoke guards added (SHA-pin, timeout, and concurrency-guard presence).
+  See [Round 57](docs/ROUND_57.md).
+
 * **2026-10-02 — Round 56: media heal targets videos only.** The round-47
   self-heal re-edited three photo posts whose image tiles came back from
   Discord with cold metadata, even though the photos already rendered fine
