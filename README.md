@@ -2120,6 +2120,17 @@ re-evaluated on every tick.
 
 ## 🗒 Changelog
 
+* **2026-10-03 — Round 60: YouTube link posts — destination-first.** Reddit
+  link posts can now contain body text with multiple YouTube URLs, so
+  first-match extraction selected a body credit link (`Song:`) instead of the
+  post's actual video destination (live `1wwgk5e`: wrong button, thumbnail,
+  and follow-up link; the showcase video was missing). The RSS `[link]`
+  destination and FULL-MODE `post_json["url"]` now take priority when they
+  are YouTube URLs, and extracted URLs are HTML-unescaped so literal `&amp;`
+  never reaches Discord. Text posts retain their body-first behavior. Seven
+  offline smoke guards replay the incident. Details:
+  [`docs/ROUND_60.md`](docs/ROUND_60.md).
+
 * **2026-10-03 — Round 59: nitter fleet body-audit and Reddit audit record.** The three Twitter engines now share a body-audited fallback order: serving mirrors `nitter.kareem.one` and `tw.eir-nya.gay` are ahead of the token-gated host, while known challenge-wall hosts remain retained at the tail. The Reddit fallback list is unchanged after the same response-body audit found no confirmed working additions. Fork credits and the full decision record are in [`docs/ROUND_59.md`](docs/ROUND_59.md).
 
 
