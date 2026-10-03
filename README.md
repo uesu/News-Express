@@ -2120,6 +2120,9 @@ re-evaluated on every tick.
 
 ## 🗒 Changelog
 
+* **2026-10-03 — Round 59: nitter fleet body-audit and Reddit audit record.** The three Twitter engines now share a body-audited fallback order: serving mirrors `nitter.kareem.one` and `tw.eir-nya.gay` are ahead of the token-gated host, while known challenge-wall hosts remain retained at the tail. The Reddit fallback list is unchanged after the same response-body audit found no confirmed working additions. Fork credits and the full decision record are in [`docs/ROUND_59.md`](docs/ROUND_59.md).
+
+
 * **2026-10-03 — Round 58: AGENTS.md — agent onboarding.** New root-level
   [`AGENTS.md`](AGENTS.md) (the emerging standard file AI coding agents
   read first) encoding the repository's operational knowledge: the

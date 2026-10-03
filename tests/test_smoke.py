@@ -2558,19 +2558,18 @@ def _literal_list_constant(relpath, name):
 
 
 _r39_x_expected = [
-    # Round 40 (2026-09-30): operator decision — nitter.cf + xitter.cf restored as
-    # the primary pair. DO NOT REMOVE without operator sign-off.
     "https://nitter.cf",
     "https://xitter.cf",
+    "https://nitter.kareem.one",
+    "https://tw.eir-nya.gay",
     "https://nitter.meowing.monster",
-    "https://nitter.netbub.com",
     "https://shitter.thepixora.com",
-    "https://nitter.jaydenha.uk",
 ]
+_r59_x_walled_tail = ["https://nitter.netbub.com", "https://nitter.jaydenha.uk"]
 for _r39_rel, _r39_expected in (
-    ("testing area/twitter_v1.py", _r39_x_expected),
-    ("testing area/twitter_v2_button_outside.py", _r39_x_expected + ["https://nitter.miningtcup.me"]),
-    ("testing area/twitter_v3.py", _r39_x_expected + ["https://nitter.miningtcup.me"]),
+    ("testing area/twitter_v1.py", _r39_x_expected + _r59_x_walled_tail),
+    ("testing area/twitter_v2_button_outside.py", _r39_x_expected + ["https://nitter.miningtcup.me"] + _r59_x_walled_tail),
+    ("testing area/twitter_v3.py", _r39_x_expected + ["https://nitter.miningtcup.me"] + _r59_x_walled_tail),
 ):
     check(f"r39 source fleet: {_r39_rel} has the reviewed X RSS order",
           _literal_list_constant(_r39_rel, "RSS_INSTANCES") == _r39_expected)
