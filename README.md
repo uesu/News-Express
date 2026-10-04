@@ -2154,9 +2154,45 @@ What **not** to change in any preset:
 Rollback is trivial: clear the Variables (empty = default) and set the cron
 back to 5 minutes.
 
+### Cadence combos (5 / 3 / 2 minutes)
+
+Any cadence **below 5 minutes requires the round-61 workflows** (the
+sync-to-tip step + the semantic cache merge — shipped in both monitor
+ymls). The 2026-10-03 double post happened at a 2–3-minute cadence on the
+pre-round-61 workflows: a queued `workflow_dispatch` run starts on the tip
+pinned at *dispatch* time, i.e. without the previous run's fresh dedup
+cache. With round 61 in place, correctness is cadence-independent.
+
+| Cron | Variables | Typical arrival | Notes |
+|---|---|---|---|
+| **5 min** (default) | none — or any preset above | ~5–10 min (Instant: 0–5) | queue overlaps ~never happen; the safest grid |
+| **3 min** | `POST_SETTLE_SECONDS=120`, `APPROVAL_RECHECK_SECONDS=180` | ~3–6 min | balanced middle; recheck matches every other tick |
+| **2 min** | `POST_SETTLE_SECONDS=120`, `APPROVAL_RECHECK_SECONDS=120` | ~2–4 min | the Faster preset; expect occasional superseded-queued-run cancellations in the Actions list (benign — a skipped tick, the next tick reads the same feed) |
+
 ---
 
 ## 🗒 Changelog
+
+* **2026-10-04 — Round 61: stale-tip double post — sync-to-tip + semantic
+  cache merge.** Live 2026-10-03: a queued `workflow_dispatch` run starts
+  on the tip pinned at DISPATCH time (the 2026-09-19 fix's "checks out the
+  newest main" assumption is false), so run #4014 missed commit
+  `2de1491`'s fresh dedup key and re-posted `1wwyure`; its cache push then
+  died on a git line conflict in `pending_reddit.json`. Both monitor
+  workflows gain a "Sync to the live branch tip" step after checkout, and
+  the persist recovery now uses `.github/scripts/merge_monitor_caches.py`
+  (semantic union merge — list union for posted keys, newest-timestamp
+  wins for pending/messages, loud failure on invalid JSON) instead of
+  `git pull --rebase`. Correctness is now cadence-independent (a README
+  "Cadence combos" table documents 5/3/2-minute setups). 15 new smoke
+  guards replay the exact incident plus an end-to-end two-clone race
+  simulation. A wide feed-source sweep (RSSHub, the RSS-Bridge
+  RedditBridge network, redlib RSS, hosted proxies) found **no working
+  third-party Reddit feed source** — every middleman hits Reddit's
+  datacenter-IP wall — so no credits were added and the fleet is
+  unchanged; the native `.rss` + feed-token + Arctic Shift trio the
+  engine already uses remains the only reliable class of sources.
+  Details: [`docs/ROUND_61.md`](docs/ROUND_61.md).
 
 * **2026-10-03 — Docs: Instant preset (old-speed combo at the 5-minute cron).**
   No code change. The Speed presets table gains **Instant**: cron unchanged at
