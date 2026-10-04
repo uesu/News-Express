@@ -2224,6 +2224,20 @@ back to 5 minutes.
 
 ## 🗒 Changelog
 
+* **2026-10-04 — Round 62: body/gallery duplicate media line scrub.**
+  Live 1wx9c77 (r/Zenlesszonezeroleaks\_): a selftext whose only content is
+  an inline image link rendered the SAME picture twice on the card — once
+  as a raw `preview.redd.it` URL text line, once in the media gallery right
+  below it. New `_drop_gallery_media_lines()` runs at card build (one
+  choke point — both RSS and FULL mode, all future posts): any body line
+  that is ONLY a redd.it media link (bare URL, HTML-escaped `&amp;`
+  variant, or a self-labelled `[url](url)` markdown link) whose file
+  identity (`_reddit_media_key`: `preview.redd.it/<slug>-v0-<id>` and
+  `i.redd.it/<id>` renditions collapse to one key) already sits in the
+  gallery is dropped. Prose lines, caption-labelled links, and media NOT
+  in the gallery stay byte-identical; a body left empty simply omits the
+  text component. 12 new smoke guards (incl. the live 1wx9c77 card shape).
+
 * **2026-10-04 — Docs: Speed & latency guide (complete tier list).**
   Replaces the Speed presets / 5-minute combos / Cadence combos trio with
   one unified guide: the latency formula, a Variable glossary, a
