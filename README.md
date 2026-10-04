@@ -2145,6 +2145,29 @@ at nearly the same feel, set `POST_SETTLE_VERIFIED_SECONDS=0` with
 `POST_SETTLE_SECONDS=60`: posts confirmed public in `/new` go instantly and
 only unconfirmable ones wait a single minute.
 
+### 5-minute combos (cron untouched, NSFW gate armed in every row)
+
+All of these keep the cron at 5 minutes and tune **only** repository
+Variables (empty = default, instantly reversible). The NSFW gate cannot be
+part of any trade: it is an in-run check, always on, and adds zero latency
+to clean posts. Ordered from most cautious to the full old-speed feel:
+
+| Combo | Variables to set | Typical arrival | What changes |
+|---|---|---|---|
+| **Default** | *none* | ~5–10 min | every post settles 5 min (verified: 60 s) before delivery |
+| **Settle-trim** | `POST_SETTLE_SECONDS=120` | ~2–7 min | unverified posts settle 2 min instead of 5; everything else default |
+| **Verified-instant** | `POST_SETTLE_VERIFIED_SECONDS=0`, `POST_SETTLE_SECONDS=60` | ~0–5 min confirmed / ~1–6 min unconfirmable | posts confirmed public in `/new` go on first sighting; only unconfirmable ones wait a single minute |
+| **Instant** ⚠️ | `POST_SETTLE_SECONDS=0`, `POST_SETTLE_VERIFIED_SECONDS=0`, `MOD_QUEUE_WEAK_GRACE_SECONDS=0`, `RETRACT_DEAD_POSTS=1` | 0–5 min (avg ~2.5) | the pre-round-36 "post on first sighting" feel — requires the retraction seatbelt (see notice above) |
+
+Optional add-on for any row: `PENDING_RECHECK_SECONDS=900` makes
+media-wait entries retry every ~3rd tick instead of every ~6th (default
+1800 s). `APPROVAL_RECHECK_SECONDS` needs no change at this cadence — its
+300 s default already matches the 5-minute tick exactly.
+
+In every combo above, strong mod-queue evidence (a literal "awaiting
+moderator approval" banner) still holds the post, the duplicate/repost
+gates still run, and the NSFW gate stays fully armed.
+
 What **not** to change in any preset:
 
 * the NSFW gate — never disable it;
