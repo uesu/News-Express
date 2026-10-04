@@ -1428,6 +1428,9 @@ with none of them set):
 | `NSFW_ALLOWLIST` | *(empty)* | round 35: optional comma-separated Reddit author names or post IDs that bypass the NSFW content gate; empty = no exceptions |
 | `POST_SETTLE_SECONDS` | `300` | round 36: seconds a new post must survive before posting; 0 = off |
 | `DUP_MEDIA_GATE` | `1` | round 36: same-sub exact-media duplicate gate with posted-post-only winners; 0 = off |
+| `MOD_QUEUE_WEAK_GRACE_SECONDS` | `900` | rounds 46/46b: benefit-of-the-doubt hold for **weak** mod-queue evidence only (AutoMod source-rule comment, or no mirror page + no provable listing). A post younger than the grace is held one more tick; older posts fail open and post. STRONG evidence (a literal "awaiting moderator approval" banner) holds regardless of this value. `0` = weak signals never hold. Recommended: `900` (default) for max cleanliness, `300` when tuning for speed — pair the lower value with `RETRACT_DEAD_POSTS=1` |
+| `LISTING_TIMEOUT_SECONDS` | `8` | rounds 46/46b: per-request timeout for the `/r/<sub>/new` listing fetches the mod-queue gate relies on. Raise only if your runner's network is slow; lowering it below ~5 makes listings fail more often, which *costs* latency (an unreadable listing pushes young posts into the weak-grace hold) |
+| `LISTING_HTML_GRACE_SECONDS` | `2` | rounds 46/46b: extra seconds an API-backed (JSON) listing attempt is given to beat the HTML fallback before the HTML result is used. Leave at `2`; this is a tie-breaker, not a gate |
 
 ### The workflow (`.github/workflows/reddit_monitor.yml`)
 
@@ -2109,92 +2112,131 @@ latency, and only then is `wait=true` appended to the webhook call.
 
 Nothing needs to be set to get the speed improvement.
 
-### Speed presets
+### Speed & latency guide (cron intervals × Variables — the complete tier list)
 
-Latency for a **clean** post is **cron offset + settle window** — nothing else.
-The other gates check in-line and only hold posts that trigger them, so disabling
-them buys no speed for normal posts; it only lets bad posts through. Every hold
-rounds up to a full cron cycle because the run does not sleep. Tune the waits,
-keep the checks:
+#### How latency actually works
 
-| Preset | Cron | Variables to set | Typical arrival | Trade-off |
-|---|---|---|---|---|
-| **Default** (ships like this) | 5 min | *none* | ~5–10 min | maximum caution; every hold costs a 5-min cycle |
-| **Fast** | 2 min | *none* | ~2–5 min | none — only the retry grid shrinks; zero behavior change |
-| **Faster** (recommended) | 2 min | `POST_SETTLE_SECONDS=120`, `APPROVAL_RECHECK_SECONDS=120` | ~2–4 min | unverified posts settle in 2 min instead of 5 |
-| **Fastest** ⚠️ | 1–2 min | `POST_SETTLE_SECONDS=60`, `APPROVAL_RECHECK_SECONDS=60`, `MOD_QUEUE_WEAK_GRACE_SECONDS=300`, `RETRACT_DEAD_POSTS=1` | ~1–3 min | see notice below |
-| **Instant** ⚠️ (old-speed feel, cron unchanged) | 5 min | `POST_SETTLE_SECONDS=0`, `POST_SETTLE_VERIFIED_SECONDS=0`, `MOD_QUEUE_WEAK_GRACE_SECONDS=0`, `RETRACT_DEAD_POSTS=1` | 0–5 min (avg ~2.5) | posts on first sighting — the pre-round-36 pipeline feel; see notice below |
+The monitor only looks at the feed on a **cron tick** (cron-job.org fires
+the workflow every N minutes). For a clean post, arrival time is:
 
-> ⚠️ **Fastest / Instant preset notice.** Shrinking the settle window and weak-evidence
-grace means a post a moderator kills 2–10 minutes after creation can reach
-Discord first. That is why these presets require `RETRACT_DEAD_POSTS=1`: the
-retraction pass tombstones (edits or deletes, per `RETRACT_MODE`) delivered
-cards whose posts die within `RETRACT_WINDOW_SECONDS` (6 h by default). The
-dedup cache still guarantees a retracted post can never repost. Run **Fastest** or **Instant**
-only with the seatbelt on. Below roughly 2 minutes, returns diminish: the
-60-second AutoMod buffer becomes the floor while cache-commit churn and mirror
-rate-limiting rise.
+```
+arrival ≈ wait for the next tick (0..N min, avg N/2)
+        + settle hold, if the post is still too young (rounds UP to a whole tick)
+        + ~0.5–1 min of run overhead (runner spin-up + feed fetch + posting)
+```
 
-**Instant** reproduces the pre-round-36 "post on first sighting" pipeline
-without touching the cron: for a clean post, latency is the cron offset alone
-(0–5 min at the 5-minute interval, ~2.5 min on average — the original
-2026-early feel). The NSFW gate stays fully armed — it is an in-run check and
-adds no latency to clean posts — and strong mod-queue evidence (a literal
-"awaiting moderator approval" banner) still holds. For one notch more caution
-at nearly the same feel, set `POST_SETTLE_VERIFIED_SECONDS=0` with
-`POST_SETTLE_SECONDS=60`: posts confirmed public in `/new` go instantly and
-only unconfirmable ones wait a single minute.
+Two kinds of controls exist — don't confuse them:
 
-### 5-minute combos (cron untouched, NSFW gate armed in every row)
+* **Waits** (settle windows, graces) — these COST latency and are the only
+  real speed levers.
+* **In-run gates** (NSFW, mod-queue, duplicate-media, repost) — these cost
+  **zero latency for clean posts**; they only hold posts that actually
+  trigger them. Disabling them buys no speed — it only re-admits incidents.
+* Any cadence **below 5 minutes requires the round-61 workflows**
+  (sync-to-tip + semantic cache merge). With round 61 in place, correctness
+  is cadence-independent — the tiers below are about efficiency and taste,
+  never about double posts.
 
-All of these keep the cron at 5 minutes and tune **only** repository
-Variables (empty = default, instantly reversible). The NSFW gate cannot be
-part of any trade: it is an in-run check, always on, and adds zero latency
-to clean posts. Ordered from most cautious to the full old-speed feel:
+#### The Variables (latency glossary)
 
-| Combo | Variables to set | Typical arrival | What changes |
+| Variable | Default | What it does | Setting it lower / `0` |
 |---|---|---|---|
-| **Default** | *none* | ~5–10 min | every post settles 5 min (verified: 60 s) before delivery |
-| **Settle-trim** | `POST_SETTLE_SECONDS=120` | ~2–7 min | unverified posts settle 2 min instead of 5; everything else default |
-| **Verified-instant** | `POST_SETTLE_VERIFIED_SECONDS=0`, `POST_SETTLE_SECONDS=60` | ~0–5 min confirmed / ~1–6 min unconfirmable | posts confirmed public in `/new` go on first sighting; only unconfirmable ones wait a single minute |
-| **Instant** ⚠️ | `POST_SETTLE_SECONDS=0`, `POST_SETTLE_VERIFIED_SECONDS=0`, `MOD_QUEUE_WEAK_GRACE_SECONDS=0`, `RETRACT_DEAD_POSTS=1` | 0–5 min (avg ~2.5) | the pre-round-36 "post on first sighting" feel — requires the retraction seatbelt (see notice above) |
+| `POST_SETTLE_SECONDS` | `300` | minimum age an **unverified** post must reach before delivery; younger posts are held and re-examined next tick | shorter wait; `0` = post on first sighting |
+| `POST_SETTLE_VERIFIED_SECONDS` | `60` | same, but for posts **confirmed public** in the sub's `/new` listing | `0` = confirmed posts go instantly |
+| `MOD_QUEUE_WEAK_GRACE_SECONDS` | `900` | hold when mod-queue evidence is **weak/ambiguous** (strong evidence — a literal "awaiting moderator approval" banner — always holds, untunable) | shorter benefit-of-the-doubt window; `0` = weak evidence ignored |
+| `APPROVAL_RECHECK_SECONDS` | `300` | how often held approval/transient entries are re-examined — set ≈ your cron interval so every tick rechecks | faster retry grid for held posts |
+| `PENDING_RECHECK_SECONDS` | `1800` | how often media-wait entries retry | `900` = retry every ~3rd tick at 5-min cron |
+| `RETRACT_DEAD_POSTS` | `0` | the **seatbelt**: tombstones (edits/deletes per `RETRACT_MODE`, default `edit`) any delivered card whose post dies within `RETRACT_WINDOW_SECONDS` (6 h) | `1` = on — required for the ⚠️ tiers |
 
-Optional add-on for any row: `PENDING_RECHECK_SECONDS=900` makes
-media-wait entries retry every ~3rd tick instead of every ~6th (default
-1800 s). `APPROVAL_RECHECK_SECONDS` needs no change at this cadence — its
-300 s default already matches the 5-minute tick exactly.
+Not Variables, but part of the picture: the **NSFW gate is always armed** in
+every tier (in-run, zero latency, cannot be disabled), and
+`MOD_QUEUE_GATE` / `DUP_MEDIA_GATE` / `REPOST_GATE` default on and should
+stay on in every tier.
 
-In every combo above, strong mod-queue evidence (a literal "awaiting
-moderator approval" banner) still holds the post, the duplicate/repost
-gates still run, and the NSFW gate stays fully armed.
+#### The tier list
 
-What **not** to change in any preset:
+| Verdict | Cron | Variables to set | Typical arrival | Use case |
+|---|---|---|---|---|
+| ✅ **Recommended** | 5 min | *none* (**Default**) | ~5–10 min | set-and-forget maximum caution; every hold costs one 5-min cycle |
+| ✅ **Recommended** | 5 min | `POST_SETTLE_SECONDS=120` (**Settle-trim**) | ~2–7 min | the best caution/speed trade without touching the cron |
+| 🟢 Slightly recommended | 3 min | `POST_SETTLE_SECONDS=120`, `APPROVAL_RECHECK_SECONDS=180` | ~3–6 min | balanced middle; recheck matches every other tick |
+| 🟢 Slightly recommended | 5 min | `POST_SETTLE_VERIFIED_SECONDS=0`, `POST_SETTLE_SECONDS=60` (**Verified-instant**) | ~0–6 min | `/new`-confirmed posts go on first sighting; unconfirmable ones wait a single minute |
+| 🟢 Slightly recommended | 10 min | `POST_SETTLE_SECONDS=120` | ~2–12 min (avg ~7) | relaxed server, still reasonably fresh; 144 runs/day instead of 288 |
+| 🟡 Okay | 10 min | *none* | ~5–15 min (avg ~10) | calm/archival feel; halves the run count and the fleet pressure |
+| 🟡 Okay | 15 min | *none* | ~5–20 min (avg ~10) | digest-style; lightest possible touch on Reddit and Actions |
+| 🟡 Okay | 2 min | *none* (**Fast**) | ~2–5 min | zero behavior change, only the grid shrinks; requires round 61 |
+| 🟡 Okay | 2 min | `POST_SETTLE_SECONDS=120`, `APPROVAL_RECHECK_SECONDS=120` (**Faster**) | ~2–4 min | expect benign superseded-queued-run cancellations in the Actions list |
+| ⚠️ **Fastest** — read the notice | 1–2 min | `POST_SETTLE_SECONDS=60`, `APPROVAL_RECHECK_SECONDS=60`, `MOD_QUEUE_WEAK_GRACE_SECONDS=300`, `RETRACT_DEAD_POSTS=1` | ~1–3 min | the practical speed ceiling |
+| ⚠️ **Instant** — read the notice | 5 min | `POST_SETTLE_SECONDS=0`, `POST_SETTLE_VERIFIED_SECONDS=0`, `MOD_QUEUE_WEAK_GRACE_SECONDS=0`, `RETRACT_DEAD_POSTS=1` | 0–5 min (avg ~2.5) | the pre-round-36 "post on first sighting" feel, cron untouched |
+| 🔴 **Not okay** | 1 min | anything | ~1–2 min | diminishing returns — see below |
 
-* the NSFW gate — never disable it;
-* `MOD_QUEUE_GATE`, `DUP_MEDIA_GATE`, and `REPOST_GATE` — leave them on (`1`);
-* strong mod-queue evidence always holds; only weak-evidence grace is tunable.
+**Why 1 minute is Not okay:** the 60 s AutoMod window becomes the floor and
+~0.5–1 min of runner spin-up eats the entire interval, so real arrival barely
+beats the 2-minute tiers — while you pay 1,440 runs/day, much heavier
+Reddit fetch pressure on the instance fleet (more 403/429s), and constant
+queued-run churn. Round 61 keeps even this cadence **safe** (no double
+posts are possible) — it is waste, not danger.
+
+#### Worked examples (post created 14:03)
+
+* **Default, 5-min cron** (ticks 14:00/05/10): seen 14:05 at age 2 min →
+  younger than 300 s, held; 14:10 at age 7 min → posts. **Discord ≈ 14:10.**
+* **Settle-trim**: seen 14:05 at age 2 min = 120 s → posts. **≈ 14:05.**
+* **Verified-instant**: confirmed in `/new` → posts 14:05; born 14:04:30
+  (younger than 60 s and unconfirmable) → next tick. **≈ 14:05–14:10.**
+* **Instant**: posts at the first tick that sees it. **≈ 14:05.**
+* **10-min Default** (ticks 14:00/10): 14:10 at age 7 min → posts. **≈ 14:10.**
+* **Faster, 2-min cron** (ticks 14:04/06): 14:04 at age 1 min → held;
+  14:06 at age 3 min → posts. **≈ 14:06.**
+
+> ⚠️ **Fastest / Instant notice — what you are trading.** With the settle
+> window near zero, a post that dies shortly after creation CAN reach
+> Discord first. Concrete scenarios:
+> * *Mod-killed post:* created 14:03, removed by a moderator 14:07. Default
+>   never posts it (it is already dead at the 14:10 tick). Instant posted it
+>   at 14:05 — the `RETRACT_DEAD_POSTS=1` seatbelt then tombstones the card
+>   automatically (edit per `RETRACT_MODE`, within the 6 h window). Without
+>   the seatbelt, the dead card just stays up.
+> * *Weak mod-queue evidence:* with the grace at `0`, a post whose queue
+>   status could not be proven posts immediately; if it then never gets
+>   approved, same seatbelt story. Strong evidence still holds it in every
+>   tier.
+> * *What does NOT change:* the NSFW gate still blocks, duplicates and
+>   re-uploads are still caught (in-run gates stay armed), and the dedup
+>   cache still guarantees a retracted post can never re-post.
+> Run these two tiers **only** with `RETRACT_DEAD_POSTS=1`.
+
+What **not** to change in any tier:
+
+* the NSFW gate — never disable; `NSFW_FAIL_OPEN=1` costs nothing in speed
+  and only removes protection;
+* `MOD_QUEUE_GATE`, `DUP_MEDIA_GATE`, `REPOST_GATE` — leave on (`1`): they add
+  no latency to clean posts, and turning them off only re-admits the exact
+  incidents (queued-post cards, duplicate floods, re-uploads) the rounds-35–48
+  gates were built to stop;
+* strong mod-queue evidence (a literal "awaiting moderator approval" banner)
+  always holds, in every tier — only the *weak*-evidence grace is tunable.
 
 Rollback is trivial: clear the Variables (empty = default) and set the cron
 back to 5 minutes.
 
-### Cadence combos (5 / 3 / 2 minutes)
-
-Any cadence **below 5 minutes requires the round-61 workflows** (the
-sync-to-tip step + the semantic cache merge — shipped in both monitor
-ymls). The 2026-10-03 double post happened at a 2–3-minute cadence on the
-pre-round-61 workflows: a queued `workflow_dispatch` run starts on the tip
-pinned at *dispatch* time, i.e. without the previous run's fresh dedup
-cache. With round 61 in place, correctness is cadence-independent.
-
-| Cron | Variables | Typical arrival | Notes |
-|---|---|---|---|
-| **5 min** (default) | none — or any preset above | ~5–10 min (Instant: 0–5) | queue overlaps ~never happen; the safest grid |
-| **3 min** | `POST_SETTLE_SECONDS=120`, `APPROVAL_RECHECK_SECONDS=180` | ~3–6 min | balanced middle; recheck matches every other tick |
-| **2 min** | `POST_SETTLE_SECONDS=120`, `APPROVAL_RECHECK_SECONDS=120` | ~2–4 min | the Faster preset; expect occasional superseded-queued-run cancellations in the Actions list (benign — a skipped tick, the next tick reads the same feed) |
-
 ---
 
 ## 🗒 Changelog
+
+* **2026-10-04 — Docs: Speed & latency guide (complete tier list).**
+  Replaces the Speed presets / 5-minute combos / Cadence combos trio with
+  one unified guide: the latency formula, a Variable glossary, a
+  verdict-tiered table covering 15/10/5/3/2/1-minute crons
+  (✅ Recommended → 🔴 Not okay, plus the ⚠️ Fastest/Instant tiers), worked
+  arrival examples, and a notice with concrete trade-off scenarios.
+  Research alongside: live probe of `sametcn99/reddit-rss-api` on its new
+  Deno Deploy host (`reddit-rss-api.sametcn99.deno.net`) — 2/5 body-reads
+  (the passes served one cached feed), the rest `UpstreamError: HTTP 429`
+  (Reddit rate-limits the datacenter IP); it also reads the **hot** `/.rss`
+  feed (not `/new.rss`) and emits JSON, not RSS. **Not compatible — not
+  added**; consistent with the round-61 sweep: a middleman adds a hop, not
+  an exemption.
 
 * **2026-10-04 — Round 61: stale-tip double post — sync-to-tip + semantic
   cache merge.** Live 2026-10-03: a queued `workflow_dispatch` run starts
