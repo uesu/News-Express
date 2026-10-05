@@ -39,7 +39,10 @@ leftovers. Never advise deleting the "other" platform's files.
 - `tests/test_smoke.py` — the main suite; every past bug is a named guard
   (`rNN: ...`). `tests/test_reddit_signals.py` — gate-logic suite.
 - `docs/ROUND_*.md` — decision records per incident. README `## 🗒 Changelog`
-  — the full dated history. Read the round doc before touching its area.
+  — the latest rounds; the full dated history (rounds 1–62) lives in
+  `docs/CHANGELOG_ARCHIVE.md`, and the detailed round-by-round engine notes
+  moved out of the README on 2026-10-05 live in `docs/ENGINE_HISTORY.md`.
+  Read the round doc before touching its area.
 
 ## How to test (ALWAYS before committing)
 
