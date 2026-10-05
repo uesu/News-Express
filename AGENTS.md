@@ -1,6 +1,6 @@
 # AGENTS.md — onboarding for AI coding agents
 
-Read this first. It encodes the hard-won operational knowledge of 58 rounds
+Read this first. It encodes the hard-won operational knowledge of 66 rounds
 of production fixes so you do not re-learn it the expensive way — or
 "fix" something that is deliberate.
 
@@ -15,7 +15,7 @@ by an external cron (cron-job.org) via `workflow_dispatch`.
 
 | Repo | Role |
 |---|---|
-| `uesu/News-Express` (this repo, private) | Development. All fixes happen HERE via PR. |
+| `uesu/News-Express` (this repo, private) | The MAIN repo — development only. Nothing runs live from here; it exists to receive development updates (rounds, docs, tests) as PRs. |
 | `uesu/7jkxmy9nvbc` (public) | **Reddit production.** Runs `reddit_monitor.yml` live. |
 | `uesu/wvkhabh2s22` (public) | **Twitter production.** Runs `twitter_monitor.yml` live. |
 
@@ -38,8 +38,13 @@ leftovers. Never advise deleting the "other" platform's files.
   engines, switchable via one commented line in the workflows. NOT dead code.
 - `tests/test_smoke.py` — the main suite; every past bug is a named guard
   (`rNN: ...`). `tests/test_reddit_signals.py` — gate-logic suite.
-- `docs/ROUND_*.md` — decision records per incident. README `## 🗒 Changelog`
-  — the full dated history. Read the round doc before touching its area.
+- `docs/` — current topic guides only: `CI_SMOKE.md`, `DEPENDABOT.md`,
+  `DISCOHOOK.md`, `PYTHON_RUNTIME.md`, `REPOSITORY_TRACKING.md` (secrets vs
+  Variables inventory).
+- `docs/history/` — the history archive: `ROUND_*.md` decision records per
+  incident, `CHANGELOG_ARCHIVE.md` (full dated history, rounds 1–62) and
+  `ENGINE_HISTORY.md` (detailed round notes moved out of the README on
+  2026-10-05). Read the round doc before touching its area.
 
 ## How to test (ALWAYS before committing)
 
@@ -54,7 +59,7 @@ checks) — "ALL PASS" is the contract, not the number. The suites stub
 needed. If you must import an engine standalone, copy the stubbing pattern
 from the top of `test_smoke.py`.
 
-Convention: every behavioral fix gets (1) a `docs/ROUND_NN.md` decision
+Convention: every behavioral fix gets (1) a `docs/history/ROUND_NN.md` decision
 record, (2) a README changelog entry, (3) named smoke guards (`rNN: ...`).
 
 ## Invariants — NEVER violate these
@@ -93,24 +98,36 @@ record, (2) a README changelog entry, (3) named smoke guards (`rNN: ...`).
   (invariant 2): same URL = provable, new URL = guesswork.
 - Benign log lines (do NOT "fix"): `dedup cache near cap` (eviction
   handles it), the OAuth-skip INFO line, `redlib gallery enrichment failed`
-  (fallback works), `MODQUEUE-LISTING ... fail open` (by design when all
-  listing sources are down).
+  (fallback works). (The `MODQUEUE-LISTING ... fail open` line was removed
+  with the mod-queue gate in round 63 — if you see it in old logs only.)
+- Long Reddit bodies deliver as the main card + up to 3 text-only
+  continuation messages ("-# (continued)" heading). Gallery, stats and
+  buttons live ONLY on the main card, and every split lands outside
+  links/URLs/spoilers — by design (round 66, live 1wxfuj5). Do not
+  "fix" continuations into the card or move media between parts.
 - The engine versions v1/v2 are documented fallbacks, enrolled in the
   smoke suite. Not stale code.
 
 ## Key defaults (all overridable via repo Variables, no code change)
 
-- `POST_SETTLE_SECONDS=300` (unverified) / `POST_SETTLE_VERIFIED_SECONDS=60`
-- `DUP_MEDIA_GATE`, `REPOST_GATE`, `MOD_QUEUE_GATE` — default ON; empty
-  Variable = ON (only explicit off-values disable).
+- `FRESH_HOLD_SECONDS=30` — flat minimum post age before a candidate is
+  considered (round 64); `LISTING_CONFIRM` (default on) requires a pristine
+  /new listing read before posting.
 - `MEDIA_HEAL_SCOPE` — `video` (default) | `on`/`all` | `off` (round 56/56b).
 - `RETRACT_DEAD_POSTS` — default OFF; `1` enables dead-post tombstoning
   (round 44; requires two independent proofs before touching a message).
+  (Round 66 removed the workflow mappings for the round-42-45 gate Variables
+  — settle windows, dup-media/repost/mod-queue gates, listing racing — that
+  round 63 had already deleted from the engine.)
 
 ## Writing conventions
 
 - Refer to the Embeddit rewrite neutrally as "the Embeddit rewrite";
   do not link external PRs of other people's repos in PR bodies or docs.
 - Latest rounds at the top of the README changelog.
+- When a round intentionally changes behavior that an older guard test
+  pins, update the guard IN THE SAME commit and annotate why in place
+  (e.g. "r52 guard updated in round 66: ...") — never silently delete or
+  weaken a guard.
 - Verify repository CONTENT, not git history — the agent-platform
   workspace flattens local history between sessions.
