@@ -126,26 +126,47 @@ want **automatic merge to main once checks are green**, pick ONE of:
 
 ### Option B — the bundled auto-merge workflow (already in the repo)
 
-`.github/workflows/dependabot_auto_merge.yml` is included but **disabled**.
-It runs from the trusted default branch **after the named CI workflow completes**;
-it does not check out or execute PR code. To turn it on, create **one repository
-variable** (not a secret — it's a switch, not a credential):
+`.github/workflows/dependabot_auto_merge.yml` is included but **disabled**
+until the repository variable below is set. It uses the trusted
+`pull_request_target` trigger for `opened`, `synchronize`, and `reopened` PR
+events. GitHub reads that workflow file from the default branch; the job does
+**not** check out the PR and does **not** execute any PR-supplied code.
+
+To turn it on, create this one repository variable (it is a switch, not a
+credential):
 
 * Repo → **Settings → Secrets and variables → Actions → Variables**
   → *New repository variable* → name **`AUTO_MERGE_DEPENDABOT`** = **`yes`**
 
-What it then does after a CI run associated with a Dependabot PR completes:
+The PR event can arrive before CI has created or finished its check run. To
+avoid that race, the workflow captures the event's head SHA and polls **only
+that immutable SHA** every 15 seconds for up to eight minutes. It never uses a
+mutable branch name. No checks, pending checks, unknown mergeability, an API
+error, a changed head SHA, an unexpected target, or a timeout all fail closed:
+the workflow logs the reason and does not merge. After checks are ready it
+refreshes the PR and checks once more immediately before calling the merge API;
+the merge request also includes that exact SHA, so GitHub rejects a late head
+change.
 
 | Gate | Check |
 |---|---|
-| 0 | variable `AUTO_MERGE_DEPENDABOT=yes`, completed CI conclusion is `success`, and exactly one PR is associated with the run |
-| 1 | PR author is `dependabot[bot]`, it is open/not a draft, and `mergeable_state` is `clean` (human PRs are never touched) |
-| 2 | **at least one check has run** on the exact PR SHA (safety — never merges blind) |
-| 3 | **every check is success/skipped/neutral** (the CI workflow of §4 is that check) |
-| 4 | → squash-merge to `main` |
+| 0 | variable `AUTO_MERGE_DEPENDABOT` is exactly `yes` |
+| 1 | trusted PR event and API response agree on one PR, its default-branch target, and its exact event head SHA |
+| 2 | API reports author `dependabot[bot]`, state `open`, and `draft=false` — human, closed, and draft PRs are skipped |
+| 3 | **at least one** Check Run exists for that exact SHA; pending or absent checks are polled, and every completed Check Run must conclude `success`, `skipped`, or `neutral` |
+| 4 | the refreshed PR is cleanly mergeable; conflicts and unknown/non-clean mergeability are never merged |
+| 5 | checks are read again on the same SHA, then GitHub is asked to **squash-merge** with that SHA as a final race guard |
 
-If any gate fails it logs why and does nothing. To disable again: set the
-variable to anything else (or delete it).
+The workflow has only `checks: read`, `contents: write`, and
+`pull-requests: write` permissions. It has no checkout step and every action
+reference is pinned to a full commit SHA. Its log names the material outcome:
+variable disabled, non-Dependabot author, draft or closed PR, merge conflict,
+checks pending, failed check, no checks, timeout, or successful merge.
+
+To disable it again, set the variable to anything other than `yes` (or delete
+it). GitHub's separate repository-level **Allow auto-merge** setting is not
+required for this option: this workflow performs the guarded squash merge via
+the GitHub API.
 
 **Why keep the check requirement?** Because "Dependabot said so" is not a
 test. The CI job is cheap (~30 s) and is what actually proves the new version
