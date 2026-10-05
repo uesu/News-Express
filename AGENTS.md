@@ -15,7 +15,7 @@ by an external cron (cron-job.org) via `workflow_dispatch`.
 
 | Repo | Role |
 |---|---|
-| `uesu/News-Express` (this repo, private) | Development. All fixes happen HERE via PR. |
+| `uesu/News-Express` (this repo, private) | The MAIN repo — development only. Nothing runs live from here; it exists to receive development updates (rounds, docs, tests) as PRs. |
 | `uesu/7jkxmy9nvbc` (public) | **Reddit production.** Runs `reddit_monitor.yml` live. |
 | `uesu/wvkhabh2s22` (public) | **Twitter production.** Runs `twitter_monitor.yml` live. |
 
