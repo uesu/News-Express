@@ -568,11 +568,12 @@ Latest rounds only — the full dated history lives in
   is "do not reintroduce any media-fingerprint gate". `docs/CI_SMOKE.md`
   drops the removed `page_is_post_page` page-identity check and its
   shell-page scenario, stops calling the smoke suite's gate list a "queue"
-  gate, and re-attributes the listing-parse fixtures to the round-64
-  pristine listing confirmation. The Privacy Policy and Terms of Service
-  keep the same `/new` listing disclosures but credit them to the listing
-  confirmation + removal check instead of the removed mod-queue gate
-  (effective dates bumped). The 2026-10-01 audit record moved to
+  gate, and re-attributes the listing fixtures to the round-64 pristine
+  listing confirmation and the round-44 retraction seatbelt — the checks
+  the suites actually run today. The Privacy Policy and Terms of Service
+  keep the same `/new` listing disclosures but credit them to those two
+  consumers instead of the removed mod-queue gate (effective dates
+  bumped). The 2026-10-01 audit record moved to
   [`docs/history/REPOSITORY_TRACKING_2026-10-01.md`](docs/history/REPOSITORY_TRACKING_2026-10-01.md)
   with a historical-snapshot banner, and every reference was repointed. No
   engine, workflow, or test changes.

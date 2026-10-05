@@ -63,15 +63,19 @@ policy: [Python runtime policy](PYTHON_RUNTIME.md).
   value matrix `video`/`on`/`all`/`off`), and — rounds 53/54 — the GHA-safe string
   Variable defaults, the Embeddit-rewrite Component-Embed page parser, and
   the Mastodon→component→unavailable mode machine).
-* **Listing-parse fixtures (originally round 38e)** — the listing reads that
-  back the round-64 pristine listing confirmation and the retraction removal
-  check are exercised offline: an in-memory `/new` listing document is fed to
-  `_fetch_new_listing()` through a fake session to verify `/comments/<id>/`
-  post-id extraction, and — round 64 — that every request is pristine (a
-  unique `_fresh=` cache-buster per call plus `Cache-Control`/`Pragma`
-  no-cache headers). The deterministic listing-span logic the removal check
-  depends on (`listing_absence_proves_dead`, `retraction_decision`) is
-  covered in `tests/test_reddit_signals.py`. None of it contacts Reddit.
+* **Listing fixtures (originally round 38e)** — the `/new` listing reads
+  behind the round-64 pristine listing confirmation and the round-44
+  retraction seatbelt are exercised offline. The real `_fetch_new_listing()`
+  runs against an in-memory listing document served by a fake session, which
+  pins the round-64 pristine request shape: a unique `_fresh=` cache-buster
+  per call plus `Cache-Control`/`Pragma` no-cache headers on every attempt.
+  What the engine does with that snapshot is covered by the decision checks
+  in both suites — `listing_absence_proves_dead` and `retraction_decision`
+  (span arithmetic, the two-proof rule, `edit`/`delete`/off) — and by the
+  round-64 end-to-end `main()` cases in `tests/test_reddit_signals.py`
+  (listed → delivers; absent → skipped with no pending/tracker entry, then
+  delivered on the first tick that lists it; a listing outage is never read
+  as absence). Nothing here contacts Reddit.
 * **Fail-loud** — any `FAIL` exits non-zero → red check → Dependabot PR
   (or your PR) cannot merge (or auto-merge).
 
