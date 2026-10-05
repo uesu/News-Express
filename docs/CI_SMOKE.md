@@ -15,7 +15,7 @@
 | Piece | What it is | What it runs |
 |---|---|---|
 | `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every push and PR** (public repo = free) | Sets up exact **CPython 3.14.7**, then runs `pip install -r requirements.txt` → `python -m compileall` over every script → `python tests/test_smoke.py` |
-| `tests/test_smoke.py` | An **offline** test (no network, no secrets, no Discord): every monitor script must **import cleanly**, the Reddit V3 card pipeline and safety gates must still behave (body cleaning, media extraction/dedup, i.redd.it swap, redlib scoping, OP comment, Components V2 layout, proxy parsers, archive/liveness/queue gates, and — round 51 — `/user`, `/u`, and `/r/u_` profile-crosspost headers plus the media-less vxReddit shell fallback). The X V3 path is also pinned for GIF conversion, fallback parsing/order, and — round 51 — a visible but still deduplicated cached `TEST_TWEET_ID` skip. | `python tests/test_smoke.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
+| `tests/test_smoke.py` | An **offline** test (no network, no secrets, no Discord): every monitor script must **import cleanly**, the Reddit V3 card pipeline and safety gates must still behave (body cleaning, media extraction/dedup, i.redd.it swap, redlib scoping, OP comment, Components V2 layout, proxy parsers, archive/liveness gates, and — round 51 — `/user`, `/u`, and `/r/u_` profile-crosspost headers plus the media-less vxReddit shell fallback). The X V3 path is also pinned for GIF conversion, fallback parsing/order, and — round 51 — a visible but still deduplicated cached `TEST_TWEET_ID` skip. | `python tests/test_smoke.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
 
 ## 2. Optional or required? — **Required (for how this repo is set up)**
 
@@ -58,17 +58,20 @@ policy: [Python runtime policy](PYTHON_RUNTIME.md).
   components-v2 layout + button set, 4000-char budget, and — round 13 — the
   proxy-service parsers: Embeddit status-id codec, og-tag parsing, stats
   lines, the redditez/embeddit JSON shapes, fallback-chain skipping, the
-  `proxy_health.json` round-trip, — round 55 — the mod-queue page-identity
-  check (`page_is_post_page`) and the 1wvlsz0 shell-page scenario
-  end-to-end, — round 56 — the videos-only media-heal scope
+  `proxy_health.json` round-trip, — round 56 — the videos-only media-heal scope
   (`is_video_media_url`/`heal_eligible_items` + the `MEDIA_HEAL_SCOPE`
   value matrix `video`/`on`/`all`/`off`), and — rounds 53/54 — the GHA-safe string
   Variable defaults, the Embeddit-rewrite Component-Embed page parser, and
   the Mastodon→component→unavailable mode machine).
-* **Round 38e queue fixtures** — the test uses an in-memory RSS document to
-  verify `/comments/<id>/` extraction, CDATA/malformed/future date handling,
-  deterministic span calculation, URL-encoded reuse of `REDDIT_FEED_TOKEN`,
-  and the existing HTML fallback. It never contacts Reddit.
+* **Listing-parse fixtures (originally round 38e)** — the listing reads that
+  back the round-64 pristine listing confirmation and the retraction removal
+  check are exercised offline: an in-memory `/new` listing document is fed to
+  `_fetch_new_listing()` through a fake session to verify `/comments/<id>/`
+  post-id extraction, and — round 64 — that every request is pristine (a
+  unique `_fresh=` cache-buster per call plus `Cache-Control`/`Pragma`
+  no-cache headers). The deterministic listing-span logic the removal check
+  depends on (`listing_absence_proves_dead`, `retraction_decision`) is
+  covered in `tests/test_reddit_signals.py`. None of it contacts Reddit.
 * **Fail-loud** — any `FAIL` exits non-zero → red check → Dependabot PR
   (or your PR) cannot merge (or auto-merge).
 
