@@ -575,10 +575,11 @@ Latest rounds only — the full dated history lives in
   URL, `||spoiler||`, or bold/italic marker pair, fixing the live 1wxfuj5
   card that was cut mid-link (`[Set](https://…` rendered broken). Markdown
   tables — which Discord does not render — now convert to per-row
-  `**bold-label**` bullets (`**Patch 3.8**` + `- **Drip Market:** October
-  9/10, 2026` + …); malformed or ambiguous tables stay byte-identical and
-  nothing is date-converted (the card's posted-time 🕐 stays the only
-  timestamp). `reddit_monitor.yml` env list cleanup: 11 mappings for gates
+  `**bold-label**` bullets (the first header composes with the first cell:
+  `**Patch 3.8**` + `- **Drip Market:** October 9/10, 2026` + …, matching
+  the hand-checked example); malformed or ambiguous tables stay
+  byte-identical and nothing is date-converted (the card's posted-time 🕐
+  stays the only timestamp). `reddit_monitor.yml` env list cleanup: 11 mappings for gates
   removed in round 63 (settle windows, duplicate-media/repost/mod-queue
   gates, listing outage racing, approval recheck) are dropped, and the
   round-64 `FRESH_HOLD_SECONDS`/`LISTING_CONFIRM` are wired; round-61

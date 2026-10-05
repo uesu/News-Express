@@ -1826,10 +1826,16 @@ def _markdown_tables_to_bullets(body: str) -> str:
     markdown table in the card body (header row + |---| separator + data
     rows) is converted to per-row bullets:
 
-        **<first cell>**
-        - **<Header2>:** <cell2>       (one bullet per remaining column,
-                                        empty cells skipped; rows joined
-                                        by a blank line)
+        **<Header1> <cell1>**
+        - **<Header2>:** <cell2>     (one bullet per remaining column,
+                                      empty cells skipped; rows joined
+                                      by a blank line)
+
+    The bold row label COMPOSES the first header with the first cell —
+    the live 1wxfuj5 table (header "Patch", cells "3.7"/"3.8") renders
+    "**Patch 3.8**", matching the hand-checked example from the PR
+    conversation. A cell that already carries the header word ("Patch
+    3.8" under header "Patch") is used verbatim — never doubled.
 
     Conservative by design: a block only converts when every row agrees
     on the cell count, the separator row is well-formed, and no second
@@ -1874,7 +1880,14 @@ def _markdown_tables_to_bullets(body: str) -> str:
             for cells in rows:
                 block = []
                 if cells[0]:
-                    block.append(f"**{cells[0]}**")
+                    label = cells[0]
+                    head1 = (header[0] or "").strip()
+                    # compose "Header1 cell1" ("Patch" + "3.8" ->
+                    # "Patch 3.8"); a cell already carrying the header
+                    # word stays verbatim ("Patch 3.8" -> "Patch 3.8")
+                    if head1 and head1.lower() not in label.lower():
+                        label = f"{head1} {label}"
+                    block.append(f"**{label}**")
                 for head, cell in zip(header[1:], cells[1:]):
                     if cell:
                         block.append(f"- **{head}:** {cell}")

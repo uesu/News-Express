@@ -4389,19 +4389,42 @@ check("r66: adversarial link straddling the continuation boundary splits before 
       f"{_r66_h[-25:]!r} / {_r66_t[:45]!r}")
 
 # --- markdown tables → Discord-safe bullets -------------------------------
-_r66_tbl = ("| Version | Drip Market | Notes |\n"
-            "|---|---|---|\n"
-            "| Patch 3.8 | October 9/10, 2026 | Version 3.8 livestream codes |\n"
-            "| Patch 3.9 | December 2026 | Next drip market refresh |")
-check("r66: markdown table renders as bold-label bullets (live 1wxfuj5 shape)",
+# the REAL 1wxfuj5 table (verbatim from Arctic Shift, t3_1wxfuj5): the
+# first data cell is "3.8" under header "Patch" — the bold row label
+# COMPOSES them into "**Patch 3.8**", matching the hand-checked example
+_r66_tbl = ("|Patch|Drip Market|Beta Start|Livestream|First Half|Second Half|New Characters|\n"
+            "|:-|:-|:-|:-|:-|:-|:-|\n"
+            "|3.7|August 25/26, 2026|September 5, 2026|September 19, 2026|October 2, 2026|"
+            "October 23, 2026|Hsin (5\\* Electro) & Suoming (5\\* Electro)|\n"
+            "|3.8|October 9/10, 2026|October 16, 2026|October 30, 2026|November 13, 2026|"
+            "December 2, 2026|Lily (5\\* Spectro)|")
+check("r66: the real 1wxfuj5 table renders as the hand-checked example (live 1wxfuj5)",
       v3._markdown_tables_to_bullets(_r66_tbl) ==
+      "**Patch 3.7**\n"
+      "- **Drip Market:** August 25/26, 2026\n"
+      "- **Beta Start:** September 5, 2026\n"
+      "- **Livestream:** September 19, 2026\n"
+      "- **First Half:** October 2, 2026\n"
+      "- **Second Half:** October 23, 2026\n"
+      "- **New Characters:** Hsin (5\\* Electro) & Suoming (5\\* Electro)\n\n"
       "**Patch 3.8**\n"
       "- **Drip Market:** October 9/10, 2026\n"
-      "- **Notes:** Version 3.8 livestream codes\n\n"
-      "**Patch 3.9**\n"
-      "- **Drip Market:** December 2026\n"
-      "- **Notes:** Next drip market refresh",
+      "- **Beta Start:** October 16, 2026\n"
+      "- **Livestream:** October 30, 2026\n"
+      "- **First Half:** November 13, 2026\n"
+      "- **Second Half:** December 2, 2026\n"
+      "- **New Characters:** Lily (5\\* Spectro)",
       repr(v3._markdown_tables_to_bullets(_r66_tbl)))
+check("r66: a first cell already carrying the header word is never doubled",
+      v3._markdown_tables_to_bullets(
+          "| Patch | Drip Market |\n|---|---|\n| Patch 3.8 | October 9/10, 2026 |")
+      == "**Patch 3.8**\n- **Drip Market:** October 9/10, 2026",
+      repr(v3._markdown_tables_to_bullets(
+          "| Patch | Drip Market |\n|---|---|\n| Patch 3.8 | October 9/10, 2026 |")))
+check("r66: an empty first header falls back to the verbatim cell",
+      v3._markdown_tables_to_bullets(
+          "| | Drip Market |\n|---|---|\n| 3.8 | October 9/10, 2026 |")
+      == "**3.8**\n- **Drip Market:** October 9/10, 2026")
 check("r66: dates stay literal — NO Discord-timestamp guessing of body text",
       "<t:" not in v3._markdown_tables_to_bullets(_r66_tbl))
 check("r66: table mid-body keeps the surrounding prose",
@@ -4409,13 +4432,13 @@ check("r66: table mid-body keeps the surrounding prose",
       "before\n\n" + v3._markdown_tables_to_bullets(_r66_tbl) + "\nafter",
       repr(v3._markdown_tables_to_bullets("before\n\n" + _r66_tbl + "\nafter")))
 check("r66: empty cells are skipped, not blank bullets",
-      v3._markdown_tables_to_bullets("| a | b | c |\n|---|---|---|\n| x | | z |")
-      == "**x**\n- **c:** z",
-      repr(v3._markdown_tables_to_bullets("| a | b | c |\n|---|---|---|\n| x | | z |")))
+      v3._markdown_tables_to_bullets("| Patch | Drip Market | Notes |\n|---|---|---|\n| 3.8 | | z |")
+      == "**Patch 3.8**\n- **Notes:** z",
+      repr(v3._markdown_tables_to_bullets("| Patch | Drip Market | Notes |\n|---|---|---|\n| 3.8 | | z |")))
 check("r66: escaped pipes survive as literal pipes",
-      v3._markdown_tables_to_bullets("| a \\| b | c |\n|---|---|\n| x \\| y | z |")
-      == "**x | y**\n- **c:** z",
-      repr(v3._markdown_tables_to_bullets("| a \\| b | c |\n|---|---|\n| x \\| y | z |")))
+      v3._markdown_tables_to_bullets("| Patch | a \\| b |\n|---|---|\n| 3.8 | x \\| y |")
+      == "**Patch 3.8**\n- **a | b:** x | y",
+      repr(v3._markdown_tables_to_bullets("| Patch | a \\| b |\n|---|---|\n| 3.8 | x \\| y |")))
 _r66_bad_tbls = [
     "| a | b |\n| c | d |",                                  # no separator row
     "| a | b | c |\n|---|---|---|\n| x | y |",               # unequal data cells
@@ -4432,9 +4455,9 @@ check("r66: a pipe-free body short-circuits untouched",
 # --- live 1wxfuj5 end-to-end shape: table + entities + link across the cut
 _r66_live_raw = (
     "Version 3.8 drip market schedule below.\n\n"
-    "| Version | Drip Market | Notes |\n"
+    "| Patch | Drip Market | Notes |\n"
     "|---|---|---|\n"
-    "| Patch 3.8 | October 9/10, 2026 | Version 3.8 livestream codes |\n\n"
+    "| 3.8 | October 9/10, 2026 | Version 3.8 livestream codes |\n\n"
     "All top-level comments must be showcases, like so:\n\n"
     "&gt; link to showcase here\n&gt; names of the characters used\n\n"
     + _r66_para("Details", 3300) + "\n\n"
@@ -4467,6 +4490,179 @@ check("r66: 1wxfuj5 shape — long body continues in follow-up messages",
       len(_r66_live_conts) >= 1, str(len(_r66_live_conts)))
 check("r66: 1wxfuj5 shape — no body-level Discord timestamps (only the card 🕐)",
       all("<t:" not in p for p in _r66_live_parts[1:]), str(_r66_live_parts[1][-80:]))
+
+# --- the FULL live 1wxfuj5 selftext (verbatim from Arctic Shift) -----------
+_r66_mega_raw = r"""Please use this thread for discussion, questions, or other topics related to the game. Off-topic discussions are welcome. **STORY LEAKS MUST BE PROPERLY SPOILER TAGGED**
+
+Thank you to u/justachilldude6347 for the megathread title. Remember to be respectful to others and follow the rules.
+
+---
+
+##### Guides & Wikis:
+
+* [encore.moe](http://encore.moe) (Character wiki + Voicelines in all languages + Leaked OSTs)
+* [Interactive Map 1](https://wuthering.gg/map)
+* [Interactive Map 2](https://www.ghzs666.com/wutheringwaves-map#/?map=default)
+* [nanoka.cc](http://ww.nanoka.cc) (Hakush-adjacent site)
+* [Prydwen](https://www.prydwen.gg/wuthering-waves/) (Guides and Builds)
+* [Tethys.gg](https://tethys.gg/) (Community-run guide by theorycrafters and speedrunners)
+* [Wuwa Wiki](https://wuwa.wiki/en)
+
+RIP Hakush
+
+---
+
+##### Resources:
+
+* [Banner Countdown](https://wuthering-countdown.gengamer.in/)
+* [BlackClears' 3.x Wuwa Calcs](https://docs.google.com/spreadsheets/d/1VGNYxq9nmxxRcA719RzfhXFHg8dtCWJmZ9WP-iq5AcQ/edit?gid=262258431#gid=262258431) (Calcs and more calcs)
+* [DPR Calc Results](https://docs.google.com/spreadsheets/d/1eoCTrwYIsRpacvL3KrcQpR5rwY3pbJ6gEljZdBj_DHs/edit?gid=1550476759#gid=1550476759) (Pre-Release/Beta Calc, **reminder that everything is stc and NOT indicative of a character's actual performance in game**)
+* [Maygi's Wuwa DPS Calculator spreadsheet](https://docs.google.com/spreadsheets/d/1vTbG2HfkVxyqvNXF2taikStK-vJJf40QrWa06Fgj17c/edit?usp=sharing) (Can be modified to work with leaked character info, note that **leak info are stc**)
+* [Riley's Calcs](https://riley31415.github.io/wuwa_calc/) (Another damage calculator)
+* [Wudamage](https://wudamage.com/) (Damage Simulator)
+* [wutheringtools.com](https://www.wutheringtools.com/) (Build optimizer)
+* [Wuwa Bookkeeping](https://docs.google.com/spreadsheets/d/1msSsnWBcXKniykf4rWQCEdk2IQuB9JHy/edit?gid=792709623#gid=792709623)
+* [Wuwalab](https://wuwalab.com/) (Another Damage Simulator)
+* [Wuwa Tracker](https://wuwatracker.com) (Achievement Tracker, Pull Tracker, Event Timeline, Ascension Planner)
+
+*If you're the owner of any of these resources and would like them removed from this list, please inform me via Chat*
+
+---
+
+##### Frequently Asked Questions (FAQ):
+
+**Q1: Banners?**
+
+3.7 2nd Phase: Suoming, Lynae, Lucilla with Lumi, Danjin, Chixia
+
+---
+
+**Q2: Future characters? (STC)**
+
+Suoming | 5\* Electro Sword
+
+[Drip](https://www.youtube.com/shorts/5mJgJC7GgkQ) | [Splash](https://www.youtube.com/shorts/0mwDm3U7m-w) | [Microwave](https://www.reddit.com/r/WutheringWavesLeaks/comments/1vqo0y0) | [Nanoka](https://ww.nanoka.cc/character/1312) | [Sig](https://ww.nanoka.cc/weapon/21020107) | [Set](https://ww.nanoka.cc/echo/6000224) MAJOR SPOILERS FOR 4C
+
+Tags: Main Damage Dealer, Basic Attack Damage, Electro Damage Amplification, Resonance Skill Damage Amplification, Tune Break: Unison
+
+---
+
+Lily | 5\* Spectro Gun
+
+[Appearance](https://www.reddit.com/r/WutheringWavesLeaks/comments/1wcpp9g) | [Set](https://www.reddit.com/r/WutheringWavesLeaks/comments/1w37g42)
+
+---
+
+* 4.x: Anna
+* 4.x: Luxier
+* 4.x: Aimoxishen/Amethyst
+
+**Reminder: All team comps with leaked characters are speculative!**
+
+**If anything is missing, check the Chinese version of nanoka**
+
+---
+
+**Q3: Skins?**
+
+Hiyuki skin in 3.8 (Seele)
+
+Scar, go back to jail. Do not pass GO, do not collect 200 dollars.
+
+---
+
+**Q4: When is beta?**
+
+Usually 2 weeks after the start of current patch.
+
+If it's not 2 weeks after the start of current patch, it's time to panic.
+
+---
+
+**Q4: Speculated future drip/beta/patch release dates?**
+
+### **TAKE WITH A GRAIN OF SALT**
+
+* Assuming every patch is 42 days long & every banner is 21 days long
+* Drip Market is one week after the start of patch in most cases
+* **Beta and Livestream dates are calculated off the average of previous patches, rounded to the nearest Friday**
+* Date timezone is EST/EDT
+
+|Patch|Drip Market|Beta Start|Livestream|First Half|Second Half|New Characters|
+|:-|:-|:-|:-|:-|:-|:-|
+|3.7|August 25/26, 2026|September 5, 2026|September 19, 2026|October 2, 2026|October 23, 2026|Hsin (5\* Electro) & Suoming (5\* Electro)|
+|3.8|October 9/10, 2026|October 16, 2026|October 30, 2026|November 13, 2026|December 2, 2026|Lily (5\* Spectro)|
+
+[Click here to see past megathreads](https://www.reddit.com/r/WutheringWavesLeaks/search/?q=Weekly+Questions+%2B+Discussions+Megathread&cId=7275eabe-0c38-45cf-a64b-730b18eb5943&iId=1ff6a97b-29f4-4dfc-b0a5-6fdb38038832&sort=new)"""
+_r66_mega_body = v3._clean_plain_body(_r66_mega_raw)
+_r66_mega_p, _r66_mega_rest = v3.build_v3_payload(
+    "WutheringWavesLeaks",
+    {"title": "Omae wa mou Hsindeiru - Weekly Questions & Discussions Megathread",
+     "author": "BriefVisit729", "body": _r66_mega_body, "media": [], "crosspost": None,
+     "stats": {"comments": 0, "ups": 1}, "youtube_url": None, "op_comment": None},
+    "https://www.reddit.com/r/WutheringWavesLeaks/comments/1wxfuj5/omae_wa_mou_hsindeiru_weekly_questions/",
+    1791120901, return_remainder=True)
+_r66_mega_conts = v3.build_continuation_payloads(_r66_mega_rest)
+_r66_mega_parts = _r66_texts(_r66_mega_p)[1:-1] + _r66_chunks(_r66_mega_conts)
+_r66_mega_joined = "\n".join(_r66_mega_parts)
+check("r66: live 1wxfuj5 megathread — the body is continued, not truncated (no '…' cut)",
+      len(_r66_mega_conts) >= 1
+      and all(not p.rstrip().endswith("…") or p.rstrip().endswith("… full post on Reddit")
+              for p in _r66_mega_parts),
+      f"conts={len(_r66_mega_conts)} lens={[len(p) for p in _r66_mega_parts]}")
+check("r66: live 1wxfuj5 megathread — the release-date table is the hand-checked example",
+      "**Patch 3.7**" in _r66_mega_joined and "**Patch 3.8**" in _r66_mega_joined
+      and "- **Drip Market:** October 9/10, 2026" in _r66_mega_joined
+      and "- **New Characters:** Lily (5\\* Spectro)" in _r66_mega_joined,
+      str([p[:60] for p in _r66_mega_parts]))
+check("r66: live 1wxfuj5 megathread — pipe-list lines ('Suoming | 5\\* …') are NOT tables",
+      "Suoming | 5\\* Electro Sword" in _r66_mega_joined
+      and "Lily | 5\\* Spectro Gun" in _r66_mega_joined)
+_r66_mega_links = re.findall(r"\[[^\]\n]+\]\(https?://[^)\s]+\)", _r66_mega_body)
+check("r66: live 1wxfuj5 megathread — EVERY markdown link delivered intact, none cut",
+      all(sum(p.count(_lnk) for p in _r66_mega_parts) == _r66_mega_body.count(_lnk) >= 1
+          for _lnk in _r66_mega_links)
+      and "[Set](https://www.reddit.com/r/WutheringWavesLeaks/comments/1w37g42)" in _r66_mega_joined,
+      f"{len(_r66_mega_links)} links; "
+      f"cut={[l for l in _r66_mega_links if sum(p.count(l) for p in _r66_mega_parts) < _r66_mega_body.count(l)]}")
+check("r66: live 1wxfuj5 megathread — no broken partial-link fragment (the live bug)",
+      all(not re.search(r"\[[^\]\n]{0,80}\]\(https?://[^\s\)]*$", p) for p in _r66_mega_parts),
+      str([p[-90:] for p in _r66_mega_parts]))
+check("r66: live 1wxfuj5 megathread — entity hygiene + no body timestamps",
+      all("&gt;" not in p and "<t:" not in p for p in _r66_mega_parts))
+
+# --- galleries are NOT affected by continuations ---------------------------
+def _r66_photos(n):
+    return [{"kind": "photo", "url": f"https://preview.redd.it/g{i}.jpg"} for i in range(n)]
+
+
+_r66_gdata = dict(_r66_data("\n\n".join(_r66_paras12)))
+_r66_gdata["media"] = _r66_photos(15)
+_r66_g15, _r66_g15_rest = v3.build_v3_payload(_r66_sub, _r66_gdata, _r66_url, _r66_ts,
+                                              return_remainder=True)
+_r66_g15_conts = v3.build_continuation_payloads(_r66_g15_rest)
+check("r66: 15-photo long-body card keeps the round-38c two-container split (10 + 5)",
+      len(_r66_g15["components"]) == 2
+      and [len(c["items"]) for c in _r66_g15["components"][0]["components"]
+           + _r66_g15["components"][1]["components"] if c.get("type") == 12] == [10, 5]
+      and [c["type"] for c in _r66_g15["components"][0]["components"]] == [10, 10, 14, 12]
+      and [c["type"] for c in _r66_g15["components"][1]["components"]] == [14, 12, 10, 14, 1],
+      str([[c["type"] for c in cont["components"]] for cont in _r66_g15["components"]]))
+check("r66: gallery card body split feeds the SAME continuation pipeline",
+      len(_r66_g15_conts) == 3
+      and all(c["components"][0]["components"][0]["type"] == 10
+              and len(c["components"][0]["components"]) == 1 for c in _r66_g15_conts),
+      f"conts={len(_r66_g15_conts)}")
+_r66_gdata_short = dict(_r66_data(_r66_short))
+_r66_gdata_short["media"] = _r66_photos(15)
+_r66_g15_short = v3.build_v3_payload(_r66_sub, _r66_gdata_short, _r66_url, _r66_ts)
+_r66_g15_short_r, _r66_g15_short_rest = v3.build_v3_payload(
+    _r66_sub, _r66_gdata_short, _r66_url, _r66_ts, return_remainder=True)
+check("r66: short-body 15-photo card — return_remainder changes nothing, zero continuations",
+      _r66_g15_short == _r66_g15_short_r and _r66_g15_short_rest == ""
+      and v3.build_continuation_payloads(_r66_g15_short_rest) == []
+      and len(_r66_g15_short["components"]) == 2,
+      f"equal={_r66_g15_short == _r66_g15_short_r} rest={_r66_g15_short_rest!r}")
 
 # --- retraction covers EVERY part (mocked session, r63 harness pattern) ---
 class _R66Session:

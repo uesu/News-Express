@@ -1,6 +1,6 @@
 # AGENTS.md — onboarding for AI coding agents
 
-Read this first. It encodes the hard-won operational knowledge of 58 rounds
+Read this first. It encodes the hard-won operational knowledge of 66 rounds
 of production fixes so you do not re-learn it the expensive way — or
 "fix" something that is deliberate.
 
@@ -38,6 +38,9 @@ leftovers. Never advise deleting the "other" platform's files.
   engines, switchable via one commented line in the workflows. NOT dead code.
 - `tests/test_smoke.py` — the main suite; every past bug is a named guard
   (`rNN: ...`). `tests/test_reddit_signals.py` — gate-logic suite.
+- `docs/` — current topic guides only: `CI_SMOKE.md`, `DEPENDABOT.md`,
+  `DISCOHOOK.md`, `PYTHON_RUNTIME.md`, `REPOSITORY_TRACKING.md` (secrets vs
+  Variables inventory).
 - `docs/history/` — the history archive: `ROUND_*.md` decision records per
   incident, `CHANGELOG_ARCHIVE.md` (full dated history, rounds 1–62) and
   `ENGINE_HISTORY.md` (detailed round notes moved out of the README on
@@ -95,8 +98,13 @@ record, (2) a README changelog entry, (3) named smoke guards (`rNN: ...`).
   (invariant 2): same URL = provable, new URL = guesswork.
 - Benign log lines (do NOT "fix"): `dedup cache near cap` (eviction
   handles it), the OAuth-skip INFO line, `redlib gallery enrichment failed`
-  (fallback works), `MODQUEUE-LISTING ... fail open` (by design when all
-  listing sources are down).
+  (fallback works). (The `MODQUEUE-LISTING ... fail open` line was removed
+  with the mod-queue gate in round 63 — if you see it in old logs only.)
+- Long Reddit bodies deliver as the main card + up to 3 text-only
+  continuation messages ("-# (continued)" heading). Gallery, stats and
+  buttons live ONLY on the main card, and every split lands outside
+  links/URLs/spoilers — by design (round 66, live 1wxfuj5). Do not
+  "fix" continuations into the card or move media between parts.
 - The engine versions v1/v2 are documented fallbacks, enrolled in the
   smoke suite. Not stale code.
 
@@ -117,5 +125,9 @@ record, (2) a README changelog entry, (3) named smoke guards (`rNN: ...`).
 - Refer to the Embeddit rewrite neutrally as "the Embeddit rewrite";
   do not link external PRs of other people's repos in PR bodies or docs.
 - Latest rounds at the top of the README changelog.
+- When a round intentionally changes behavior that an older guard test
+  pins, update the guard IN THE SAME commit and annotate why in place
+  (e.g. "r52 guard updated in round 66: ...") — never silently delete or
+  weaken a guard.
 - Verify repository CONTENT, not git history — the agent-platform
   workspace flattens local history between sessions.
