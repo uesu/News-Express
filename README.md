@@ -1986,8 +1986,57 @@ pre-round-63 commit of `testing area/reddit_main_v3.py` from Git history.
 
 ---
 
+## 🆕 Reddit V3 — round 64 (2026-10-05): Pristine Listing Protocol
+
+**How a post gets delivered:** a new Reddit post is only sent to Discord once
+its own age clears a flat, stateless `FRESH_HOLD_SECONDS` floor (default
+30 s) **and** a fresh, cache-busted read of the subreddit's `/new` listing
+proves it's actually live right now. Not listed yet? It's skipped for this
+tick only — never blocked, never cached — and posts the instant a later
+tick finds it there. The three round-63 protections (dedup, fail-closed
+NSFW, retraction seatbelt) are unchanged and still run exactly as before.
+
+1. **Stateless 30 s fresh hold (`FRESH_HOLD_SECONDS`, default 30).** Age is
+   computed straight from the post's own timestamp — no first-seen
+   tracking, no pending entry, no inference of any kind. `FRESH_HOLD_SECONDS=60`
+   is an extra-cautious floor (covers slower AutoModerator passes) and
+   `FRESH_HOLD_SECONDS=0` turns it off. At any cron interval of 2 minutes or
+   more, either value costs the post at most one tick of extra latency.
+2. **Pristine listing confirmation (`LISTING_CONFIRM`, default 1).** Every
+   tick, each monitored subreddit's `/new` listing is fetched with a unique
+   `_fresh=<unix ms>` cache-buster on every single request plus
+   `Cache-Control: no-cache, no-store` / `Pragma: no-cache` headers, so no
+   CDN or proxy can hand back a stale page — and the result is never reused
+   across runs. A candidate present in that listing proceeds; absent, it's
+   skipped this tick and re-checked next tick (logged, never cached). If the
+   candidate is older than the listing's own oldest entry (scrolled past
+   `limit=100`), confirmation is inapplicable and it falls straight through
+   to normal delivery. If no listing source is readable at all this tick,
+   that's an **outage**, never read as absence — every new candidate for
+   that subreddit is skipped and retried next tick.
+3. **No AutoModerator or sticky-comment detection of any kind** — no phrase
+   matching, no inference, no tracker state. `LISTING_CONFIRM=0` restores
+   round-63 delivery; pair it with `FRESH_HOLD_SECONDS=0` for a full,
+   byte-for-byte return to pre-round-64 behavior.
+
+**Precedence:** dedup skip → `FRESH_HOLD_SECONDS` floor → pristine listing
+confirmation → the fail-closed NSFW gate (unchanged, still fail-closed) →
+deliver. The retraction seatbelt is unaffected.
+
+---
+
 ## 🗒 Changelog
 
+* **2026-10-05 — Round 64: Pristine Listing Protocol.** A post now delivers
+  only when a cache-busted, pristine read of the subreddit's /new listing
+  proves it is live on the subreddit at that moment (unique `_fresh`
+  cache-buster + no-cache request headers on every listing read — no stale
+  CDN/cache view can linger). Not there → skipped, never blocked: it posts
+  instantly on the tick it first appears. Plus a stateless
+  `FRESH_HOLD_SECONDS=30` floor computed from the post's own timestamp — no
+  trackers, no pending entries, no inference. `LISTING_CONFIRM=0` restores
+  round-63 behavior. Dedup, fail-closed NSFW, and the retraction seatbelt
+  are unchanged.
 * **2026-10-05 — Round 63: The Great Simplification.** The Reddit engine is
   reduced to three protections: the dedup cache, the fail-closed NSFW gate
   (polished: over_18 + thumbnail marker + subreddit flag + page markers on

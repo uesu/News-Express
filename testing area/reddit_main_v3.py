@@ -348,6 +348,30 @@ RETRACT_MODE = os.getenv("RETRACT_MODE", "edit").strip().lower() or "edit"
 RETRACT_WINDOW_SECONDS = _env_int("RETRACT_WINDOW_SECONDS", 21600)
 POSTED_MESSAGES_FILE = "posted_messages.json"
 
+# ---------------------------------------------------------------------------
+# ■ ROUND 64 ("Pristine Listing Protocol", 2026-10-05)
+# A new post is delivered only when a pristine, cache-busted read of the
+# subreddit's /new listing proves it is actually live on the subreddit RIGHT
+# NOW, plus a flat minimum age computed from the post's own creation
+# timestamp. Both are stateless: neither writes a pending entry, and
+# "not there yet" is a this-tick skip, never a permanent block — the first
+# tick where the post appears (and clears the age floor) it posts instantly.
+# No AutoModerator comment detection of any kind: no phrase matching, no
+# inference, no tracker state.
+#   FRESH_HOLD_SECONDS — section A: flat minimum post age (seconds) before a
+#     candidate is even considered; 0 disables the floor entirely.
+#   LISTING_CONFIRM — section B: 1 (default) requires the pristine /new
+#     listing to confirm the candidate before it posts; 0 disables the
+#     listing-confirmation gate (the FRESH_HOLD_SECONDS floor still applies
+#     independently; set both to 0 to fully restore pre-round-64 delivery).
+# ---------------------------------------------------------------------------
+FRESH_HOLD_SECONDS = _env_int("FRESH_HOLD_SECONDS", 30)
+_LISTING_CONFIRM_RAW = os.getenv("LISTING_CONFIRM")
+if not _LISTING_CONFIRM_RAW or _LISTING_CONFIRM_RAW.strip().lower() in ("1", "true", "yes", "on"):
+    LISTING_CONFIRM = True
+else:
+    LISTING_CONFIRM = _LISTING_CONFIRM_RAW.strip().lower() not in ("0", "false", "no", "off")
+
 # Round 63 ("The Great Simplification"): the settle window, the mod-queue
 # gate, the duplicate-media gate, the repost gate and the page-identity
 # check are gone. A native Reddit post is delivered as-is — the only things
@@ -464,26 +488,43 @@ def _rss_oldest_age(xml, now=None):
 async def _fetch_new_listing(session, subreddit):
     """Return ``(post_ids, oldest_age_seconds)`` for r/<subreddit>/new.
 
-    Round 63: the only remaining consumer is the retraction seatbelt
+    Round 63: the only remaining consumer was the retraction seatbelt
     (``listing_absence_proves_dead``) — it just needs a snapshot of which
     post IDs are currently listed and how far back that listing reaches.
     Every mirror/RSS source is tried concurrently and the first usable
     answer wins; one flat, hardcoded timeout bounds the whole step. There is
     no HTML-vs-RSS provenance distinction any more — that existed solely to
     feed the mod-queue gate's release proof, which round 63 removed.
+
+    Round 64 ("Pristine Listing Protocol"): this is now ALSO the proof
+    the main delivery loop's listing-confirmation gate relies on, so every
+    request here is made PRISTINE — a unique ``_fresh=<unix ms>`` cache-buster
+    query param (CDN cache keys include the query string, so a unique value
+    guarantees an uncached read) plus ``Cache-Control``/``Pragma`` no-cache
+    request headers, on every mirror/RSS attempt. The per-subreddit,
+    once-per-run memoization below is unchanged — a fresh process (one per
+    cron tick) means that memo is itself never reused across runs.
     """
     if subreddit in _listing_cache:
         return _listing_cache[subreddit]
 
     _timeout = aiohttp.ClientTimeout(total=_LISTING_TIMEOUT_SECONDS)
+    # Round 64: one cache-buster value per _fetch_new_listing() call — every
+    # mirror/RSS attempt this call makes shares it (they fire within
+    # milliseconds of each other), but it is freshly computed on every call,
+    # so two listing reads (different subreddits, or different cron ticks)
+    # never share a value and no CDN/proxy can serve a cached response.
+    _fresh = int(time.time() * 1000)
+    _pristine_headers = {**BROWSER_HEADERS, "Cache-Control": "no-cache, no-store",
+                         "Pragma": "no-cache"}
 
     async def _html_listing(instance):
         try:
             # miningtcup sits behind its DogWAF and rejects untokenized
             # requests. The helper is a no-op for every non-miningtcup URL
             # (same helper the post page uses).
-            async with session.get(_with_miningtcup_token(f"{instance}/r/{subreddit}/new?limit=100"),
-                                   headers=BROWSER_HEADERS, timeout=_timeout,
+            url = _with_miningtcup_token(f"{instance}/r/{subreddit}/new?limit=100&_fresh={_fresh}")
+            async with session.get(url, headers=_pristine_headers, timeout=_timeout,
                                    allow_redirects=True) as resp:
                 if resp.status != 200 or "html" not in (resp.headers.get("Content-Type") or "").lower():
                     return None
@@ -497,12 +538,12 @@ async def _fetch_new_listing(session, subreddit):
 
     async def _rss_listing(instance):
         try:
-            url = f"{instance}/r/{subreddit}/new.rss?limit=100"
+            url = f"{instance}/r/{subreddit}/new.rss?limit=100&_fresh={_fresh}"
             if REDDIT_FEED_TOKEN:
                 # Feed tokens are credentials; quote them as a query value and
                 # never include the resulting URL in a log message.
                 url += f"&feed={quote(REDDIT_FEED_TOKEN, safe='')}"
-            async with session.get(url, headers=BROWSER_HEADERS, timeout=_timeout,
+            async with session.get(url, headers=_pristine_headers, timeout=_timeout,
                                    allow_redirects=True) as resp:
                 xml = await resp.text() if resp.status == 200 else None
         except Exception:
@@ -542,10 +583,11 @@ async def _fetch_new_listing(session, subreddit):
             task.cancel()
 
     if result is not None:
-        logging.info(f"LISTING: r/{subreddit} /new ({len(result[0])} entries).")
+        logging.info(f"LISTING: r/{subreddit} pristine /new ({len(result[0])} entries).")
     else:
-        logging.info(f"LISTING: r/{subreddit} /new listing unavailable this run "
-                     f"(all sources) — the retraction seatbelt fails open.")
+        logging.info(f"LISTING: r/{subreddit} pristine /new listing unavailable this run "
+                     f"(all sources) — an outage, not absence: the round-64 listing-confirmation "
+                     f"gate and the retraction seatbelt both fail open (skip/retry next tick).")
     _listing_cache[subreddit] = result
     return result
 
@@ -3968,6 +4010,47 @@ async def main():
                     logging.info(f"[{unique_key}] pending ({_pend.get('reason')}) — "
                                  f"skipping recheck, due again in ~{_due_in}s.")
                 continue
+
+            # ---- round 64: stateless 30s fresh hold (section A) ---------
+            # A flat floor computed from the post's OWN creation timestamp —
+            # no first-seen tracking, no pending entry. A candidate still
+            # under the floor simply re-qualifies from the feed next tick.
+            if not TEST_POST_ID and FRESH_HOLD_SECONDS > 0:
+                _post_age = now - float(published_ts or now)
+                if _post_age < FRESH_HOLD_SECONDS:
+                    logging.info(f"[{unique_key}] age {_post_age:.1f}s < "
+                                 f"FRESH_HOLD_SECONDS ({FRESH_HOLD_SECONDS}s) — "
+                                 f"skipped this tick (stateless, not cached), "
+                                 f"re-evaluated next tick.")
+                    continue
+
+            # ---- round 64: pristine listing confirmation (section B) ----
+            # Delivers only when a cache-busted, pristine read of the
+            # subreddit's /new listing proves the post is live right now.
+            # Absent -> skip this tick (never cached); appears -> posts on
+            # the very next tick. A candidate older than the listing's own
+            # span (scrolled past limit=100) cannot be proven OR disproven,
+            # so confirmation is inapplicable and it falls through normally.
+            # An unreadable listing is an OUTAGE, never read as absence —
+            # every new candidate for that subreddit is skipped and retried.
+            if not TEST_POST_ID and LISTING_CONFIRM:
+                _r64_listing = await _fetch_new_listing(session, subreddit)
+                if _r64_listing is None:
+                    logging.info(f"[{unique_key}] pristine /new listing unavailable "
+                                 f"for r/{subreddit} this tick (outage, not absence) "
+                                 f"— skipped (not cached), retried next tick.")
+                    continue
+                _r64_ids, _r64_oldest_age = _r64_listing
+                _r64_candidate_id = (extract_post_id(path) or "").lower()
+                _r64_post_age = now - float(published_ts or now)
+                if _r64_oldest_age is not None and _r64_post_age > _r64_oldest_age:
+                    logging.info(f"[{unique_key}] older than the pristine listing's own "
+                                 f"span — confirmation inapplicable, falling through to "
+                                 f"normal delivery.")
+                elif _r64_candidate_id not in _r64_ids:
+                    logging.info(f"[{unique_key}] not in pristine listing — skipped "
+                                 f"this tick (not cached), re-checked next tick.")
+                    continue
 
             # ---- round 42/45: fail-closed NSFW content gate -------------
             # Runs before any Discord payload, thumbnail or attachment is

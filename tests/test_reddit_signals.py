@@ -217,18 +217,19 @@ asyncio.run(_fetch_checks())
 
 # 8 end-to-end-ish main cases with fake session ----------------------------
 class _Entry(dict):
-    def __init__(self):
+    def __init__(self, age_seconds=120):
         super().__init__()
         self.link = "/r/TestSub/comments/abc123/title/"
         self.title = "Clean Title"
         self.author = "Author"
-        self["published_parsed"] = time.gmtime(time.time() - 120)
+        self["published_parsed"] = time.gmtime(time.time() - age_seconds)
         self["updated_parsed"] = self["published_parsed"]
         self["content"] = [{"value": "body"}]
         self["summary"] = "body"
 
 class _Feed:
-    entries = [_Entry()]
+    def __init__(self, age_seconds=120):
+        self.entries = [_Entry(age_seconds)]
 
 class _FakeResponse:
     status = 204
@@ -254,7 +255,8 @@ class _FakeClientSession:
         self.posts.append((url, json))
         return _FakeResponse()
 
-async def _run_main_case(markers, page_html=None):
+async def _run_main_case(markers, page_html=None, age_seconds=120, listing=(("abc123",), 600),
+                          fresh_hold=None, listing_confirm=None):
     names = [
         "SUBREDDITS", "TEST_POST_ID", "DRY_RUN", "fetch_combined_feed",
         "fetch_arctic_nsfw_flags", "_fetch_new_listing",
@@ -262,6 +264,7 @@ async def _run_main_case(markers, page_html=None):
         "create_discohook_share", "load_posted", "load_pending", "save_posted",
         "save_pending", "save_posted_messages", "load_posted_messages",
         "fetch_first_redlib_post_page", "RETRACT_DEAD_POSTS", "aiohttp",
+        "FRESH_HOLD_SECONDS", "LISTING_CONFIRM",
     ]
     old = {name: getattr(v3, name) for name in names}
     old_env = os.environ.get("DISCORD_WEBHOOK_URL")
@@ -274,9 +277,17 @@ async def _run_main_case(markers, page_html=None):
         v3.TEST_POST_ID = ""
         v3.DRY_RUN = False
         v3.RETRACT_DEAD_POSTS = False
-        v3.fetch_combined_feed = lambda session: _async_return(_Feed())
+        if fresh_hold is not None:
+            v3.FRESH_HOLD_SECONDS = fresh_hold
+        if listing_confirm is not None:
+            v3.LISTING_CONFIRM = listing_confirm
+        v3.fetch_combined_feed = lambda session: _async_return(_Feed(age_seconds))
         v3.fetch_arctic_nsfw_flags = lambda session, ids, label="": _async_return({"abc123": markers})
-        v3._fetch_new_listing = lambda session, sub: _async_return(({"abc123"}, 600))
+        if listing is None:
+            v3._fetch_new_listing = lambda session, sub: _async_return(None)
+        else:
+            _listing_ids, _listing_oldest = listing
+            v3._fetch_new_listing = lambda session, sub: _async_return((set(_listing_ids), _listing_oldest))
         v3.verify_archive_post_live = lambda session, path, label="", feed_ok=True: _async_return((True, "live"))
         v3.fetch_post_json = lambda session, pid, use_oauth=False: _async_return(None)
         v3.resolve_post_media = lambda session, base, post_json, path="", label="": _async_return({
@@ -335,6 +346,103 @@ async def _main_checks():
     sent, pending = await _run_main_case({"archive_status": "missing"}, None)
     check("main unreadable fallback fails closed", sent == 0 and pending.get("TestSub_abc123", {}).get("reason") == "nsfw_unknown")
 asyncio.run(_main_checks())
+
+# ROUND 64 ("Pristine Listing Protocol") end-to-end main() cases ------------
+# Precedence under test: dedup -> FRESH_HOLD floor -> pristine listing
+# confirmation -> NSFW gate (unchanged, fail-closed) -> deliver. Every case
+# below uses age_seconds/listing/fresh_hold/listing_confirm overrides added
+# to _run_main_case so a single harness exercises both new, fully stateless
+# gates (neither ever touches `pending` -- every "skipped" assertion below
+# also confirms no pending/tracker entry was created for the candidate).
+async def _r64_checks():
+    # D.2: listed + older than the 30s default floor -> delivers.
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=120,
+                                          listing=(("abc123",), 600))
+    check("r64: listed + older than FRESH_HOLD_SECONDS delivers", sent == 1)
+
+    # D.3: absent from the pristine listing -> skipped, never cached, then
+    # delivers the moment a later tick's listing includes it.
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=120,
+                                          listing=(("other",), 600))
+    check("r64: absent from pristine listing is skipped, not delivered",
+          sent == 0 and "TestSub_abc123" not in pending)
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=120,
+                                          listing=(("abc123",), 600))
+    check("r64: same candidate delivers instantly once a later tick lists it",
+          sent == 1)
+
+    # D.4: younger than the 30s default floor -> skipped even when listed,
+    # with NO pending/tracker entry (fully stateless); delivers once old
+    # enough on a later tick.
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=10,
+                                          listing=(("abc123",), 600))
+    check("r64: younger than FRESH_HOLD_SECONDS is skipped even when listed, "
+          "and creates no pending/tracker entry",
+          sent == 0 and "TestSub_abc123" not in pending)
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=45,
+                                          listing=(("abc123",), 600))
+    check("r64: same candidate delivers next tick once older than the floor",
+          sent == 1)
+
+    # D.5: horizon rule -- candidate older than the listing's own oldest
+    # entry (scrolled past limit=100) cannot be confirmed OR disconfirmed,
+    # so the gate is inapplicable and normal delivery proceeds, even though
+    # the (too-short) listing snapshot here doesn't contain its id.
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=10000,
+                                          listing=(("other",), 600))
+    check("r64: older than the listing's own span falls through to normal "
+          "delivery (confirmation inapplicable)", sent == 1)
+
+    # D.6: outage -- no listing source readable this tick is NEVER read as
+    # absence: the candidate is skipped (not cached) and recovers next tick.
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=120,
+                                          listing=None)
+    check("r64: a listing outage skips the candidate without caching it",
+          sent == 0 and "TestSub_abc123" not in pending)
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=120,
+                                          listing=(("abc123",), 600))
+    check("r64: the same candidate recovers on the next tick once the "
+          "listing is readable again", sent == 1)
+
+    # D.7: precedence -- an NSFW post that IS listed and past the fresh
+    # hold is still blocked by the (unchanged, fail-closed) NSFW gate.
+    sent, pending = await _run_main_case({"over_18": True}, age_seconds=120,
+                                          listing=(("abc123",), 600))
+    check("r64: precedence holds -- listed + old enough is still NSFW-blocked",
+          sent == 0 and pending.get("TestSub_abc123", {}).get("reason") == "nsfw_flag")
+
+    # D.8 (+ addendum): FRESH_HOLD_SECONDS=60 is honored independently of the
+    # default -- 45s delivers at the 30s default, is skipped at 60, and
+    # delivers once past 60s; FRESH_HOLD_SECONDS=0 disables the floor
+    # entirely (a brand-new, 0-second-old, listed post posts immediately).
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=45,
+                                          listing=(("abc123",), 600))
+    check("r64 addendum: age 45s delivers at the 30s default", sent == 1)
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=45,
+                                          listing=(("abc123",), 600), fresh_hold=60)
+    check("r64 addendum: the same age 45s is skipped once FRESH_HOLD_SECONDS=60, "
+          "with no pending/tracker entry",
+          sent == 0 and "TestSub_abc123" not in pending)
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=65,
+                                          listing=(("abc123",), 600), fresh_hold=60)
+    check("r64 addendum: it delivers once older than the 60s floor", sent == 1)
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=0,
+                                          listing=(("abc123",), 600), fresh_hold=0)
+    check("r64 addendum: FRESH_HOLD_SECONDS=0 disables the floor entirely "
+          "(posts at age 0 once listed)", sent == 1)
+
+    # D.8: LISTING_CONFIRM=0 + FRESH_HOLD_SECONDS=0 together fully restore
+    # round-63 delivery byte-for-byte -- the two knobs are independent
+    # mechanisms, so true parity with pre-round-64 behavior needs BOTH off;
+    # proven here with a candidate that would fail EITHER gate alone
+    # (0s old, and absent from the listing) yet still delivers.
+    sent, pending = await _run_main_case({"over_18": False}, age_seconds=0,
+                                          listing=(("other",), 600),
+                                          fresh_hold=0, listing_confirm=False)
+    check("r64: LISTING_CONFIRM=0 + FRESH_HOLD_SECONDS=0 restores round-63 "
+          "behavior byte-for-byte (both new gates fully bypassed)", sent == 1)
+asyncio.run(_r64_checks())
+
 
 # 16 static/wiring cases ---------------------------------------------------
 _v3_src = inspect.getsource(v3)

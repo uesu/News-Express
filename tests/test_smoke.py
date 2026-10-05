@@ -2563,6 +2563,120 @@ check("r63: the main loop never removes a key from the dedup cache for any reaso
 print()
 
 # ===========================================================================
+# ROUND 64 (2026-10-05) — Pristine Listing Protocol.
+# A post delivers only once a cache-busted, pristine read of the subreddit's
+# /new listing proves it is live RIGHT NOW, plus a stateless flat age floor
+# computed from the post's own timestamp. See tests/test_reddit_signals.py
+# for the full end-to-end main() coverage (D.2-D.8 + addendum); this block
+# covers D.1 (pristine request shape), D.8 (env parsing/defaults) and D.9
+# (the absence-of-AutoModerator-detection guard).
+# ===========================================================================
+
+# ---- D.1: every listing request is pristine (unique cache-buster + no-cache
+# headers), and the buster differs between two consecutive requests --------
+class _R64Resp:
+    status = 200
+    headers = {"Content-Type": "text/html"}
+    async def text(self):
+        return '<a href="/r/TestSub/comments/abc123/t/">t</a>'
+    async def __aenter__(self):
+        return self
+    async def __aexit__(self, *args):
+        return False
+
+class _R64Session:
+    def __init__(self):
+        self.calls = []
+    def get(self, url, headers=None, timeout=None, allow_redirects=True):
+        self.calls.append((url, dict(headers or {})))
+        return _R64Resp()
+
+async def _r64_fetch_twice():
+    v3._listing_cache.clear()
+    sess = _R64Session()
+    _real_time = v3.time.time
+    _r64_ticks = iter([1000000.000, 1000000.001])
+    v3.time.time = lambda: next(_r64_ticks, _real_time())
+    try:
+        await v3._fetch_new_listing(sess, "TestSub1")
+        v3._listing_cache.clear()
+        await v3._fetch_new_listing(sess, "TestSub2")
+        v3._listing_cache.clear()
+    finally:
+        v3.time.time = _real_time
+    return sess.calls
+_r64_calls = asyncio.run(_r64_fetch_twice())
+_r64_fresh_values = []
+for _url, _hdrs in _r64_calls:
+    _m = re.search(r"[?&]_fresh=(\d+)", _url)
+    if _m:
+        _r64_fresh_values.append(_m.group(1))
+check("r64: every listing request URL carries a _fresh= cache-buster",
+      len(_r64_calls) > 0 and len(_r64_fresh_values) == len(_r64_calls))
+check("r64: the cache-buster differs between two separate _fetch_new_listing() calls",
+      len(set(_r64_fresh_values)) >= 2 or len(_r64_calls) < 2)
+check("r64: every listing request sends Cache-Control/Pragma no-cache headers",
+      all(_hdrs.get("Cache-Control") == "no-cache, no-store" and _hdrs.get("Pragma") == "no-cache"
+          for _url, _hdrs in _r64_calls))
+v3._listing_cache.clear()
+
+# ---- D.8: FRESH_HOLD_SECONDS / LISTING_CONFIRM parse from env, with the
+# documented defaults, and are empty-string-safe like every other Variable --
+_r64_names = ("FRESH_HOLD_SECONDS", "LISTING_CONFIRM")
+_r64_saved_env = {name: os.environ.get(name) for name in _r64_names}
+try:
+    os.environ.update({name: "" for name in _r64_names})
+    _r64_default = load_module("smoke_reddit_v3_r64_default_env", "testing area/reddit_main_v3.py")
+    check("r64: FRESH_HOLD_SECONDS empty env defaults to 30",
+          _r64_default.FRESH_HOLD_SECONDS == 30)
+    check("r64: LISTING_CONFIRM empty env defaults to True",
+          _r64_default.LISTING_CONFIRM is True)
+    os.environ["FRESH_HOLD_SECONDS"] = "60"
+    os.environ["LISTING_CONFIRM"] = "0"
+    _r64_custom = load_module("smoke_reddit_v3_r64_custom_env", "testing area/reddit_main_v3.py")
+    check("r64: FRESH_HOLD_SECONDS=60 parses to 60",
+          _r64_custom.FRESH_HOLD_SECONDS == 60)
+    check("r64: LISTING_CONFIRM=0 parses to False",
+          _r64_custom.LISTING_CONFIRM is False)
+    os.environ["FRESH_HOLD_SECONDS"] = "0"
+    _r64_off = load_module("smoke_reddit_v3_r64_off_env", "testing area/reddit_main_v3.py")
+    check("r64: FRESH_HOLD_SECONDS=0 parses to 0 (floor disabled)",
+          _r64_off.FRESH_HOLD_SECONDS == 0)
+finally:
+    for _name, _value in _r64_saved_env.items():
+        if _value is None:
+            os.environ.pop(_name, None)
+        else:
+            os.environ[_name] = _value
+
+# ---- D.9: absence guard — no AutoModerator / sticky-comment detection of
+# any kind exists anywhere in the Reddit engine (no phrase matching, no
+# inference, no tracker state). The only two mentions of "AutoModerator" in
+# the whole engine are prose that explicitly EXCLUDES its footer text from
+# an unrelated removal-reason check — never a detection mechanism. ---------
+_r64_src_files = {
+    "reddit_main_v3.py": inspect.getsource(v3),
+    "reddit_signals.py": inspect.getsource(signals),
+}
+_r64_forbidden_always = ("mirror link and source link", "queue-request", "sticky")
+_r64_forbidden_comparisons = (
+    '== "automoderator"', "== 'automoderator'",
+    '.lower() == "automoderator"', ".lower() == 'automoderator'",
+    'in ("automoderator"', "in ('automoderator'",
+    'in ["automoderator"', "in ['automoderator'",
+    'r"automoderator"', "r'automoderator'",
+)
+for _fname, _fsrc in _r64_src_files.items():
+    _lower = _fsrc.lower()
+    check(f"r64: {_fname} has no sticky/queue-request/mirror-link phrase matching",
+          all(phrase not in _lower for phrase in _r64_forbidden_always))
+    check(f"r64: {_fname} never compares/matches against the literal 'automoderator' "
+          f"as a detection mechanism (mentions, if any, are prose only)",
+          all(pattern not in _lower for pattern in _r64_forbidden_comparisons))
+
+print()
+
+# ===========================================================================
 # ROUND 47 (2026-10-01) — X: self-heal a message whose media Discord left
 # unresolved, and stop downgrading videos Discord can actually play.
 # ===========================================================================
