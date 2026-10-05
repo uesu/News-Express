@@ -2371,8 +2371,9 @@ for _r39_wf in (".github/workflows/reddit_monitor.yml", ".github/workflows/twitt
 
 with open(os.path.join(ROOT, ".github/workflows/dependabot_auto_merge.yml"), encoding="utf-8") as _fh:
     _r39_merge = _fh.read()
-# r67 (2026-10-05) UPDATE: workflow_run sometimes did not fire after CI, so
-# this trusted pull_request_target flow polls its immutable event SHA instead.
+# 2026-10-05 update — Dependabot auto-merge workflow repair: workflow_run
+# sometimes did not fire after CI, so this trusted pull_request_target flow
+# polls its immutable event SHA instead.
 check("r39/r67 Dependabot auto-merge uses trusted PR events and never checks out PR code",
       "pull_request_target:" in _r39_merge
       and "types: [opened, synchronize, reopened]" in _r39_merge
