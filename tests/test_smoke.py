@@ -4174,6 +4174,72 @@ check("r62: 1wx9c77 card — no raw-URL text component",
 check("r62: 1wx9c77 card — gallery intact, header+stats only",
       12 in _r62_kinds and _r62_kinds.count(10) == 2, str(_r62_kinds))
 
+
+# ---- round 65 (2026-10-05): body entity hygiene -------------------------
+# Live 1wxvl13 (r/HonkaiStarRail_leaks): a card built from the Arctic Shift
+# backup path showed literal "&gt;" — Arctic (like Reddit's JSON API) serves
+# selftext HTML-escaped, and only the JSON path (strip_html) unescaped it.
+# Every body path now unescapes EXACTLY ONCE, and a line that is only ">"
+# (an empty markdown blockquote separator) is dropped from the card body.
+_r65_live = ("All top-level comments must be showcases, like so:\n\n&gt;\n"
+             "&gt; link to showcase here\n&gt; names of the characters used")
+_r65_body = v3._clean_plain_body(_r65_live)
+check("r65: live 1wxvl13 Arctic body — the real quote line is kept",
+      "> link to showcase here" in _r65_body, repr(_r65_body))
+check("r65: live 1wxvl13 Arctic body — no literal '&gt;' anywhere",
+      "&gt;" not in _r65_body, repr(_r65_body))
+check("r65: live 1wxvl13 Arctic body — no lone '>' artifact line",
+      all(ln.strip() != ">" for ln in _r65_body.splitlines()), repr(_r65_body))
+check("r65: live 1wxvl13 Arctic body — full expected shape",
+      _r65_body == "All top-level comments must be showcases, like so:\n\n"
+                   "> link to showcase here\n> names of the characters used",
+      repr(_r65_body))
+check("r65: double-escape safety — Arctic '&amp;gt;' renders '&gt;', not '>'",
+      v3._clean_plain_body("&amp;gt;") == "&gt;",
+      repr(v3._clean_plain_body("&amp;gt;")))
+check("r65: JSON-path parity — strip_html still unescapes exactly once",
+      v3.strip_html("&gt;") == ">" and v3.strip_html("&amp;gt;") == "&gt;",
+      f"{v3.strip_html('&gt;')!r} / {v3.strip_html('&amp;gt;')!r}")
+check("r65: quoted content lines survive byte-identical",
+      v3._clean_plain_body("> quoted text") == "> quoted text"
+      and v3._clean_plain_body(">> nested quoted text") == ">> nested quoted text"
+      and v3._line_stage(["> quoted text"]) == ["> quoted text"])
+check("r65: '>'-only / '> '-only / '>>' lines are dropped",
+      v3._clean_plain_body(">") == "" and v3._clean_plain_body("> ") == ""
+      and v3._clean_plain_body(">>") == "")
+check("r65: a body of ONLY '>' lines yields an empty body",
+      v3._clean_plain_body(">\n> \n>>\n>  ") == "")
+check("r65: mixed body keeps prose + quotes, drops only the separator",
+      v3._clean_plain_body("before\n\n>\n\n> quoted\n\nafter")
+      == "before\n\n> quoted\n\nafter",
+      repr(v3._clean_plain_body("before\n\n>\n\n> quoted\n\nafter")))
+check("r65: exactly ONE unescape on the Arctic path (source guard)",
+      inspect.getsource(v3._clean_plain_body).count("html_lib.unescape(") == 1)
+check("r65: strip_html keeps its single unescape (source guard)",
+      inspect.getsource(v3.strip_html).count("html_lib.unescape(") == 1)
+_r65_card = v3.build_v3_payload(
+    "HonkaiStarRail_leaks",
+    {"title": "Daily Discussion Thread", "author": "leaker",
+     "body": v3._clean_plain_body(_r65_live), "media": [], "crosspost": None,
+     "stats": {"comments": 4, "ups": 12}, "youtube_url": None, "op_comment": None},
+    "https://www.reddit.com/r/HonkaiStarRail_leaks/comments/1wxvl13/x/", 1791139200)
+_r65_texts = [c["content"] for c in _r65_card["components"][0]["components"]
+              if c.get("type") == 10]
+check("r65: 1wxvl13 card — body component carries the real quote",
+      any("> link to showcase here" in t for t in _r65_texts), str(_r65_texts))
+check("r65: 1wxvl13 card — no '&gt;' and no lone '>' line on the card",
+      all("&gt;" not in t and all(ln.strip() != ">" for ln in t.splitlines())
+          for t in _r65_texts), str(_r65_texts))
+_r65_empty_card = v3.build_v3_payload(
+    "HonkaiStarRail_leaks",
+    {"title": "Daily Discussion Thread", "author": "leaker",
+     "body": v3._clean_plain_body(">\n> \n>>"), "media": [], "crosspost": None,
+     "stats": {"comments": 4, "ups": 12}, "youtube_url": None, "op_comment": None},
+    "https://www.reddit.com/r/HonkaiStarRail_leaks/comments/1wxvl13/x/", 1791139200)
+_r65_empty_kinds = [c["type"] for c in _r65_empty_card["components"][0]["components"]]
+check("r65: an all-'>' body omits the text component (header+stats only)",
+      _r65_empty_kinds.count(10) == 2, str(_r65_empty_kinds))
+
 if failures:
     print(f"SMOKE TEST FAILURES ({len(failures)}): {failures}")
     sys.exit(1)

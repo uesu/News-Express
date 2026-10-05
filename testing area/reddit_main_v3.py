@@ -1607,9 +1607,19 @@ def _arctic_media_count(post) -> int:
 
 
 def _clean_plain_body(text) -> str:
+    """Plain (non-HTML) selftext -> card body — the Arctic archive path.
+
+    Round 65 (2026-10-05, live 1wxvl13): Arctic Shift — like Reddit's own
+    JSON API — serves selftext with HTML entities escaped (&gt; &lt; &amp;),
+    so the Arctic path unescapes EXACTLY ONCE here, before the cleaning
+    (mirroring the JSON path's single unescape inside strip_html). Never a
+    second pass: a post that genuinely writes "&amp;gt;" must render
+    "&gt;", not ">".
+    """
     if text in ("[removed]", "[deleted]"):
         return ""
-    return _collapse_blanks(_line_stage([line.strip() for line in str(text or "").splitlines()]))
+    text = html_lib.unescape(str(text or ""))
+    return _collapse_blanks(_line_stage([line.strip() for line in text.splitlines()]))
 
 
 def _drop_youtube_line(body: str, youtube_url: str | None) -> str:
@@ -1675,7 +1685,12 @@ def _drop_gallery_media_lines(body: str, media: list) -> str:
 
 
 def strip_html(value: str | None) -> str:
-    """Removes tags from HTML-ish strings (used for JSON selftext etc.)."""
+    """Removes tags from HTML-ish strings (used for JSON selftext etc.).
+
+    Round 65 audit: the html_lib.unescape below is the JSON body path's
+    ONE unescape (JSON selftext, crosspost originals, OP comment all flow
+    through here) — never add a second pass anywhere upstream.
+    """
     if not value:
         return ""
     value = re.sub(r"(?is)<span\s+[^>]*\bclass=[\"\x27][^\"\x27]*\b(?:md-)?spoiler(?:-text)?\b[^\"\x27]*[\"\x27][^>]*>(.*?)</span>", r"||\1||", value)
@@ -2068,6 +2083,13 @@ def _line_stage(lines: list) -> list:
     """Drop recognizable feed navigation/footer artifacts, not prose."""
     kept = []
     for line in repair_mangled_link_lines(_repair_label_url_mangle(lines)):
+        # Round 65 (2026-10-05, live 1wxvl13): a line that is ONLY '>'
+        # characters (+ whitespace) — ">", "> ", ">>" — is an empty markdown
+        # blockquote separator with no content; it renders as a stray
+        # literal '>' on the card. Lines with actual quoted content
+        # ("> text") stay byte-identical.
+        if re.fullmatch(r">[\s>]*", line.strip()):
+            continue
         if line.lower() in ("link", "comments", "[link]", "[comments]", "permalink"):
             continue
         if re.match(r"^submitted\)?\s+by\s+\[?\s*/?u/", line, re.I):
@@ -2664,6 +2686,8 @@ def extract_op_comment(post_json: dict) -> dict | None:
         return None
 
     def _finish(d: dict) -> dict | None:
+        # Round 65 audit: the OP comment body unescapes exactly once —
+        # inside strip_html (never again downstream).
         body = strip_html(d.get("body"))
         if not body:
             return None
@@ -2790,6 +2814,9 @@ def base_from_redlib_page(page_html: str | None, path: str) -> dict | None:
         "author": _clean_author_name(author),
         "content_html": area,
         "thumb": og.group(1) if og else None,
+        # Round 65 audit: this body's HTML entities are unescaped exactly
+        # once — inside clean_rss_body (the round-16 fixpoint the feed's
+        # double-escaping requires).
         "body": clean_rss_body(area),
         "crosspost_orig_path": find_crosspost_original_path(area, path),
         "vred_id": extract_vreddit_id(area),
@@ -3016,6 +3043,9 @@ def entry_to_base_data(entry) -> dict:
         "author": _clean_author_name(author),
         "content_html": content_html,
         "thumb": thumb,
+        # Round 65 audit: this body's HTML entities are unescaped exactly
+        # once — inside clean_rss_body (the round-16 fixpoint the feed's
+        # double-escaping requires).
         "body": clean_rss_body(content_html),
         "crosspost_orig_path": find_crosspost_original_path(
             content_html, normalize_reddit_path(str(getattr(entry, "link", "")))),
@@ -3104,7 +3134,7 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
     stats = None
     crosspost = None
     op_comment = None
-    body = base["body"]
+    body = base["body"]  # round 65 audit: RSS/redlib/mirror base bodies are unescaped exactly once at build time (clean_rss_body / reddit_proxy.clean_proxy_body)
     title = base["title"]
     author = base["author"]
     yt_url = base["youtube_url"]
@@ -3117,6 +3147,8 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
         title = str(post_json.get("title") or title)[:400]
         author = str(post_json.get("author") or author)
         if post_json.get("selftext"):
+            # Round 65 audit: the JSON selftext unescapes exactly once —
+            # inside strip_html (no second pass anywhere downstream).
             body = strip_html(post_json["selftext"]) or body
         stats = {"comments": post_json.get("num_comments", 0),
                  "ups": post_json.get("ups", 0)}
@@ -3160,6 +3192,9 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
                         if g:
                             media.append({"kind": "gif", "url": g})
                         if orig.get("selftext"):
+                            # Round 65 audit: the crosspost original's
+                            # selftext unescapes exactly once — inside
+                            # strip_html (never again downstream).
                             orig_body = strip_html(orig["selftext"])
                             if orig_body and len(orig_body) > len(body or ""):
                                 body = orig_body
@@ -3250,6 +3285,13 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
     # Structured text wins over flattened og descriptions. Archive text is
     # used only when the RSS/redlib body is empty.
     if arctic and not (body or "").strip():
+        # Round 65 (2026-10-05, live 1wxvl13): the Arctic body path now
+        # unescapes HTML entities EXACTLY ONCE, inside _clean_plain_body —
+        # completing the round-65 body-entity audit: JSON selftext / crosspost
+        # originals / OP comment unescape inside strip_html, RSS + redlib
+        # content inside clean_rss_body (round-16 fixpoint), proxy bodies
+        # inside reddit_proxy.clean_proxy_body, and Arctic selftext HERE.
+        # No path unescapes twice ("&amp;gt;" must render "&gt;", not ">").
         body = _clean_plain_body(arctic.get("selftext"))
 
     # ---- round 13: PROXY media services (native mode only) ---------------
@@ -3300,6 +3342,9 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
                 nonlocal stats, body
                 stats = proxy.get("stats") or stats
                 if proxy.get("body") and not (body or "").strip():
+                    # Round 65 audit: proxy bodies arrive pre-unescaped
+                    # (exactly once) from reddit_proxy.py's parsers
+                    # (clean_proxy_body & friends) — no second unescape here.
                     body = proxy["body"][:MAX_BODY_CHARS]
 
             video_dead = bool(proxy_video) and not video_ok

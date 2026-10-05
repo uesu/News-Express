@@ -2027,6 +2027,13 @@ deliver. The retraction seatbelt is unaffected.
 
 ## 🗒 Changelog
 
+* **2026-10-05 — Round 65: body entity hygiene.** Live 1wxvl13: a card built
+  from the Arctic Shift backup path showed literal `&gt;` — Arctic (like
+  Reddit's API) serves selftext HTML-escaped, and only the JSON path
+  unescaped it. Every body path now HTML-unescapes exactly once
+  (double-unescape explicitly tested against), and empty-blockquote artifact
+  lines (a line that is only `>`) are dropped. Quoted content, and all other
+  paths, are byte-identical.
 * **2026-10-05 — Round 64: Pristine Listing Protocol.** A post now delivers
   only when a cache-busted, pristine read of the subreddit's /new listing
   proves it is live on the subreddit at that moment (unique `_fresh`
