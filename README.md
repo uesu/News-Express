@@ -561,6 +561,28 @@ Latest rounds only — the full dated history lives in
 [`docs/history/CHANGELOG_ARCHIVE.md`](docs/history/CHANGELOG_ARCHIVE.md) (rounds 1–62) and
 [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) (detailed round notes).
 
+* **2026-10-05 — Round 66: long-post continuations + table rendering + stale env cleanup.**
+  A post body that no longer fits the card's text budget is no longer
+  truncated: the main card keeps the first chunk (identical layout —
+  header, gallery, stats, buttons) and the remainder is delivered as up to
+  3 follow-up messages — text-only Components V2 containers, same accent
+  color, each opening with a small `-# (continued)` heading; beyond the
+  cap the last message ends with `… full post on Reddit`. Retraction
+  covers every part: continuation message IDs are recorded alongside the
+  main card's, so the tombstone/delete pass hits them all. Every split —
+  the main budget AND continuation boundaries — lands on a safe point
+  (paragraph break → line break → space) and never inside a link, bare
+  URL, `||spoiler||`, or bold/italic marker pair, fixing the live 1wxfuj5
+  card that was cut mid-link (`[Set](https://…` rendered broken). Markdown
+  tables — which Discord does not render — now convert to per-row
+  `**bold-label**` bullets (`**Patch 3.8**` + `- **Drip Market:** October
+  9/10, 2026` + …); malformed or ambiguous tables stay byte-identical and
+  nothing is date-converted (the card's posted-time 🕐 stays the only
+  timestamp). `reddit_monitor.yml` env list cleanup: 11 mappings for gates
+  removed in round 63 (settle windows, duplicate-media/repost/mod-queue
+  gates, listing outage racing, approval recheck) are dropped, and the
+  round-64 `FRESH_HOLD_SECONDS`/`LISTING_CONFIRM` are wired; round-61
+  deploy steps untouched.
 * **2026-10-05 — Docs: history folder.** All dated records now live in
   [`docs/history/`](docs/history/) — the changelog archive (rounds 1–62),
   the engine round notes, and every `ROUND_*.md` decision record — with a

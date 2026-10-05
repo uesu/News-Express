@@ -102,12 +102,15 @@ record, (2) a README changelog entry, (3) named smoke guards (`rNN: ...`).
 
 ## Key defaults (all overridable via repo Variables, no code change)
 
-- `POST_SETTLE_SECONDS=300` (unverified) / `POST_SETTLE_VERIFIED_SECONDS=60`
-- `DUP_MEDIA_GATE`, `REPOST_GATE`, `MOD_QUEUE_GATE` — default ON; empty
-  Variable = ON (only explicit off-values disable).
+- `FRESH_HOLD_SECONDS=30` — flat minimum post age before a candidate is
+  considered (round 64); `LISTING_CONFIRM` (default on) requires a pristine
+  /new listing read before posting.
 - `MEDIA_HEAL_SCOPE` — `video` (default) | `on`/`all` | `off` (round 56/56b).
 - `RETRACT_DEAD_POSTS` — default OFF; `1` enables dead-post tombstoning
   (round 44; requires two independent proofs before touching a message).
+  (Round 66 removed the workflow mappings for the round-42-45 gate Variables
+  — settle windows, dup-media/repost/mod-queue gates, listing racing — that
+  round 63 had already deleted from the engine.)
 
 ## Writing conventions
 

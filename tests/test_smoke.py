@@ -4240,6 +4240,357 @@ _r65_empty_kinds = [c["type"] for c in _r65_empty_card["components"][0]["compone
 check("r65: an all-'>' body omits the text component (header+stats only)",
       _r65_empty_kinds.count(10) == 2, str(_r65_empty_kinds))
 
+print()
+
+# ===========================================================================
+# ROUND 66 (2026-10-05) — long-post continuations, markdown table rendering,
+# safe splits, stale env cleanup.
+# A body beyond the card's text budget is continued in follow-up messages
+# (main card layout unchanged), every split lands on a safe boundary —
+# never inside a link/URL/spoiler/marker pair (live 1wxfuj5) — markdown
+# tables render as per-row bullets (live 1wxfuj5), retraction covers every
+# part, and reddit_monitor.yml drops 11 env mappings for gates removed in
+# round 63 while wiring the round-64 FRESH_HOLD_SECONDS/LISTING_CONFIRM.
+# ===========================================================================
+
+_r66_sub = "TestSub"
+_r66_url = "https://www.reddit.com/r/TestSub/comments/abc123/x/"
+_r66_ts = 1791139200
+
+
+def _r66_data(body):
+    return {"title": "Long post continuation test", "author": "leaker",
+            "body": body, "media": [], "crosspost": None,
+            "stats": {"comments": 123, "ups": 45}, "youtube_url": None,
+            "op_comment": None}
+
+
+def _r66_para(tag, n):
+    # exactly n chars, no markdown markers inside
+    return (f"{tag} " + "x" * (n - len(tag) - 1))[:n]
+
+
+def _r66_texts(payload):
+    return [c["content"] for cont in payload["components"] for c in cont["components"]
+            if c.get("type") == 10]
+
+
+def _r66_chunks(conts):
+    out = []
+    for p in conts:
+        chunk = p["components"][0]["components"][0]["content"]
+        assert chunk.startswith(v3.CONTINUATION_HEADER + "\n"), chunk[:30]
+        out.append(chunk[len(v3.CONTINUATION_HEADER) + 1:])
+    return out
+
+
+# --- short body: parity — the card is byte-identical, zero continuations --
+_r66_short = "Short body — fits the card in one piece."
+_r66_p_plain = v3.build_v3_payload(_r66_sub, _r66_data(_r66_short), _r66_url, _r66_ts)
+_r66_p_split, _r66_rest = v3.build_v3_payload(_r66_sub, _r66_data(_r66_short),
+                                              _r66_url, _r66_ts, return_remainder=True)
+check("r66: short body — return_remainder=True returns the byte-identical card",
+      _r66_p_plain == _r66_p_split and _r66_rest == "",
+      f"equal={_r66_p_plain == _r66_p_split} rest={_r66_rest!r}")
+check("r66: short body — zero continuation messages",
+      v3.build_continuation_payloads(_r66_rest) == [])
+check("r66: short body — the whole body stays on the card, no ellipsis",
+      _r66_short in _r66_texts(_r66_p_plain), str(_r66_texts(_r66_p_plain)))
+
+# --- 5000-char body: main card + exactly ONE continuation ---------------
+_r66_paras5 = [_r66_para(f"P{i}", 1000) for i in range(5)]
+_r66_body5 = "\n\n".join(_r66_paras5)            # 5008 chars
+_r66_p5, _r66_rest5 = v3.build_v3_payload(_r66_sub, _r66_data(_r66_body5),
+                                          _r66_url, _r66_ts, return_remainder=True)
+_r66_t5 = _r66_texts(_r66_p5)
+_r66_budget5 = max(300, 3800 - len(_r66_t5[0]) - len(_r66_t5[-1]))   # op line empty here
+_r66_fill = ""
+for _p in _r66_paras5:                            # greedy paragraph fill
+    _cand = _r66_fill + ("\n\n" if _r66_fill else "") + _p
+    if len(_cand) <= _r66_budget5:
+        _r66_fill = _cand
+    else:
+        break
+check("r66: 5k body — the main card keeps the largest paragraph-safe prefix",
+      _r66_t5[1] == _r66_fill and len(_r66_fill) <= _r66_budget5,
+      f"body={_r66_t5[1][:40]!r}… len={len(_r66_t5[1])} expected={len(_r66_fill)} budget={_r66_budget5}")
+check("r66: 5k body — main + remainder reconstruct the body exactly",
+      _r66_t5[1] + "\n\n" + _r66_rest5 == _r66_body5,
+      f"lens {len(_r66_t5[1])}+{len(_r66_rest5)} vs {len(_r66_body5)}")
+_r66_conts5 = v3.build_continuation_payloads(_r66_rest5)
+check("r66: 5k body — exactly one continuation message",
+      len(_r66_conts5) == 1, str(len(_r66_conts5)))
+check("r66: 5k body — the continuation carries the whole remainder",
+      _r66_chunks(_r66_conts5) == [_r66_rest5],
+      str([len(c) for c in _r66_chunks(_r66_conts5)]))
+check("r66: continuation payload shape — V2 container, card accent, '-# (continued)' heading",
+      all(p["flags"] == v3.IS_COMPONENTS_V2
+          and p["components"][0]["type"] == 17
+          and p["components"][0]["accent_color"] == 16729344
+          and p["components"][0]["components"][0]["type"] == 10
+          and p["components"][0]["components"][0]["content"].startswith("-# (continued)\n")
+          and len(p["components"][0]["components"][0]["content"]) <= v3.CONTINUATION_CHAR_LIMIT
+          for p in _r66_conts5), str(_r66_conts5)[:300])
+
+# --- ~12000-char body: main + THREE continuations + 'full post on Reddit' -
+# 13 paragraphs x 1000 chars: the main card holds 3 and each continuation
+# holds 3, so the 13th paragraph spills past the 12k-char deliverable cap.
+_r66_paras12 = [_r66_para(f"P{i}", 1000) for i in range(13)]
+_r66_body12 = "\n\n".join(_r66_paras12)           # 13024 chars
+_r66_p12, _r66_rest12 = v3.build_v3_payload(_r66_sub, _r66_data(_r66_body12),
+                                            _r66_url, _r66_ts, return_remainder=True)
+_r66_t12 = _r66_texts(_r66_p12)
+_r66_conts12 = v3.build_continuation_payloads(_r66_rest12)
+_r66_chunks12 = _r66_chunks(_r66_conts12)
+check("r66: 12k-class body — capped at exactly three continuations",
+      len(_r66_conts12) == 3, str(len(_r66_conts12)))
+check("r66: 12k-class body — the last continuation ends with the 'full post on Reddit' pointer",
+      _r66_chunks12[-1].endswith("\n\n… full post on Reddit"),
+      repr(_r66_chunks12[-1][-60:]))
+_r66_c3_base = _r66_chunks12[-1][: -len("\n\n… full post on Reddit")]
+_r66_delivered = "\n\n".join([_r66_t12[1]] + _r66_chunks12[:2] + [_r66_c3_base])
+check("r66: 12k-class body — every delivered chunk is a paragraph-safe prefix of the body",
+      _r66_body12.startswith(_r66_delivered) and len(_r66_delivered) < len(_r66_body12),
+      f"delivered={len(_r66_delivered)} body={len(_r66_body12)}")
+check("r66: 12k-class body — beyond the cap only the spill is dropped (the last para)",
+      _r66_body12[len(_r66_delivered):].strip() == _r66_paras12[-1],
+      repr(_r66_body12[len(_r66_delivered):][:60]))
+check("r66: 12k-class body — no continuation slice ever cuts a paragraph",
+      all(chunk in _r66_body12 for chunk in _r66_chunks12[:2]),
+      str([len(c) for c in _r66_chunks12[:2]]))
+
+# --- safe splits: NEVER inside a link / URL / spoiler / marker pair -------
+_r66_link = "[Set](https://example.com/honkai-set)"
+_r66_h, _r66_t = v3.split_card_body("A" * 280 + " " + _r66_link + " trailing words here", 300)
+check("r66: a markdown link straddling the budget splits BEFORE it (live 1wxfuj5)",
+      _r66_h == "A" * 280 and _r66_t.startswith(_r66_link),
+      f"{_r66_h[-25:]!r} / {_r66_t[:45]!r}")
+_r66_h, _r66_t = v3.split_card_body("B" * 290 + " ||spoiler text|| more words follow", 300)
+check("r66: a spoiler straddling the budget is never sliced open",
+      _r66_t.startswith("||spoiler text||") and "||spoiler" not in _r66_h,
+      f"{_r66_h[-25:]!r} / {_r66_t[:35]!r}")
+_r66_h, _r66_t = v3.split_card_body(
+    "C" * 285 + " https://example.com/very/long/path/that/keeps/going/and/going plus words", 300)
+check("r66: a bare URL straddling the budget splits before the scheme",
+      _r66_t.startswith("https://example.com/very/long"), f"{_r66_h[-20:]!r} / {_r66_t[:45]!r}")
+_r66_nospace = "x" * 250 + _r66_link + "y" * 50   # no boundary chars at all
+_r66_h, _r66_t = v3.split_card_body(_r66_nospace, 300)
+check("r66: pathological no-boundary text still splits (progress) without slicing the link",
+      len(_r66_h) == 300 and _r66_link in _r66_h and _r66_h + _r66_t == _r66_nospace,
+      f"head_len={len(_r66_h)} link_intact={_r66_link in _r66_h}")
+# adversarial: the same straddle at a CONTINUATION boundary (~3784, not 3800,
+# because the '-# (continued)' heading claims the first 17 chars)
+_r66_adv = _r66_para("Adv", 3760) + "\n\n" + _r66_link + "\n\n" + _r66_para("Tail", 50)
+_r66_h, _r66_t = v3.split_card_body(_r66_adv, v3.CONTINUATION_CHAR_LIMIT
+                                    - len(v3.CONTINUATION_HEADER) - 1)
+check("r66: adversarial link straddling the continuation boundary splits before it",
+      _r66_t.startswith(_r66_link) and _r66_link in _r66_h + _r66_t
+      and not (_r66_link[:-1] in _r66_h and _r66_link not in _r66_h),
+      f"{_r66_h[-25:]!r} / {_r66_t[:45]!r}")
+
+# --- markdown tables → Discord-safe bullets -------------------------------
+_r66_tbl = ("| Version | Drip Market | Notes |\n"
+            "|---|---|---|\n"
+            "| Patch 3.8 | October 9/10, 2026 | Version 3.8 livestream codes |\n"
+            "| Patch 3.9 | December 2026 | Next drip market refresh |")
+check("r66: markdown table renders as bold-label bullets (live 1wxfuj5 shape)",
+      v3._markdown_tables_to_bullets(_r66_tbl) ==
+      "**Patch 3.8**\n"
+      "- **Drip Market:** October 9/10, 2026\n"
+      "- **Notes:** Version 3.8 livestream codes\n\n"
+      "**Patch 3.9**\n"
+      "- **Drip Market:** December 2026\n"
+      "- **Notes:** Next drip market refresh",
+      repr(v3._markdown_tables_to_bullets(_r66_tbl)))
+check("r66: dates stay literal — NO Discord-timestamp guessing of body text",
+      "<t:" not in v3._markdown_tables_to_bullets(_r66_tbl))
+check("r66: table mid-body keeps the surrounding prose",
+      v3._markdown_tables_to_bullets("before\n\n" + _r66_tbl + "\nafter") ==
+      "before\n\n" + v3._markdown_tables_to_bullets(_r66_tbl) + "\nafter",
+      repr(v3._markdown_tables_to_bullets("before\n\n" + _r66_tbl + "\nafter")))
+check("r66: empty cells are skipped, not blank bullets",
+      v3._markdown_tables_to_bullets("| a | b | c |\n|---|---|---|\n| x | | z |")
+      == "**x**\n- **c:** z",
+      repr(v3._markdown_tables_to_bullets("| a | b | c |\n|---|---|---|\n| x | | z |")))
+check("r66: escaped pipes survive as literal pipes",
+      v3._markdown_tables_to_bullets("| a \\| b | c |\n|---|---|\n| x \\| y | z |")
+      == "**x | y**\n- **c:** z",
+      repr(v3._markdown_tables_to_bullets("| a \\| b | c |\n|---|---|\n| x \\| y | z |")))
+_r66_bad_tbls = [
+    "| a | b |\n| c | d |",                                  # no separator row
+    "| a | b | c |\n|---|---|---|\n| x | y |",               # unequal data cells
+    "| a | b |\n|---|---|\n| x | y |\n| c | d |\n|---|---|\n| e | f |",  # glued tables
+    "| a | b |\n|---|---|",                                  # zero data rows
+    "plain prose, no pipes at all",
+]
+check("r66: malformed/ambiguous tables stay byte-identical — never guess",
+      all(v3._markdown_tables_to_bullets(_b) == _b for _b in _r66_bad_tbls),
+      str([b for b in _r66_bad_tbls if v3._markdown_tables_to_bullets(b) != b]))
+check("r66: a pipe-free body short-circuits untouched",
+      v3._markdown_tables_to_bullets("") == "" and v3._markdown_tables_to_bullets(None) is None)
+
+# --- live 1wxfuj5 end-to-end shape: table + entities + link across the cut
+_r66_live_raw = (
+    "Version 3.8 drip market schedule below.\n\n"
+    "| Version | Drip Market | Notes |\n"
+    "|---|---|---|\n"
+    "| Patch 3.8 | October 9/10, 2026 | Version 3.8 livestream codes |\n\n"
+    "All top-level comments must be showcases, like so:\n\n"
+    "&gt; link to showcase here\n&gt; names of the characters used\n\n"
+    + _r66_para("Details", 3300) + "\n\n"
+    + "Full kit details in " + _r66_link + " — see the official notes.\n\n"
+    + _r66_para("Trailer", 1200)
+)
+_r66_live_body = v3._clean_plain_body(_r66_live_raw)
+_r66_live_p, _r66_live_rest = v3.build_v3_payload(
+    _r66_sub, _r66_data(_r66_live_body), _r66_url, _r66_ts, return_remainder=True)
+_r66_live_conts = v3.build_continuation_payloads(_r66_live_rest)
+# body parts only — the header's title link and the stats line's posted-time
+# 🕐 are not body text (the timestamp check below must not trip on them)
+_r66_live_parts = _r66_texts(_r66_live_p)[1:-1] + _r66_chunks(_r66_live_conts)
+check("r66: 1wxfuj5 shape — the table converts on the card itself",
+      any("**Patch 3.8**" in p and "- **Drip Market:** October 9/10, 2026" in p
+          for p in _r66_live_parts), str(_r66_live_parts[1][:120]))
+check("r66: 1wxfuj5 shape — r65 entity hygiene holds on every part",
+      all("&gt;" not in p and all(ln.strip() != ">" for ln in p.splitlines())
+          for p in _r66_live_parts), str(_r66_live_parts[:2]))
+check("r66: 1wxfuj5 shape — the quote block survives",
+      any("> link to showcase here" in p for p in _r66_live_parts))
+check("r66: 1wxfuj5 shape — the [Set](…) link is delivered intact, exactly once",
+      sum(p.count(_r66_link) for p in _r66_live_parts) == 1,
+      str([p.count(_r66_link) for p in _r66_live_parts]))
+check("r66: 1wxfuj5 shape — no partial-link fragment anywhere (the live bug)",
+      all(not re.search(r"\[Set\]\(https://example\.com/honkai-se", p)
+          or _r66_link in p for p in _r66_live_parts),
+      str([p[-80:] for p in _r66_live_parts]))
+check("r66: 1wxfuj5 shape — long body continues in follow-up messages",
+      len(_r66_live_conts) >= 1, str(len(_r66_live_conts)))
+check("r66: 1wxfuj5 shape — no body-level Discord timestamps (only the card 🕐)",
+      all("<t:" not in p for p in _r66_live_parts[1:]), str(_r66_live_parts[1][-80:]))
+
+# --- retraction covers EVERY part (mocked session, r63 harness pattern) ---
+class _R66Session:
+    """Records every HTTP verb; optionally fails the Nth PATCH/DELETE
+    (0-based among that verb) to prove partial failures block 'retracted'."""
+
+    def __init__(self, fail_part=None):
+        self.calls = []
+        self.fail_part = fail_part
+
+    def _n(self, verb):
+        return len([c for c in self.calls if c[0] == verb])
+
+    def patch(self, url, json=None, **k):
+        n = self._n("PATCH")
+        self.calls.append(("PATCH", url, json))
+        return _R63Req(404 if self.fail_part == n else 200)
+
+    def delete(self, url, **k):
+        n = self._n("DELETE")
+        self.calls.append(("DELETE", url, None))
+        return _R63Req(404 if self.fail_part == n else 204)
+
+
+async def _r66_run(mode, fail_part=None):
+    saved = (v3.RETRACT_DEAD_POSTS, v3.RETRACT_MODE, v3.RETRACT_WINDOW_SECONDS,
+             v3._fetch_new_listing, v3.live_removal_reason, v3.get_webhook_for_subreddit)
+    try:
+        v3.RETRACT_DEAD_POSTS = True
+        v3.RETRACT_MODE = mode
+        v3.RETRACT_WINDOW_SECONDS = 21600
+
+        async def _fake_listing(session, subreddit):
+            return ({"zzz_other"}, 7200)
+
+        async def _fake_live(session, path, label=""):
+            return "removed by moderator"
+
+        v3._fetch_new_listing = _fake_listing
+        v3.live_removal_reason = _fake_live
+        v3.get_webhook_for_subreddit = lambda sub: "https://discord.test/api/webhooks/1/tok"
+        session = _R66Session(fail_part)
+        records = _r63_record(_r63_now)
+        records["RetractSub_abc111"]["message_ids"] = ["999", "1000", "1001"]
+        await v3.retract_dead_posts(session, records, _r63_now)
+        return session, records
+    finally:
+        (v3.RETRACT_DEAD_POSTS, v3.RETRACT_MODE, v3.RETRACT_WINDOW_SECONDS,
+         v3._fetch_new_listing, v3.live_removal_reason,
+         v3.get_webhook_for_subreddit) = saved
+
+
+_r66_sess, _r66_recs = asyncio.run(_r66_run("edit"))
+check("r66: edit-mode retraction PATCHes ALL parts (main + continuations)",
+      len(_r66_sess.calls) == 3 and all(c[0] == "PATCH" for c in _r66_sess.calls)
+      and all(f"/messages/{mid}" in c[1] for c, mid in zip(_r66_sess.calls, ("999", "1000", "1001"))),
+      str(_r66_sess.calls))
+check("r66: the MAIN card keeps its full tombstone payload",
+      "hi" in _r66_sess.calls[0][2]["components"][0]["components"][1]["content"]
+      and "no longer live" in _r66_sess.calls[0][2]["components"][0]["components"][0]["content"],
+      str(_r66_sess.calls[0][2])[:200])
+check("r66: continuation parts get the greyed continuation tombstone",
+      all("no longer live" in c[2]["components"][0]["components"][0]["content"]
+          and c[2]["components"][0]["accent_color"] == 0x808080
+          and c[2]["flags"] == v3.IS_COMPONENTS_V2
+          for c in _r66_sess.calls[1:]),
+      str(_r66_sess.calls[1][2])[:200])
+check("r66: retracted only marks when EVERY part was tombstoned",
+      _r66_recs["RetractSub_abc111"].get("retracted") is True)
+
+_r66_sess, _r66_recs = asyncio.run(_r66_run("edit", fail_part=1))
+check("r66: a failed part blocks 'retracted' but the other parts still get patched",
+      len(_r66_sess.calls) == 3 and _r66_recs["RetractSub_abc111"].get("retracted") is not True,
+      f"calls={len(_r66_sess.calls)} retracted={_r66_recs['RetractSub_abc111'].get('retracted')}")
+
+_r66_sess, _r66_recs = asyncio.run(_r66_run("delete"))
+check("r66: delete-mode retraction DELETEs ALL parts",
+      len(_r66_sess.calls) == 3 and all(c[0] == "DELETE" for c in _r66_sess.calls)
+      and all(f"/messages/{mid}" in c[1] for c, mid in zip(_r66_sess.calls, ("999", "1000", "1001")))
+      and _r66_recs["RetractSub_abc111"].get("retracted") is True,
+      str(_r66_sess.calls))
+
+# --- workflow guards (round-61 steps sacred; env list = mappings only) ----
+with open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"), encoding="utf-8") as _r66_f:
+    _r66_wf = _r66_f.read()
+_r66_stale = ["APPROVAL_RECHECK_SECONDS", "POST_SETTLE_SECONDS", "POST_SETTLE_VERIFIED_SECONDS",
+              "DUP_MEDIA_GATE", "REPOST_GATE", "REPOST_WINDOW_SECONDS", "MOD_QUEUE_GATE",
+              "MOD_QUEUE_WINDOW_SECONDS", "MOD_QUEUE_WEAK_GRACE_SECONDS",
+              "LISTING_HTML_GRACE_SECONDS", "LISTING_TIMEOUT_SECONDS"]
+check("r66: reddit_monitor.yml — all 11 stale env mappings fully gone (lines AND comments)",
+      all(_n not in _r66_wf for _n in _r66_stale),
+      str([n for n in _r66_stale if n in _r66_wf]))
+check("r66: reddit_monitor.yml — round-64 FRESH_HOLD_SECONDS/LISTING_CONFIRM are wired",
+      "FRESH_HOLD_SECONDS: ${{ vars.FRESH_HOLD_SECONDS }}" in _r66_wf
+      and "LISTING_CONFIRM: ${{ vars.LISTING_CONFIRM }}" in _r66_wf)
+check("r66: reddit_monitor.yml — kept mappings intact (pending recheck, NSFW, retraction)",
+      all(f"{_n}: ${{{{ vars.{_n} }}}}" in _r66_wf for _n in
+          ["PENDING_RECHECK_SECONDS", "NSFW_ALLOWLIST", "NSFW_FAIL_OPEN",
+           "NSFW_REQUIRE_SUBREDDIT", "NSFW_PAGE_FALLBACK", "RETRACT_DEAD_POSTS",
+           "RETRACT_MODE", "RETRACT_WINDOW_SECONDS"]))
+check("r66: reddit_monitor.yml — round-61 deploy steps untouched",
+      "Sync to the live branch tip" in _r66_wf
+      and "git reset --hard FETCH_HEAD" in _r66_wf
+      and "merge_monitor_caches.py" in _r66_wf
+      and "git pull --rebase" not in _r66_wf)
+
+# --- engine source guards ---------------------------------------------------
+check("r66: budgets — main card cap raised for continuations, 3 × 3800 more",
+      v3.MAX_BODY_CHARS == 16000 and v3.MAX_CONTINUATIONS == 3
+      and v3.CONTINUATION_CHAR_LIMIT == 3800,
+      f"{v3.MAX_BODY_CHARS}/{v3.MAX_CONTINUATIONS}/{v3.CONTINUATION_CHAR_LIMIT}")
+_r66_bv3_src = inspect.getsource(v3.build_v3_payload)
+check("r66: the card build converts tables + splits safely — no ellipsis truncation left",
+      "_markdown_tables_to_bullets(" in _r66_bv3_src and "split_card_body(" in _r66_bv3_src
+      and 'rstrip() + "…"' not in _r66_bv3_src)
+check("r66: the table renderer never emits Discord timestamps",
+      "<t:" not in inspect.getsource(v3._markdown_tables_to_bullets))
+check("r66: the posting loop delivers continuations and records every message id",
+      "build_continuation_payloads(" in inspect.getsource(v3.main)
+      and "message_ids" in inspect.getsource(v3.main))
+check("r66: retraction reads message_ids and tombstones continuation parts",
+      "message_ids" in inspect.getsource(v3.retract_dead_posts)
+      and "tombstone_continuation_payload" in inspect.getsource(v3.retract_dead_posts))
+
 if failures:
     print(f"SMOKE TEST FAILURES ({len(failures)}): {failures}")
     sys.exit(1)
