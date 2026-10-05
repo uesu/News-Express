@@ -49,7 +49,7 @@ Full prior history of News-Express, moved out of the main README during Round 63
   datacenter-IP wall — so no credits were added and the fleet is
   unchanged; the native `.rss` + feed-token + Arctic Shift trio the
   engine already uses remains the only reliable class of sources.
-  Details: [`docs/ROUND_61.md`](docs/ROUND_61.md).
+  Details: [`docs/ROUND_61.md`](ROUND_61.md).
 
 * **2026-10-03 — Docs: Instant preset (old-speed combo at the 5-minute cron).**
   No code change. The Speed presets table gains **Instant**: cron unchanged at
@@ -78,13 +78,13 @@ Full prior history of News-Express, moved out of the main README during Round 63
   are YouTube URLs, and extracted URLs are HTML-unescaped so literal `&amp;`
   never reaches Discord. Text posts retain their body-first behavior. Seven
   offline smoke guards replay the incident. Details:
-  [`docs/ROUND_60.md`](docs/ROUND_60.md).
+  [`docs/ROUND_60.md`](ROUND_60.md).
 
-* **2026-10-03 — Round 59: nitter fleet body-audit and Reddit audit record.** The three Twitter engines now share a body-audited fallback order: serving mirrors `nitter.kareem.one` and `tw.eir-nya.gay` are ahead of the token-gated host, while known challenge-wall hosts remain retained at the tail. The Reddit fallback list is unchanged after the same response-body audit found no confirmed working additions. Fork credits and the full decision record are in [`docs/ROUND_59.md`](docs/ROUND_59.md).
+* **2026-10-03 — Round 59: nitter fleet body-audit and Reddit audit record.** The three Twitter engines now share a body-audited fallback order: serving mirrors `nitter.kareem.one` and `tw.eir-nya.gay` are ahead of the token-gated host, while known challenge-wall hosts remain retained at the tail. The Reddit fallback list is unchanged after the same response-body audit found no confirmed working additions. Fork credits and the full decision record are in [`docs/ROUND_59.md`](ROUND_59.md).
 
 
 * **2026-10-03 — Round 58: AGENTS.md — agent onboarding.** New root-level
-  [`AGENTS.md`](AGENTS.md) (the emerging standard file AI coding agents
+  [`AGENTS.md`](../../AGENTS.md) (the emerging standard file AI coding agents
   read first) encoding the repository's operational knowledge: the
   three-repo dev/prod architecture and manual deployment flow, the file
   map, how to test, the nine never-violate invariants (NSFW gate,
@@ -102,7 +102,7 @@ Full prior history of News-Express, moved out of the main README during Round 63
   6-hour default and, because the P0 concurrency guard queues instead of
   cancelling, silence the monitor behind it. Zero engine/behavior change;
   smoke guards added (SHA-pin, timeout, and concurrency-guard presence).
-  See [Round 57](docs/ROUND_57.md).
+  See [Round 57](ROUND_57.md).
 
 * **2026-10-02 — Round 56: media heal targets videos only.** The round-47
   self-heal re-edited three photo posts whose image tiles came back from
@@ -115,7 +115,7 @@ Full prior history of News-Express, moved out of the main README during Round 63
   `MEDIA_HEAL_SCOPE` accepts `video` (default), `on`/`all` (restore healing
   for every media type) and `off` (disable the heal pass entirely) — no code
   change for any mode. Log wording fixed ("the media now renders").
-  See [Round 56](docs/ROUND_56.md).
+  See [Round 56](ROUND_56.md).
 
 * **2026-10-02 — Round 55: mod-queue page evidence must render this post.**
   A 200 Cloudflare/JavaScript shell could masquerade as a Reddit post page
@@ -124,7 +124,7 @@ Full prior history of News-Express, moved out of the main README during Round 63
   `/comments/<id>` marker before page HTML can feed the mod-queue verdict.
   Shells route into the existing no-page branch: young posts hold unless an
   API-backed listing proves release, while healthy rendered posts retain the
-  zero-latency path. See [Round 55](docs/ROUND_55.md).
+  zero-latency path. See [Round 55](ROUND_55.md).
 
 * **2026-10-02 — Embeddit incident root cause + rewrite readiness (rounds
   53–54).** The 2026-10-01 23:13 UTC production runs logged
@@ -152,7 +152,7 @@ Full prior history of News-Express, moved out of the main README during Round 63
   WARNING line, embeddit stays in the dispatch order); if it doesn't parse,
   the round-53 drop applies — the chain can never do worse than today.
   No new secrets or Variables; no workflow changes. See
-  [Round 53](docs/ROUND_53.md) and [Round 54](docs/ROUND_54.md).
+  [Round 53](ROUND_53.md) and [Round 54](ROUND_54.md).
 
 * **2026-10-01 — Repository tracking and configuration audit.** The active
   workflow paths, legacy engines, tests, state files, runtime policy, Privacy
@@ -168,7 +168,7 @@ Full prior history of News-Express, moved out of the main README during Round 63
   cache is ignored locally so enabling it cannot leave an accidental
   working-tree file. The policy files now disclose the conditional Discord
   message-ID/payload cache and its retention purpose. See the
-  [consolidated tracking record](docs/REPOSITORY_TRACKING.md).
+  [consolidated tracking record](../REPOSITORY_TRACKING.md).
 
 * **2026-10-02 — Profile-crosspost and fallback observability hardening.**
   Reddit V3 now renders crossposts whose original is a user profile post from
@@ -183,7 +183,7 @@ Full prior history of News-Express, moved out of the main README during Round 63
   adds offline fixtures for every profile route, the vxReddit shell, and the
   cache-skip invariant. No secrets, Variables, network request types, cache
   formats, retention, or data-processing behavior changed; the policy files
-  remain current. See [Round 51 audit record](docs/ROUND_51.md).
+  remain current. See [Round 51 audit record](ROUND_51.md).
 
 * **2026-09-30 — Runtime, delivery, and source hardening.** All executable
   workflows now pin stable CPython **3.14.7**; CI installs, compiles, and smoke-tests
@@ -193,7 +193,7 @@ Full prior history of News-Express, moved out of the main README during Round 63
   starts with the tracker-healthy RSS hosts, while the Reddit chains include the
   current official Redlib registry's token-free non-Cloudflare mirrors. The
   standalone `CHANGELOG.md` was retired; this in-README section is the single
-  release history. See [Python runtime policy](docs/PYTHON_RUNTIME.md) for the
+  release history. See [Python runtime policy](../PYTHON_RUNTIME.md) for the
   compatibility, performance, and update/automation policy.
 
 * **2026-09-30 — Reddit V3 round 38e: RSS-backed native queue detection.**

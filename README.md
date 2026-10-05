@@ -365,8 +365,8 @@ STATIC_BUTTONS = [
 ## 📬 Reddit delivery pipeline
 
 Current behavior (rounds 63–65). For the full history of how this evolved,
-see [`docs/ENGINE_HISTORY.md`](docs/ENGINE_HISTORY.md) and the
-[changelog archive](docs/CHANGELOG_ARCHIVE.md).
+see [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) and the
+[changelog archive](docs/history/CHANGELOG_ARCHIVE.md).
 
 **A post delivers when, in order:**
 
@@ -479,7 +479,7 @@ path — the folder name contains a space).
   `test_tweet` = `screen_name/tweet_id`.
 * **`Could not fetch valid RSS feed for @…` / `r/…`** — public mirrors
   rotate/die; the engines fall back automatically (read the per-source log
-  lines). Historical incidents: [`docs/ENGINE_HISTORY.md`](docs/ENGINE_HISTORY.md).
+  lines). Historical incidents: [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md).
 * **`HTTP 429 for r/…`** — Reddit's anonymous datacenter rate limit
   (~1 req/min per IP). The combined-feed fetch normally fits it, non-feed
   HTML ("loading takes a moment") is rejected automatically, and the engine
@@ -546,9 +546,9 @@ of FxTwitter/FxEmbed — [donations welcome](https://github.com/sponsors/dangere
 
 | Document | Contents |
 |---|---|
-| [`docs/CHANGELOG_ARCHIVE.md`](docs/CHANGELOG_ARCHIVE.md) | Full dated history, rounds 1–62 |
-| [`docs/ENGINE_HISTORY.md`](docs/ENGINE_HISTORY.md) | Round-by-round engine notes moved out of this README (2026-10-05) |
-| [`docs/ROUND_*.md`](docs/) | Decision records per incident |
+| [`docs/history/CHANGELOG_ARCHIVE.md`](docs/history/CHANGELOG_ARCHIVE.md) | Full dated history, rounds 1–62 |
+| [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) | Round-by-round engine notes moved out of this README (2026-10-05) |
+| [`docs/history/ROUND_*.md`](docs/history/) | Decision records per incident |
 | [`docs/REPOSITORY_TRACKING.md`](docs/REPOSITORY_TRACKING.md) | File/config/policy inventory and audit record |
 | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) · [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) · [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) · [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) | Topic guides |
 | [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md) · [`TERMS_OF_SERVICE.md`](TERMS_OF_SERVICE.md) | Policies |
@@ -558,9 +558,17 @@ of FxTwitter/FxEmbed — [donations welcome](https://github.com/sponsors/dangere
 ## 🗒 Changelog
 
 Latest rounds only — the full dated history lives in
-[`docs/CHANGELOG_ARCHIVE.md`](docs/CHANGELOG_ARCHIVE.md) (rounds 1–62) and
-[`docs/ENGINE_HISTORY.md`](docs/ENGINE_HISTORY.md) (detailed round notes).
+[`docs/history/CHANGELOG_ARCHIVE.md`](docs/history/CHANGELOG_ARCHIVE.md) (rounds 1–62) and
+[`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) (detailed round notes).
 
+* **2026-10-05 — Docs: history folder.** All dated records now live in
+  [`docs/history/`](docs/history/) — the changelog archive (rounds 1–62),
+  the engine round notes, and every `ROUND_*.md` decision record — with a
+  short index. `docs/` keeps only the current topic guides. Stale deployment
+  artifacts of already-merged rounds were deleted (`round_46b.patch`,
+  `bump_3.14.8.patch` — superseded by the automated
+  `python_version_bump.yml` workflow — and the copy-paste PR packages for
+  rounds 42–45). Every cross-reference was repointed and link-checked.
 * **2026-10-05 — Round 65: body entity hygiene.** Live 1wxvl13: a card built
   from the Arctic Shift backup path showed literal `&gt;` — Arctic (like
   Reddit's API) serves selftext HTML-escaped, and only the JSON path
@@ -589,9 +597,9 @@ Latest rounds only — the full dated history lives in
   the current shipped behavior (hero + badges, features, setup, config,
   delivery pipeline, testing, troubleshooting). Every dated round-by-round
   note (~1,450 lines) moved verbatim to
-  [`docs/ENGINE_HISTORY.md`](docs/ENGINE_HISTORY.md); the dated changelog
+  [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md); the dated changelog
   for rounds 1–62 remains in
-  [`docs/CHANGELOG_ARCHIVE.md`](docs/CHANGELOG_ARCHIVE.md). No behavior,
+  [`docs/history/CHANGELOG_ARCHIVE.md`](docs/history/CHANGELOG_ARCHIVE.md). No behavior,
   engine, workflow, or test changes.
 
 ---

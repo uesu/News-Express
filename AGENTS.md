@@ -38,11 +38,10 @@ leftovers. Never advise deleting the "other" platform's files.
   engines, switchable via one commented line in the workflows. NOT dead code.
 - `tests/test_smoke.py` — the main suite; every past bug is a named guard
   (`rNN: ...`). `tests/test_reddit_signals.py` — gate-logic suite.
-- `docs/ROUND_*.md` — decision records per incident. README `## 🗒 Changelog`
-  — the latest rounds; the full dated history (rounds 1–62) lives in
-  `docs/CHANGELOG_ARCHIVE.md`, and the detailed round-by-round engine notes
-  moved out of the README on 2026-10-05 live in `docs/ENGINE_HISTORY.md`.
-  Read the round doc before touching its area.
+- `docs/history/` — the history archive: `ROUND_*.md` decision records per
+  incident, `CHANGELOG_ARCHIVE.md` (full dated history, rounds 1–62) and
+  `ENGINE_HISTORY.md` (detailed round notes moved out of the README on
+  2026-10-05). Read the round doc before touching its area.
 
 ## How to test (ALWAYS before committing)
 
@@ -57,7 +56,7 @@ checks) — "ALL PASS" is the contract, not the number. The suites stub
 needed. If you must import an engine standalone, copy the stubbing pattern
 from the top of `test_smoke.py`.
 
-Convention: every behavioral fix gets (1) a `docs/ROUND_NN.md` decision
+Convention: every behavioral fix gets (1) a `docs/history/ROUND_NN.md` decision
 record, (2) a README changelog entry, (3) named smoke guards (`rNN: ...`).
 
 ## Invariants — NEVER violate these

@@ -10,8 +10,8 @@
 > date* — later rounds supersede earlier ones. For the condensed,
 > newest-first history see [`CHANGELOG_ARCHIVE.md`](CHANGELOG_ARCHIVE.md)
 > (rounds 1–62) and the changelog at the bottom of the
-> [`README.md`](../README.md) (round 63+). Decision records for individual
-> incidents live in the `ROUND_*.md` files in this folder.
+> [`README.md`](../../README.md) (round 63+). Decision records for individual
+> incidents live in the `ROUND_*.md` files alongside this file.
 
 ## Contents
 
@@ -486,7 +486,7 @@ jobs:
   card never exceeds Discord's total text limit (body is auto-trimmed last).
 * **Discohook preview.** After each successful post, a keyless public share
   link rendering the exact card is created and logged (see
-  [Discohook](../README.md#-integrations) — now the Integrations section of
+  [Discohook](../../README.md#-integrations) — now the Integrations section of
   the README). `DISCOHOOK_PREVIEW=0`
   disables.
 * **Test tools (verify before promoting).** In the V3 workflow
@@ -505,7 +505,7 @@ jobs:
   `REDDIT_JSON_PROBE` (default `auto`), `PROXY_MEDIA` (default on),
   `PROXY_WARMUP_POST`, `EMBEDDIT_INSTANCE`, `YOUTUBE_LINK_MESSAGE` (default
   on), `PENDING_RECHECK_SECONDS` (default 1800 s), and the round-42–50 gate,
-  listing, and proxy timing switches shown in [`.env.example`](../.env.example).
+  listing, and proxy timing switches shown in [`.env.example`](../../.env.example).
   That template is the source of truth for the complete local switch list and
   its matching GitHub Actions repository Variables.
 
@@ -557,9 +557,9 @@ credits, no API key):
 * **`EMBEDEZ_API_KEY` is no longer used by V3** (the keyless public
   endpoints replaced the paid API) — the repo secret can be deleted; only
   the old V2 script needs it.
-* **Docs added:** [`docs/DISCOHOOK.md`](DISCOHOOK.md) (Discohook =
+* **Docs added:** [`docs/DISCOHOOK.md`](../DISCOHOOK.md) (Discohook =
   preview-only here, **fully optional**, safe to disable — and why it isn't
-  relied on for posting) and [`docs/CI_SMOKE.md`](CI_SMOKE.md)
+  relied on for posting) and [`docs/CI_SMOKE.md`](../CI_SMOKE.md)
   (ci.yml + test_smoke.py = the **required** offline safety gate).
 
 ### 🆕 Reddit V3 — round 14 (2026-09-16): card polishing (after the first production runs)
@@ -1450,7 +1450,7 @@ preserved verbatim in
 **What this means for latency:** a new post now delivers on the **first
 cron tick after it's confirmed not-NSFW** — there is no longer a settle
 window or queue-evidence wait layered on top. Latency is simply your cron
-interval (see [Step 4](../README.md#step-4--reliable-10-minute-automation-external-trigger)
+interval (see [Step 4](../../README.md#step-4--reliable-10-minute-automation-external-trigger)
 of the README).
 
 **Rollback:** none of the removed gates can be re-enabled via a Variable —
