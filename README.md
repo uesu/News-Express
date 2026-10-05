@@ -639,7 +639,3 @@ Latest rounds only — the full dated history lives in
 * All trademarks belong to their respective owners; this project is an
   unofficial, non-affiliated automation tool for personal servers.
 
----
-
-*Based on [News-Flash-Bot](https://github.com/cold-logic5/News-Flash-Bot) by
-[@cold-logic5](https://github.com/cold-logic5).*
