@@ -168,7 +168,7 @@ Full prior history of News-Express, moved out of the main README during Round 63
   cache is ignored locally so enabling it cannot leave an accidental
   working-tree file. The policy files now disclose the conditional Discord
   message-ID/payload cache and its retention purpose. See the
-  [consolidated tracking record](../REPOSITORY_TRACKING.md).
+  [consolidated tracking record](REPOSITORY_TRACKING_2026-10-01.md).
 
 * **2026-10-02 — Profile-crosspost and fallback observability hardening.**
   Reddit V3 now renders crossposts whose original is a user profile post from

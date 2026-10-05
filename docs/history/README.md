@@ -7,6 +7,7 @@ topic guides in [`docs/`](../) stay focused on the current shipped behavior.
 |---|---|
 | [`CHANGELOG_ARCHIVE.md`](CHANGELOG_ARCHIVE.md) | Full dated changelog, rounds 1–62 (newest first) |
 | [`ENGINE_HISTORY.md`](ENGINE_HISTORY.md) | Round-by-round engine behavior notes, moved verbatim out of the README (2026-10-05) |
+| [`REPOSITORY_TRACKING_2026-10-01.md`](REPOSITORY_TRACKING_2026-10-01.md) | File/config/policy inventory and audit record — a dated snapshot of baseline `6ff4270`, written before the round-63 simplification |
 | `ROUND_*.md`, `round-15-validation.md` | Decision records per incident (what broke, why, the fix, the guards) |
 
 Rounds 63+ are summarized in the [README changelog](../../README.md#-changelog).

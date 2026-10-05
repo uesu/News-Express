@@ -39,12 +39,13 @@ leftovers. Never advise deleting the "other" platform's files.
 - `tests/test_smoke.py` — the main suite; every past bug is a named guard
   (`rNN: ...`). `tests/test_reddit_signals.py` — gate-logic suite.
 - `docs/` — current topic guides only: `CI_SMOKE.md`, `DEPENDABOT.md`,
-  `DISCOHOOK.md`, `PYTHON_RUNTIME.md`, `REPOSITORY_TRACKING.md` (secrets vs
-  Variables inventory).
+  `DISCOHOOK.md`, `PYTHON_RUNTIME.md`. For the live secrets-vs-Variables
+  inventory read `.env.example` and the workflow `env:` blocks.
 - `docs/history/` — the history archive: `ROUND_*.md` decision records per
-  incident, `CHANGELOG_ARCHIVE.md` (full dated history, rounds 1–62) and
+  incident, `CHANGELOG_ARCHIVE.md` (full dated history, rounds 1–62),
   `ENGINE_HISTORY.md` (detailed round notes moved out of the README on
-  2026-10-05). Read the round doc before touching its area.
+  2026-10-05) and `REPOSITORY_TRACKING_2026-10-01.md` (pre-round-63 audit
+  snapshot). Read the round doc before touching its area.
 
 ## How to test (ALWAYS before committing)
 
@@ -81,10 +82,7 @@ record, (2) a README changelog entry, (3) named smoke guards (`rNN: ...`).
 6. **cron-job.org is the single scheduler.** GitHub's native `schedule:` is
    disabled on purpose (it raced the external cron → double posts).
 7. **Actions stay SHA-pinned** (round 57); jobs keep `timeout-minutes`.
-8. Mod-queue page evidence must render THIS post: any fixture fed to
-   `mod_queue_reason` as a "real page" must contain the post's own
-   `/comments/<id>/` marker (round 55).
-9. Heal eligibility is classified by **URL**, never by response
+8. Heal eligibility is classified by **URL**, never by response
    `content_type` (it is empty exactly when unresolved — round 56).
    `heal_eligible_items` reads module-global `MEDIA_HEAL_SCOPE` at call
    time (tests monkeypatch it).
@@ -93,9 +91,10 @@ record, (2) a README changelog entry, (3) named smoke guards (`rNN: ...`).
 
 - X "GIFs" are `video.twimg.com/tweet_video/*.mp4` → heal-eligible as
   videos. Converted `.gif`/`.webp` image files are excluded. By design.
-- Re-uploaded Reddit media gets NEW `i.redd.it` URLs → the duplicate-media
-  gate cannot and should not catch cross-author re-uploads. By design
-  (invariant 2): same URL = provable, new URL = guesswork.
+- (historical — gate removed in round 63) Re-uploaded Reddit media gets NEW
+  `i.redd.it` URLs, so the former duplicate-media gate was never allowed to
+  catch cross-author re-uploads. Do not reintroduce any media-fingerprint
+  gate — invariant 2: same URL = provable, new URL = guesswork.
 - Benign log lines (do NOT "fix"): `dedup cache near cap` (eviction
   handles it), the OAuth-skip INFO line, `redlib gallery enrichment failed`
   (fallback works). (The `MODQUEUE-LISTING ... fail open` line was removed

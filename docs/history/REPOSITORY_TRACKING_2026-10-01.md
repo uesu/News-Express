@@ -1,5 +1,11 @@
 # Repository tracking record — current main audit
 
+> **Historical snapshot (2026-10-01, pre-round-63).** This audit describes the
+> repository as of baseline `6ff4270` and is preserved verbatim. The file
+> inventory, Variable set, and gate descriptions here predate the round-63
+> simplification and the 2026-10-05 docs restructure — consult `README.md`,
+> `.env.example`, and the workflows for current truth.
+
 **Review date:** October 1, 2026
 **Baseline fetched:** `origin/main` at `6ff427038c358ecd9f63be4a9144f3dc7b5b0aa3`
 **Review branch:** `arena/01a0f9a2-news-express`

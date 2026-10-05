@@ -549,7 +549,7 @@ of FxTwitter/FxEmbed — [donations welcome](https://github.com/sponsors/dangere
 | [`docs/history/CHANGELOG_ARCHIVE.md`](docs/history/CHANGELOG_ARCHIVE.md) | Full dated history, rounds 1–62 |
 | [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) | Round-by-round engine notes moved out of this README (2026-10-05) |
 | [`docs/history/ROUND_*.md`](docs/history/) | Decision records per incident |
-| [`docs/REPOSITORY_TRACKING.md`](docs/REPOSITORY_TRACKING.md) | File/config/policy inventory and audit record |
+| [`docs/history/REPOSITORY_TRACKING_2026-10-01.md`](docs/history/REPOSITORY_TRACKING_2026-10-01.md) | File/config/policy inventory and audit record (historical snapshot, 2026-10-01) |
 | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) · [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) · [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) · [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) | Topic guides |
 | [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md) · [`TERMS_OF_SERVICE.md`](TERMS_OF_SERVICE.md) | Policies |
 
@@ -561,6 +561,22 @@ Latest rounds only — the full dated history lives in
 [`docs/history/CHANGELOG_ARCHIVE.md`](docs/history/CHANGELOG_ARCHIVE.md) (rounds 1–62) and
 [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) (detailed round notes).
 
+* **2026-10-05 — Docs: stale-gate sweep.** The current docs no longer
+  describe gates that round 63 deleted. `AGENTS.md` drops the
+  `mod_queue_reason` fixture invariant (the function no longer exists) and
+  rewrites the duplicate-media landmine as history — the rule that survives
+  is "do not reintroduce any media-fingerprint gate". `docs/CI_SMOKE.md`
+  drops the removed `page_is_post_page` page-identity check and its
+  shell-page scenario, stops calling the smoke suite's gate list a "queue"
+  gate, and re-attributes the listing fixtures to the round-64 pristine
+  listing confirmation and the round-44 retraction seatbelt — the checks
+  the suites actually run today. The Privacy Policy and Terms of Service
+  keep the same `/new` listing disclosures but credit them to those two
+  consumers instead of the removed mod-queue gate (effective dates
+  bumped). The 2026-10-01 audit record moved to
+  [`docs/history/REPOSITORY_TRACKING_2026-10-01.md`](docs/history/REPOSITORY_TRACKING_2026-10-01.md)
+  with a historical-snapshot banner, and every reference was repointed. No
+  engine, workflow, or test changes.
 * **2026-10-05 — Round 66: long-post continuations + table rendering + stale env cleanup.**
   A post body that no longer fits the card's text budget is no longer
   truncated: the main card keeps the first chunk (identical layout —
