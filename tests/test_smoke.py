@@ -2374,13 +2374,13 @@ with open(os.path.join(ROOT, ".github/workflows/dependabot_auto_merge.yml"), enc
 # 2026-10-05 update — Dependabot auto-merge workflow repair: workflow_run
 # sometimes did not fire after CI, so this trusted pull_request_target flow
 # polls its immutable event SHA instead.
-check("r39/r67 Dependabot auto-merge uses trusted PR events and never checks out PR code",
+check("Dependabot auto-merge uses trusted PR events and never checks out PR code",
       "pull_request_target:" in _r39_merge
       and "types: [opened, synchronize, reopened]" in _r39_merge
       and "workflow_run:" not in _r39_merge
       and "actions/checkout" not in _r39_merge
       and "pull_request_target runs this trusted file" in _r39_merge)
-check("r39/r67 Dependabot auto-merge fails closed on the exact head SHA before squash merging",
+check("Dependabot auto-merge fails closed on the exact head SHA before squash merging",
       "AUTO_MERGE_DEPENDABOT" in _r39_merge
       and "pr.user?.login !== 'dependabot[bot]'" in _r39_merge
       and "expectedHeadSha = eventPr.head.sha" in _r39_merge
