@@ -18,8 +18,8 @@ validated, and what is and is not automated.
 ## Why 3.14.8
 
 Python **3.14.8** is the latest stable production release on the current
-3.14 line (released August 5, 2026). Python 3.15 is still a release candidate
-on this review date, so it is intentionally not used in a production monitor.
+3.14 line (released September 30, 2026). Python 3.15 is in the release-candidate phase. News-Express does not adopt a new minor series automatically until the
+configured soak period, wheel-availability gate, and full validation checks pass.
 The authoritative release pages are:
 
 * [Python 3.14.8](https://www.python.org/downloads/release/python-3148/)
