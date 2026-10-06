@@ -1,10 +1,11 @@
 # Python runtime policy — CPython 3.14.8
 
 **Current production/CI pin:** `3.14.8`
-**Reviewed:** September 30, 2026
 
-The CI, Reddit monitor, and X monitor workflows all use the same exact
-CPython version through `actions/setup-python@v7`:
+**Reviewed:** 2026-10-06 against official Python sources
+
+The CI, Reddit monitor, and X monitor workflows use the same exact CPython
+version through SHA-pinned `actions/setup-python@v7`:
 
 ```yaml
 with:
@@ -12,118 +13,169 @@ with:
   cache: 'pip'
 ```
 
-This file is the source of truth for why that number is exact, how it is
-validated, and what is and is not automated.
+This file is the current operational policy for the exact runtime pin, the
+validation gates around it, and what the automation is allowed to change.
+Historical records under `docs/history/` are intentionally not rewritten just
+because the current pin changes.
 
-## Why 3.14.8
+## Official status reviewed for this pin
 
-Python **3.14.8** is the latest stable production release on the current
-3.14 line (released September 30, 2026). Python 3.15 is in the release-candidate phase. News-Express does not adopt a new minor series automatically until the
-configured soak period, wheel-availability gate, and full validation checks pass.
-The authoritative release pages are:
+Python **3.14.8** is the current News-Express runtime. The official Python
+release page identifies it as the eighth maintenance release of Python 3.14 and
+lists its release date as **September 30, 2026**:
 
-* [Python 3.14.8](https://www.python.org/downloads/release/python-3148/)
-* [Python 3.15.0 RC1](https://www.python.org/downloads/release/python-3150rc1/)
+* [Python 3.14.8 release page](https://www.python.org/downloads/release/python-3148/)
 
-An exact patch pin gives every scheduled run, CI run, and manual dispatch the
-same interpreter. That makes failures reproducible and means a new CPython
-patch cannot silently alter a live posting run before this repository's CI has
-examined it.
+As of this 2026-10-06 review, News-Express is **not** adopting Python 3.15:
+
+* the official Python downloads page still serves Python 3.14.8 as the latest
+  Python 3 source release;
+* the Python Developer's Guide lists Python 3.15 as `prerelease`; and
+* `https://www.python.org/downloads/release/python-3150/` does not publish a
+  final Python 3.15.0 release page.
+
+When Python 3.15 final is officially available, it is still a **new minor
+series** for this repository and must receive a pull request plus manual review;
+it is not treated as an ordinary patch update merely because it exists.
+
+## Version terminology used here
+
+News-Express uses the normal `MAJOR.MINOR.PATCH` terminology:
+
+| Example | Classification | Repository policy |
+|---|---|---|
+| `3.14.7 -> 3.14.8` | **PATCH** update inside the same `3.14` series | eligible for automated proposal and, when every gate passes, optional patch auto-merge |
+| `3.14.8 -> 3.15.0` | new **MINOR** series | PR only; manual review required even if validation passes |
+| `3.x -> 4.x` | **MAJOR** update | deliberate manual migration; never handled as an ordinary patch/minor bump |
+
+A new minor series must never be described as a patch update.
+
+## Repository and production scope
+
+`uesu/News-Express` is the development repository. The Reddit and X/Twitter
+production repositories have their own production-only workflows and receive
+production changes separately. The Python runtime bump workflow in this
+repository only opens and optionally merges PRs in **this** repository; it does
+not copy News-Express documentation into production repositories and does not
+modify production caches or state files.
 
 ## Compatibility assessment
 
-This repository is compatible by design with standard (GIL-enabled) CPython
-3.14:
+This repository is designed for standard (GIL-enabled) CPython 3.14:
 
 * The scripts use standard-library `asyncio`, `json`, `re`, and HTTP clients;
-  no removed Python 3.11 API or CPython implementation detail is relied on.
+  no removed Python 3.11 API or CPython implementation detail is intentionally
+  relied on.
 * `feedparser` and `python-dotenv` are pure-Python dependencies in this use.
 * `aiohttp>=3.14.3` publishes CPython 3.14 wheels, including Linux wheels used
-  by GitHub-hosted Ubuntu runners. Its release line includes Python 3.14
-  support and fixes.
+  by GitHub-hosted Ubuntu runners. Its transitive C-extension dependencies
+  (`multidict`, `yarl`, `frozenlist`, and `propcache`) also need wheels for a
+  proposed interpreter.
 * The workflows leave `freethreaded` at setup-python's default (`false`). This
   is deliberate: the monitor has not been validated on the experimental
   free-threaded build, and its work is primarily asynchronous network I/O.
 
-Compatibility is **proved for a proposed change only when the PR's CI is
-green**: it installs the real requirements under 3.14.8, compiles every
-script, and runs the offline smoke suite. A manual dry-run of each monitor
-remains the final recommended production check because third-party feeds and
-Discord webhooks are intentionally not exercised by CI.
+Offline repository validation means the real requirements install under the
+pinned interpreter, all Python files in `testing area/` and `tests/` compile,
+and both offline suites pass. Third-party feeds, Discord delivery, external
+cron triggers, and future service outages remain outside offline validation and
+should be checked with the documented dry-run/test-post controls when needed.
 
 ## Performance: realistic expectations
 
-This is a safe runtime modernization, not a promise of a fixed percentage
-speed-up:
+This runtime pin is for reproducibility and controlled upgrades, not a promise
+of a fixed percentage speed-up:
 
 * CPython 3.14 contains runtime and standard-library improvements. They can
   reduce interpreter overhead in Python-heavy sections.
-* News Express is overwhelmingly **I/O-bound**: feed requests, mirror
+* News-Express is overwhelmingly **I/O-bound**: feed requests, mirror
   fallbacks, media probes, and Discord webhooks dominate a normal run. Network
   availability and latency therefore determine almost all end-to-end duration.
-* The first job on the new patch can have a pip-cache miss. Subsequent runs
-  reuse `actions/setup-python`'s dependency cache; its cache key includes the
-  resolved Python environment and `requirements.txt`, so it avoids reusing an
+* The first job on a new patch can have a pip-cache miss. Subsequent runs reuse
+  `actions/setup-python`'s dependency cache; its cache key includes the resolved
+  Python environment and `requirements.txt`, so it avoids reusing an
   incompatible environment.
-* The refreshed mirror chains improve worst-case latency more directly: known
-  RSS-disabled/stale X endpoints are no longer serially waited on, while the
-  current healthy RSS hosts are tried first.
 
-In short: expect equal or modestly improved local CPU overhead after the first
-cache warm-up, but judge monitor speed from Actions logs over several runs—not
-from a benchmark claim that ignores the network.
+Judge monitor speed from Actions logs over several runs, not from benchmark
+claims that ignore network behavior.
 
 ## Is the Python runtime auto-bumped?
 
-**Not by Dependabot — by a dedicated workflow, since round 46.** The shipped
-Dependabot configuration has two update ecosystems:
+**Not by Dependabot.** Dependabot manages dependency manifests and `uses:`
+Action versions; it does not manage `python-version` workflow inputs.
 
-| Managed automatically (as PRs) | Not managed automatically |
+| Managed by Dependabot | Managed by the Python runtime workflow |
 |---|---|
-| pip packages in `requirements.txt` | `python-version` workflow inputs |
-| GitHub Actions used by `uses:` | CPython major/minor/patch selection |
-
-Dependabot can update `actions/setup-python@v7`, but that action's
-`python-version: '3.14.8'` input is repository configuration, not a dependency
-manifest that Dependabot manages. The opt-in Dependabot auto-merge workflow
-can merge a **green Dependabot dependency PR**; it never changes the Python
-runtime itself.
+| pip dependency ranges in `requirements.txt` | exact CPython `python-version` pins |
+| GitHub Actions used by `uses:` | patch/minor candidate selection and validation |
 
 Using `python-version: '3.14'` would float automatically to a later 3.14 patch,
 but it would trade away reproducibility and pre-merge validation: the new
-interpreter would first be seen by a **live posting run**, untested.
+interpreter could first be seen by a live posting run.
 
-`.github/workflows/python_version_bump.yml` closes that gap without giving up
-the exact pin. Weekly (and on demand) it works out the next CPython version —
-the newest stable patch of the current series, or, when the series is
-exhausted, the newest patch of the **next** series, never skipping a series —
-then proves the repository on it *before* proposing anything:
+`.github/workflows/python_version_bump.yml` keeps the exact pin while still
+checking for safe candidates. Weekly, and on manual dispatch, it considers only:
+
+1. the newest stable patch of the current series, or
+2. if no newer patch exists, the newest stable patch of the next minor series.
+
+It never skips a minor series and never proposes a major-version migration.
+Release candidates, betas, alphas, and versions absent from the
+`actions/python-versions` linux-x64 manifest are ignored.
+
+## Runtime bump validation gates
+
+A runtime bump PR is only opened after these gates pass under the candidate
+interpreter:
 
 | Gate | Why |
 |---|---|
-| version exists in the `actions/python-versions` manifest with a linux-x64 build | that manifest is exactly what `setup-python` resolves; a version absent from it breaks every workflow |
-| `pip install --only-binary=:all: -r requirements.txt` | `aiohttp` and its C dependencies (`multidict`, `yarl`, `frozenlist`, `propcache`) ship per-ABI wheels. A brand-new CPython minor has none for days or weeks; without this flag pip would silently compile from source. No wheels ⇒ the bump is **deferred**, not merged |
-| soak period, minor bumps only (`PYTHON_BUMP_SOAK_DAYS`, default 30) | an `x.y.0` is the least-tested build of its line; security patches skip the soak on purpose |
-| `compileall` + `test_smoke.py` + `test_reddit_signals.py` under the new interpreter | the real CI gate, run on the candidate |
-| the same three, **again**, after the pin is rewritten | the rewrite edits `tests/test_smoke.py` itself (the round-39 pin guard), so the rewritten tree has to be re-proved |
+| candidate exists in the `actions/python-versions` manifest with a linux-x64 build | that manifest is what `setup-python` resolves; a version absent from it breaks the workflows |
+| `pip install --only-binary=:all: -r requirements.txt` | compiled dependencies must have prebuilt wheels for the candidate ABI; if wheels are missing, the bump is deferred instead of compiling from source |
+| soak period for new minor series only (`PYTHON_BUMP_SOAK_DAYS`, default `30`) | an `x.y.0` minor release is deliberately reviewed after it has been available in the runner manifest for the configured period; patch releases skip the soak |
+| `python -m compileall -q "testing area" tests` | syntax/importability gate for every Python file used by the monitors and tests |
+| `python tests/test_smoke.py` | offline card-pipeline and workflow invariant guards |
+| `python tests/test_reddit_signals.py` | pure Reddit gate/decision guards |
+| repeat compileall + both suites after the rewrite | the rewrite updates current runtime surfaces and the round-39 pin guard in `tests/test_smoke.py`, so the rewritten tree is revalidated |
 
-A pull request is only created when all of that is green. Merging is opt-in
-through the repository Variable `AUTO_MERGE_PYTHON_BUMP`: unset means the PR
-simply waits, `yes` merges green **patch** bumps, `all` merges green minor
-bumps too. `yes` is the recommended setting — a minor bump also leaves prose in
-this file naming the old series, which no script should rewrite blind (a
-series-wide replace would corrupt unrelated numbers such as `aiohttp>=3.14.3`),
-so those leftovers are listed in the PR body for a human instead.
+The rewrite scope is an explicit current-runtime allowlist: workflow pins,
+current runtime documentation, README runtime references, and the smoke-test
+pin guard. `docs/history/` is checked separately and fails the workflow if it
+changes. Unexpected files also fail closed.
 
-## Safe update procedure
+## Auto-merge policy and authentication
+
+`AUTO_MERGE_PYTHON_BUMP` is a repository **Variable** with one supported
+auto-merge value:
+
+| Variable value | Behavior |
+|---|---|
+| unset, empty, or anything other than `yes` | open the verified PR and wait for manual review |
+| `yes` | auto-merge verified **patch** bumps only |
+
+There is intentionally no `all` mode. A new minor series such as Python 3.15
+must remain a manual-review PR, and a major version such as Python 4 requires a
+deliberate migration plan.
+
+The workflow uses `BUMP_PAT` only through GitHub Actions secret references
+(`secrets.BUMP_PAT`) for checkout, PR creation, and the optional patch merge.
+No token value belongs in the repository, logs, docs, or workflow inputs. If the
+secret is missing or invalid, the job fails safely rather than falling back to a
+direct push to `main`.
+
+## Safe manual update procedure
 
 1. Confirm the candidate is a final stable CPython release on python.org.
-2. Change the one exact pin in **all three** executable workflows:
-   `ci.yml`, `reddit_monitor.yml`, and `twitter_monitor.yml`.
-3. Update this document and the README's embedded workflow examples.
-4. Require a green CI run on the new interpreter.
-5. Merge, then dispatch each monitor once with safe test controls (`dry_run:
-   yes` for Reddit; a controlled `test_tweet`/test channel for X) and verify
-   the Actions log reports the expected interpreter.
-6. If an issue appears, revert the small workflow-only pin change; the prior
-   interpreter is restored on the next run.
+2. Classify the change as patch, minor, or major using the terminology above.
+3. Change the exact pin in `ci.yml`, `reddit_monitor.yml`, and
+   `twitter_monitor.yml`.
+4. Update current documentation (`README.md`, `docs/CI_SMOKE.md`,
+   `docs/DEPENDABOT.md`, and this file) without rewriting historical records.
+5. Run the compile and offline suites locally when possible, then require CI on
+   the PR.
+6. For a production rollout, update the separate production repositories through
+   their production-only process; do not copy this development documentation or
+   historical audit archive into production.
+7. After merge, dispatch each monitor once with safe test controls (`dry_run:
+   yes` for Reddit; a controlled `test_tweet`/test channel for X) when live
+   service behavior needs confirmation.

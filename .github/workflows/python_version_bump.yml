@@ -1,71 +1,66 @@
-#  Automatic CPython version bump (round 46, 2026-10-01)
+#  Automatic CPython version bump (round 46, revised 2026-10-06)
 #
 #  WHY THIS EXISTS
-#  Dependabot cannot do this. `python-version: '3.14.7'` inside a workflow is
-#  repository configuration, not a dependency in a manifest Dependabot parses
-#  (see docs/DEPENDABOT.md). So new CPython releases — including SECURITY
-#  releases like 3.14.8 — had to be noticed and applied by hand.
+#  Dependabot cannot update `python-version: '3.14.8'` because that value is
+#  repository workflow configuration, not a dependency manifest entry. New
+#  CPython releases therefore need a dedicated, validated PR path.
 #
-#  SCOPE: PATCH *AND* MINOR
-#  This workflow follows the runtime forward for ever: 3.14.7 -> 3.14.8 (patch)
-#  and, when the time comes, 3.14.x -> 3.15.y (minor). It is never allowed to
-#  skip a series: from 3.14 it will only ever propose 3.15, never 3.16. The
-#  run after that picks up the next one, so every jump stays one reviewable
-#  step.
+#  VERSION TERMINOLOGY
+#    MAJOR.MINOR.PATCH
+#    3.14.7 -> 3.14.8  = PATCH update inside the current series
+#    3.14.8 -> 3.15.0  = new MINOR series
+#    3.x    -> 4.x     = MAJOR update
 #
-#  THE RULE: 100% GREEN OR NOTHING
-#  No PR is opened unless, under the NEW interpreter, all of this passed:
+#  SCOPE: PATCH PROPOSALS, AND NEXT-MINOR PRS AFTER REVIEW GATES
+#  The workflow first looks for the newest stable patch of the current series.
+#  If none is newer, it may propose the newest stable patch of the next minor
+#  series after the configured soak period and validation gates. It never skips
+#  a minor series and never proposes a major-version migration. Python 4 (or
+#  any other major change) is deliberate manual migration work, not an ordinary
+#  runtime bump.
+#
+#  VALIDATION GATES
+#  No PR is opened unless, under the candidate interpreter, all of this passed:
 #    1. every dependency installed FROM A PREBUILT WHEEL
 #       (`--only-binary=:all:`). This is the single most likely way a new
 #       CPython minor breaks this repo: aiohttp ships compiled wheels per
-#       interpreter ABI (cp310...cp314 today) and so do its C dependencies
-#       multidict / yarl / frozenlist / propcache. On the day 3.15.0 lands
-#       those wheels do not exist yet, pip would fall back to compiling from
-#       source, and that either fails or silently produces a slower, less
-#       tested build. Wheels missing => DEFERRED, not merged, not failed.
-#    2. `python -m compileall` over the whole tree
+#       interpreter ABI, and so do multidict / yarl / frozenlist / propcache.
+#       A brand-new CPython minor may not have those wheels yet; without this
+#       flag pip could compile from source. Wheels missing => DEFERRED, not
+#       merged.
+#    2. `python -m compileall` over `testing area` and `tests`
 #    3. tests/test_smoke.py
 #    4. tests/test_reddit_signals.py
-#  then the pin is rewritten everywhere and 2-4 are run AGAIN on the rewritten
-#  tree (the rewrite edits tests/test_smoke.py itself — see below). Only then
-#  is a PR created.
+#  The exact pin is then rewritten only in the explicit current-runtime
+#  allowlist, and 2-4 are run again on the rewritten tree. Historical records
+#  under docs/history/ are protected and any unexpected file change fails the
+#  workflow closed.
 #
 #  SOAK PERIOD FOR A NEW MINOR
 #  A x.y.0 release is the least-tested build of its series. A minor bump is
 #  therefore only proposed once the release has been in the runner image
 #  manifest for PYTHON_BUMP_SOAK_DAYS days (repository Variable, default 30).
-#  Patch releases have no soak: a patch is usually a security fix and the ABI
-#  is stable inside a series.
+#  Patch releases have no soak: a patch usually keeps the same series ABI and
+#  may contain security fixes.
 #
 #  AUTO-MERGE (repository Variable AUTO_MERGE_PYTHON_BUMP)
 #    unset / anything else -> never merges, just opens the PR
-#    'yes'                 -> merges green PATCH bumps; a MINOR bump still
-#                             waits for you
-#    'all'                 -> merges green minor bumps too
-#  A minor bump also leaves prose in docs/ pointing at the old series, which
-#  no script should rewrite blind, so 'yes' deliberately stops there.
+#    'yes'                 -> merges green PATCH bumps only
+#  There is intentionally no `all` mode. A MINOR bump such as Python 3.15
+#  always waits for manual review even when every validation gate passes.
 #
-#  REPOSITORY SETTING THIS NEEDS (or doesn't)
-#  Opening a PR with the built-in GITHUB_TOKEN requires
-#    Settings -> Actions -> General -> Workflow permissions ->
-#    "Allow GitHub Actions to create and approve pull requests"
-#  to be ticked. It is OFF by default on GitHub. If it is off, this workflow
-#  does NOT fail and does NOT silently do nothing: it falls back to pushing
-#  the verified branch and, when AUTO_MERGE_PYTHON_BUMP allows this kind of
-#  bump, fast-forwards main to it directly (contents: write needs no extra
-#  setting). The bump was already proven green twice before that point, so
-#  the PR is a review surface, not a safety mechanism.
-#  Using a fine-grained PAT in secrets.BUMP_PAT also sidesteps the setting
-#  entirely, because the PR is then opened by you, not by Actions.
+#  AUTHENTICATION AND PUBLICATION
+#  This workflow uses secrets.BUMP_PAT for checkout, PR creation, and the
+#  optional patch auto-merge. BUMP_PAT must remain a GitHub Actions secret
+#  reference only; no token value belongs in this repository. If the token is
+#  missing or invalid, the job fails safely. There is no direct-to-main
+#  fallback.
 #
 #  NOTE ON PR CHECKS
-#  A PR opened with the built-in GITHUB_TOKEN does NOT trigger other
-#  workflows, so ci.yml will not post a check on this PR. That is why this
-#  job runs the SAME commands ci.yml runs — under the NEW interpreter, which
-#  is strictly more informative than CI running them under the old pin. If
-#  you want the CI badge on the PR too, create a fine-grained PAT with
-#  Contents+Pull requests write, store it as secret BUMP_PAT, and swap the
-#  GH_TOKEN lines marked below.
+#  The job runs the same offline gates as ci.yml under the candidate interpreter
+#  before it opens the PR. The PR may also receive normal CI checks depending on
+#  repository settings and token behavior; those checks are an additional review
+#  signal, not a replacement for the pre-PR runtime validation above.
 
 name: Python version bump (auto)
 
@@ -215,7 +210,7 @@ jobs:
           echo "kind=$KIND"     >> "$GITHUB_OUTPUT"
           echo "bump=yes"       >> "$GITHUB_OUTPUT"
 
-      # ---- THE GATE: install the candidate and prove the repo works on it --
+      # ---- THE GATE: install the candidate and run the offline validation --
       - name: Install the candidate interpreter
         if: steps.resolve.outputs.bump == 'yes'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7 — SHA-pinned (round 57)
@@ -269,8 +264,10 @@ jobs:
             .github/workflows/ci.yml
             .github/workflows/reddit_monitor.yml
             .github/workflows/twitter_monitor.yml
+            README.md
             docs/PYTHON_RUNTIME.md
             docs/CI_SMOKE.md
+            docs/DEPENDABOT.md
             tests/test_smoke.py
           )
           printf 'Allowlisted files to update:\n'
@@ -306,9 +303,24 @@ jobs:
           if git diff --no-ext-diff | grep -Eiq '(ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|BUMP_PAT=[^ $}]+)'; then
             echo '::error::Token-like value found in diff'; exit 1
           fi
+          OLD_SERIES="${CURRENT%.*}"
+          NEW_SERIES="${LATEST%.*}"
+          LEFTOVERS=""
+          if [ "$OLD_SERIES" != "$NEW_SERIES" ]; then
+            LEFTOVERS="$(grep -rn \
+              --include='*.md' --include='*.yml' --include='*.yaml' \
+              -E "(CPython|Python) ${OLD_SERIES}([^.0-9]|$)|python-${OLD_SERIES//./}" . \
+              | grep -v '^./docs/history/' \
+              | head -40 || true)"
+          fi
+          {
+            echo 'leftovers<<EOF'
+            echo "${LEFTOVERS:-}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
           echo '---- final diff/stat before PR ----'
           git --no-pager diff --stat
-          git --no-pager diff -- .github/workflows/ci.yml .github/workflows/reddit_monitor.yml .github/workflows/twitter_monitor.yml docs/PYTHON_RUNTIME.md docs/CI_SMOKE.md tests/test_smoke.py
+          git --no-pager diff -- .github/workflows/ci.yml .github/workflows/reddit_monitor.yml .github/workflows/twitter_monitor.yml README.md docs/PYTHON_RUNTIME.md docs/CI_SMOKE.md docs/DEPENDABOT.md tests/test_smoke.py
 
       # The rewrite touches the test suite itself (the round-39 pin guard),
       # so the tree is verified AGAIN afterwards. This is the gate that
@@ -380,21 +392,21 @@ jobs:
 
           All of them passed — the PR is only created when they do.
           ${NOTE}
-          > Note: PRs opened with \`GITHUB_TOKEN\` do not trigger \`ci.yml\`, so no
-          > check appears below. The commands above are the same ones CI runs,
-          > executed under the NEW interpreter.
+          > The commands above are the same offline gates CI runs, executed
+          > under the candidate interpreter before this PR was opened. Any
+          > normal PR checks that appear below are an additional signal.
           EOF
           )" 2>pr_error.txt)"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
           echo "Opened $URL"
 
-      # AUTO_MERGE_PYTHON_BUMP: 'yes' = patch bumps, 'all' = minor bumps too.
+      # AUTO_MERGE_PYTHON_BUMP: 'yes' = eligible patch bumps only.
       - name: Merge it (only when AUTO_MERGE_PYTHON_BUMP allows this kind)
         if: >-
           steps.pr.outputs.url != '' &&
-          (vars.AUTO_MERGE_PYTHON_BUMP == 'all' ||
-           (vars.AUTO_MERGE_PYTHON_BUMP == 'yes' && steps.resolve.outputs.kind != 'minor'))
+          vars.AUTO_MERGE_PYTHON_BUMP == 'yes' &&
+          steps.resolve.outputs.kind == 'patch'
         env:
           GH_TOKEN: ${{ secrets.BUMP_PAT }}
           URL: ${{ steps.pr.outputs.url }}
@@ -414,6 +426,5 @@ jobs:
             echo "* wheels available: \`${{ steps.wheels.outputs.ok || 'n/a' }}\`"
             echo "* deferred: \`${{ steps.resolve.outputs.deferred || 'no' }}\`"
             echo "* pull request: ${{ steps.pr.outputs.url || 'none opened' }}"
-            echo "* PR blocked by repo settings: \`${{ steps.pr.outputs.blocked || 'no' }}\`"
             echo "* branch: \`${{ steps.pr.outputs.branch || 'none' }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

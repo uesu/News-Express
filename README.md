@@ -53,7 +53,7 @@ flowchart LR
   double posts; re-enabling is a documented two-line change — see
   [Setup step 4](#step-4--reliable-10-minute-automation-external-trigger)).
 * **Memory** — posted IDs are cached in JSON files committed back to the repo
-  by `github-actions[bot]`, so nothing is ever posted twice.
+  by `github-actions[bot]`, so normal runs deduplicate against committed state.
 * **Safety** — every PR must pass the offline
   [CI smoke gate](https://github.com/uesu/News-Express/actions/workflows/ci.yml)
   (`pip install` + `compileall` + two test suites) before merge.
@@ -87,7 +87,7 @@ flowchart LR
 | **FULL MODE** | with an optional Reddit script app: 💬/👍 stats, the OP's stickied comment, and true crosspost embeds |
 | **Fallback fleet** | proxy services (redditez → vxreddit → Embeddit rewrite), Redlib instances, and the Arctic Shift archive — a dead source never breaks a run |
 | **Gates** | dedup cache + fail-closed NSFW gate + opt-in dead-post retraction (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
-| **Mod-queue safe** | a 48-hour freshness window means posts approved hours later still get posted |
+| **Listing-safe delivery** | cache-busted `/new` confirmation posts an item on the first tick it is visible; listing outages are never treated as proof of absence |
 
 ### 🧱 Platform
 
@@ -96,7 +96,7 @@ flowchart LR
 * 🔘 **Customizable buttons** — link-style buttons with Unicode or custom server emoji.
 * 🕙 **Reliable automation** — external cron trigger, cache auto-commits, per-run flood caps.
 * 🧪 **Two offline test suites** — smoke + signals, no network, no secrets; every past bug is a named guard (`rNN: ...`).
-* 🤖 **Dependabot-ready** — weekly dependency PRs, CI-gated, optional auto-merge.
+* 🤖 **Dependabot-ready** — weekly dependency/action checks, grouped PRs when requirements need updates, CI-gated, optional auto-merge.
 
 ---
 
@@ -147,7 +147,7 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 │       ├── reddit_monitor.yml     # Reddit — runs testing area/reddit_main_v3.py
 │       ├── ci.yml                 # PR gate: install + compile + offline smoke suites
 │       ├── dependabot_auto_merge.yml  # opt-in auto-merge for Dependabot PRs
-│       └── python_version_bump.yml    # verified CPython bump workflow
+│       └── python_version_bump.yml    # verified CPython patch/minor PR workflow
 ├── docs/                          # decision records + guides (see Docs index below)
 ├── testing area/                  # the engines (see Testing)
 │   ├── twitter_v1.py · twitter_v2_button_outside.py · twitter_v3.py
@@ -212,8 +212,10 @@ design — no channel flooding).
 GitHub's built-in `schedule:` can lag 15–60 min or skip runs, so an external
 cron does the triggering:
 
-1. **Create a PAT:** *Settings → Developer settings → Personal access tokens
-   (classic)* → check **`workflow`** (and `repo` if private).
+1. **Create a PAT for the external cron only.** Prefer a fine-grained token
+   scoped to this repository with **Actions: write** permission (classic PATs
+   also work with `workflow`, plus `repo` if the repository is private). Store
+   it only in cron-job.org, never in this repository or chat.
 2. Sign up at [cron-job.org](https://cron-job.org) (free) and create a job
    **per workflow**:
    * **URL:** `https://api.github.com/repos/<YOU>/<REPO>/actions/workflows/twitter_monitor.yml/dispatches`
@@ -455,14 +457,42 @@ path — the folder name contains a space).
 
 ---
 
+
+## 🐍 Runtime, dependencies, and production scope
+
+* **Current runtime:** exact CPython **3.14.8** in CI and both monitor
+  workflows. The official Python 3.14.8 release page lists **September 30,
+  2026** as its release date.
+* **Version terms:** `MAJOR.MINOR.PATCH` — `3.14.7 -> 3.14.8` is a **patch**
+  update, `3.14.8 -> 3.15.0` is a new **minor** series, and `3.x -> 4.x` is a
+  **major** update.
+* **Runtime automation:** `.github/workflows/python_version_bump.yml` checks for
+  final stable candidates in the `actions/python-versions` manifest, requires
+  wheels-only dependency installation (`pip install --only-binary=:all:`), runs
+  compileall + both offline suites before and after the allowlisted rewrite, and
+  opens a PR only after those gates pass.
+* **Auto-merge boundary:** `AUTO_MERGE_PYTHON_BUMP=yes` permits eligible patch
+  auto-merges only. Python 3.15 remains a manual-review minor-series PR, and
+  Python 4 or any other major update requires deliberate migration. There is no
+  direct-to-main fallback and no `all` auto-merge mode.
+* **Authentication:** runtime bump publication uses `BUMP_PAT` only through
+  GitHub Actions secret references (`secrets.BUMP_PAT`). Secret values and
+  personal tokens must never be committed.
+* **Production scope:** this development repository does not copy its docs or
+  historical audit records into production. The Reddit and X production repos
+  have separate production-only workflow updates and caches.
+
+See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
+[`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) for dependency automation.
+
 ## 🔗 Integrations
 
 | Integration | What it does | Docs |
 |---|---|---|
 | **Discohook** | after each Reddit post, a share-link preview of the exact card is logged (keyless public API, no webhook URL ever leaves the repo; disable with `DISCOHOOK_PREVIEW=0`) | [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) |
-| **Dependabot** | weekly dependency PRs, CI-gated; optional opt-in auto-merge (`AUTO_MERGE_DEPENDABOT=yes`) | [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) |
-| **Python runtime** | CPython pinned to an exact stable version (3.14.8), bumped deliberately via a verified workflow — never silently floated | [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) |
-| **CI** | every PR: `pip install` + `compileall` + both offline suites | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) |
+| **Dependabot** | weekly dependency/action checks; grouped PRs when requirements need updates; optional opt-in auto-merge (`AUTO_MERGE_DEPENDABOT=yes`) | [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) |
+| **Python runtime** | CPython pinned to exact stable **3.14.8**; patch bumps may auto-merge only with `AUTO_MERGE_PYTHON_BUMP=yes`, new minor series require manual review, major versions require manual migration | [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) |
+| **CI** | every PR: `pip install` + `compileall` + smoke suite + Reddit signal suite | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) |
 
 ---
 
@@ -561,6 +591,14 @@ Latest rounds only — the full dated history lives in
 [`docs/history/CHANGELOG_ARCHIVE.md`](docs/history/CHANGELOG_ARCHIVE.md) (rounds 1–62) and
 [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) (detailed round notes).
 
+* **2026-10-06 — Python automation documentation sanitation.** Current docs
+  now spell out CPython 3.14.8, patch/minor/major terminology, wheels-only
+  runtime bump validation, the 30-day new-minor soak, `AUTO_MERGE_PYTHON_BUMP=yes`
+  as patch-only, `BUMP_PAT` as a secret reference only, the explicit runtime
+  rewrite allowlist, and the absence of any direct-to-main fallback. Dependency
+  docs now match the grouped Dependabot configuration, and production scope is
+  clarified: News-Express development docs/history are not copied into the
+  separate production repositories. Historical 3.14.7 records remain historical.
 * **2026-10-05 — Docs: stale-gate sweep.** The current docs no longer
   describe gates that round 63 deleted. `AGENTS.md` drops the
   `mod_queue_reason` fixture invariant (the function no longer exists) and
