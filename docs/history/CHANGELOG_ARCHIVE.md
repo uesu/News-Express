@@ -186,7 +186,7 @@ Full prior history of News-Express, moved out of the main README during Round 63
   remain current. See [Round 51 audit record](ROUND_51.md).
 
 * **2026-09-30 — Runtime, delivery, and source hardening.** All executable
-  workflows now pin stable CPython **3.14.8**; CI installs, compiles, and smoke-tests
+  workflows now pin stable CPython **3.14.7**; CI installs, compiles, and smoke-tests
   that exact interpreter before merge. Cache persistence uses an explicit
   `HEAD:<branch>` push, bounded rebase retries (15 s / 30 s), and clear failure
   annotations so a lost dedup update cannot be silent. The X fallback chain now
