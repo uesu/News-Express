@@ -14,7 +14,7 @@
 
 | Piece | What it is | What it runs |
 |---|---|---|
-| `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every push and PR** (public repo = free) | Sets up exact **CPython 3.14.7**, then runs `pip install -r requirements.txt` → `python -m compileall` over every script → `python tests/test_smoke.py` |
+| `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every push and PR** (public repo = free) | Sets up exact **CPython 3.14.8**, then runs `pip install -r requirements.txt` → `python -m compileall` over every script → `python tests/test_smoke.py` |
 | `tests/test_smoke.py` | An **offline** test (no network, no secrets, no Discord): every monitor script must **import cleanly**, the Reddit V3 card pipeline and safety gates must still behave (body cleaning, media extraction/dedup, i.redd.it swap, redlib scoping, OP comment, Components V2 layout, proxy parsers, archive/liveness gates, and — round 51 — `/user`, `/u`, and `/r/u_` profile-crosspost headers plus the media-less vxReddit shell fallback). The X V3 path is also pinned for GIF conversion, fallback parsing/order, and — round 51 — a visible but still deduplicated cached `TEST_TWEET_ID` skip. | `python tests/test_smoke.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
 
 ## 2. Optional or required? — **Required (for how this repo is set up)**
@@ -30,7 +30,7 @@
 
 ## 2a. Python runtime coverage
 
-The CI workflow deliberately pins **CPython 3.14.7** in the same way as both
+The CI workflow deliberately pins **CPython 3.14.8** in the same way as both
 live monitor workflows. That makes a green PR the proof that the exact runtime
 can install the current dependencies, compile every script, and pass the
 offline behavioral suite. It does not contact Discord or external feeds; after
