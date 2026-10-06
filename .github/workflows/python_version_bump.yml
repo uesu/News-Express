@@ -293,7 +293,16 @@ jobs:
           if git diff --name-only -- docs/history/ | grep -q .; then
             echo '::error::Historical files changed by runtime rewrite'; exit 1
           fi
-          git diff --name-only | grep -vFxf <(printf '%s\n' "${ALLOWLIST[@]}" .github/workflows/python_version_bump.yml)             && { echo '::error::Unexpected file changed'; exit 1; } || true
+          UNEXPECTED="$(
+            git diff --name-only |
+              grep -vFxf <(printf '%s\n' "${ALLOWLIST[@]}" .github/workflows/python_version_bump.yml) ||
+              true
+          )"
+          if [ -n "$UNEXPECTED" ]; then
+            echo '::error::Unexpected file changed:'
+            printf '%s\n' "$UNEXPECTED"
+            exit 1
+          fi
           if git diff --no-ext-diff | grep -Eiq '(ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|BUMP_PAT=[^ $}]+)'; then
             echo '::error::Token-like value found in diff'; exit 1
           fi
