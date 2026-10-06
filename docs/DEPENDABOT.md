@@ -1,13 +1,12 @@
-# 🤖 Dependabot — full explanation (and how to let it update everything automatically)
+# 🤖 Dependabot — dependency automation and runtime-boundary policy
 
-> **TL;DR:** Dependabot is a **free, built-in GitHub feature** that watches your
-> `requirements.txt` and your GitHub Actions and **opens pull requests** with
-> safe version bumps. It **never touches `main` on its own** — every change
-> waits in a PR for you to review and merge. It is **100% optional**: the
-> monitor works exactly the same with it off. This repo already ships
-> everything wired up (`.github/dependabot.yml` + a CI check + an opt-in
-> auto-merge workflow), so enabling it costs you nothing and disabling it is
-> deleting one file.
+> **TL;DR:** Dependabot is a **free, built-in GitHub feature** that watches
+> `requirements.txt` and GitHub Actions references and opens dependency/action
+> pull requests when the configured ranges or action pins need an update. It
+> does **not** manage the CPython `python-version` runtime pin. Dependabot never
+> pushes directly to `main`; merges require either human review or the separate
+> opt-in, CI-gated auto-merge workflow. It is optional: the monitor can run
+> without Dependabot, but dependency update review loses its automated PR path.
 
 ---
 
@@ -21,10 +20,11 @@ Dependabot is **not** a bot you host, install, or pay for. It is a service
    `.github/workflows/*.yml` (GitHub Actions).
 2. **Watches** the package registries (PyPI, the GitHub Actions marketplace)
    for new versions and published security advisories.
-3. When something new (or a vulnerability fix) appears, it **opens a pull
-   request** from `dependabot[bot]` with the bump — usually a **one-line diff**
-   (e.g. `aiohttp>=3.9.0` → `aiohttp>=3.10.11`) plus a summary of what changed
-   and links to the upstream changelog/commits.
+3. When a configured requirement needs to change, or a vulnerability fix needs
+   a tighter lower bound, it **opens a pull request** from `dependabot[bot]`
+   with the bump plus a summary and upstream links. This repository groups pip
+   dependency updates together and groups GitHub Actions updates together to
+   reduce PR noise.
 
 That's the whole loop: **scan → open PR → you decide.**
 
@@ -53,23 +53,25 @@ With the config in this repo (`.github/dependabot.yml`):
   * **github-actions**: every workflow's `actions/checkout@v7`,
     `actions/setup-python@v7`, … (the old v4/v5 pins were auto-bumped to
     v7 by Dependabot itself — see the Node 20→24 FAQ below)
-* For each outdated dependency it opens (or updates) **one PR per
-  dependency**, labeled `dependencies` (+ `python` / `github-actions`),
-  with a commit prefix like `deps(python): bump aiohttp from 3.9.5 to 3.10.11`.
-* It also opens **security-update PRs** whenever a published vulnerability
-  affects a pinned version (these are the important ones — they fix known CVEs
-  before they're exploitable).
-* If a PR is left open and a *newer* version lands, Dependabot **updates the
-  same PR** instead of opening noise. If a PR is closed unmerged, it stops
-  re-opening that exact bump.
-* PRs are marked closed/replaced when the new version becomes the default.
+* For pip, `versioning-strategy: increase-if-necessary` means ordinary releases
+  already allowed by the ranges (for example an `aiohttp` 3.x release below
+  `<4`) do not create noisy PRs; the workflows install the newest allowed
+  versions on each run. Dependabot opens a PR when the requirement itself must
+  change, such as a security lower-bound update or a release outside the
+  current range.
+* For GitHub Actions, pinned action references are checked weekly and grouped
+  into a single `github-actions` PR when updates are available.
+* Security-update PRs are opened whenever a published vulnerability affects the
+  configured dependency requirement.
+* If a PR is left open and a newer applicable version lands, Dependabot updates
+  the same PR instead of opening a duplicate. If a PR is closed unmerged, it
+  stops re-opening that exact bump.
 
-**What it will NOT do:** run your scripts, post to Discord, change any code
-other than managed dependency/action version pins, change the workflow
-`python-version` input, push to `main`, or merge anything unless you enable the
-separate opt-in auto-merge gate. It does not consume Actions minutes for the PR
-itself (public repos: runs entirely free; private repos: the check runs use your
-normal Actions minutes — a few seconds here).
+**What it will NOT do:** run your monitor scripts, post to Discord, change
+application code, change the workflow `python-version` input, push directly to
+`main`, or merge anything unless you enable the separate opt-in auto-merge gate.
+It does not consume Actions minutes for creating the PR itself (public repos:
+free; private repos: the CI checks use normal Actions minutes).
 
 ## 3a. Does Dependabot auto-bump Python itself?
 
@@ -78,10 +80,19 @@ normal Actions minutes — a few seconds here).
 That is intentional: floating `3.14` would silently take a newly released patch
 into a live posting run without a dedicated PR or a pre-merge runtime test.
 
-The repository uses an exact CPython pin and changes it deliberately in all
-three executable workflows. See [Python runtime policy](PYTHON_RUNTIME.md) for
-the current stable-version assessment, compatibility, performance limits, and
-the safe bump/rollback procedure.
+The repository uses an exact CPython pin and changes it through
+`.github/workflows/python_version_bump.yml`, not Dependabot. The runtime policy
+is:
+
+* patch updates within the current series may be automatically proposed and,
+  when all validation passes, auto-merged only if `AUTO_MERGE_PYTHON_BUMP=yes`;
+* a new minor series such as Python 3.15 requires a PR and manual review;
+* a major version such as Python 4 requires deliberate manual migration; and
+* `AUTO_MERGE_PYTHON_BUMP` has no `all` mode.
+
+See [Python runtime policy](PYTHON_RUNTIME.md) for the current official version
+assessment, wheel-only validation, soak period, rewrite allowlist, and rollback
+procedure.
 
 ## 4. How do I know it won't break anything? (the safety chain)
 
@@ -94,11 +105,13 @@ Three layers, in order:
    including Dependabot's, runs:
    * `pip install -r requirements.txt` — a broken/renamed package fails
      **here**, before it can reach your production workflow;
-   * `python -m compileall` over every script — syntax errors fail here;
-   * `tests/test_smoke.py` — an offline check that all monitor scripts import
-     and the card pipeline still behaves (no network, no secrets needed).
-   Red check = don't merge. That's the entire review you need for a one-line
-   dependency bump: **green checks + one-line diff = safe.**
+   * `python -m compileall -q "testing area" tests` — syntax errors fail here;
+   * `python tests/test_smoke.py` — offline monitor import and card-pipeline
+     guards;
+   * `python tests/test_reddit_signals.py` — pure Reddit gate/decision guards.
+   Red check = don't merge. For a routine dependency PR, green checks plus a
+   minimal dependency/action diff are the required merge gate; live external
+   services remain outside CI.
 3. **Revert is one click.** If a merged bump ever misbehaves (rare for these
    three stable libraries), GitHub's *Revert* button on the merge commit
    undoes it in seconds; the next Dependabot run will simply try a different
@@ -108,8 +121,8 @@ Three layers, in order:
 process): after merging a bump, trigger the Reddit workflow once with
 `dry_run: yes` (or a `test_post`) and skim the log — the card payloads get
 logged without touching Discord. Then do one real test-channel run if you
-want the full confidence. For routine patch bumps (3.9.5 → 3.9.6) the green
-check is usually enough.
+want the full confidence. For routine dependency patch bumps, the green check
+is usually the repository's offline gate; it is not a live-service proof.
 
 ## 5. Making it fully automatic (PR **and** merge to main) — opt-in
 
@@ -181,18 +194,18 @@ still installs and compiles.
 * **Private repo:** included with your plan; the PR check runs count against
   your normal monthly Actions minutes (a few seconds — negligible here).
 * **Monitoring limits:** public repos — unlimited dependencies. Private repos
-  — 10 per repo on Free, 100 on Pro/Team. This repo monitors **~6
-  dependencies total** (3 pip + 3 actions), so it fits any plan with room to
-  grow.
+  — 10 per repo on Free, 100 on Pro/Team. This repo monitors a small set of
+  pip requirements plus the GitHub Actions referenced in the workflows, so it
+  fits comfortably within those limits.
 
 ## 7. Recommended review routine (60 seconds per PR)
 
 1. Open the Dependabot PR.
-2. Read the first line of the diff — should be a version number only
-   (e.g. `aiohttp>=3.9.0` → `aiohttp>=3.10.11`). Anything bigger? Read the
-   changelog link it provides; for a **major** version (e.g. 3.x → 4.0)
-   skim the migration notes.
-3. Check the **CI** tab: green ✅ (install + compile + smoke test).
+2. Read the diff — for pip it should normally be a requirement-bound change,
+   and for actions it should be action references only. Anything bigger? Read
+   the changelog link; for a **major** dependency version (e.g. 3.x → 4.0) skim
+   the migration notes.
+3. Check the **CI** tab: green ✅ (install + compile + smoke + Reddit signals).
 4. **Merge** (or enable auto-merge per §5). Done — the next scheduled
    monitor run uses the new version automatically.
 
@@ -217,16 +230,16 @@ description): treat as higher priority — review the advisory, then merge.
 * **"Will Dependabot break my `posted_reddit.json` / caches?"** No — it
   doesn't touch data files, only dependency pins.
 * **"What if a bump breaks the live workflow?"** The next run logs the
-  failure; hit *Revert* on the merge commit (or re-pin the old version) and
-  it's back to green in one step. That's why the CI gate matters — it catches
-  99% of these cases *before* they're merged.
+  failure; hit *Revert* on the merge commit (or re-pin the old version) to
+  restore the previous dependency set. That's why the CI gate matters — it
+  catches install, syntax, import, and offline behavior failures before merge.
 * **"Can it update the Reddit feed scripts' *code* or Python version?"** No.
   Code changes and the CPython runtime pin are deliberate human-reviewed work
   (the `testing area/` process and CI are the gate). Dependabot only manages
   third-party package/action versions. See [Python runtime policy](PYTHON_RUNTIME.md).
 * **"Do I get an email?"** Yes — PR notifications work like any PR. You can
-  mute the `dependencies` label if it's noisy, but at weekly cadence with 6
-  dependencies it's a handful of PRs a month at most.
+  mute the `dependencies` label if it's noisy, but the weekly cadence and
+  grouped update configuration keep PR volume low.
 * **"Is this the same as Dependabot alerts?"** Alerts (Security tab) just
   notify you about vulnerabilities; the PR feature here is the automated-fix
   part. Both are free; the PR part is what's configured by
@@ -237,5 +250,7 @@ description): treat as higher priority — review the advisory, then merge.
 *Files involved: `.github/dependabot.yml` (the switch),
 `.github/workflows/ci.yml` (the safety gate),
 `.github/workflows/dependabot_auto_merge.yml` (opt-in auto-merge after CI),
-`tests/test_smoke.py` (the offline test the gate runs), and
-`docs/PYTHON_RUNTIME.md` (the deliberately managed CPython runtime pin).*
+`tests/test_smoke.py` and `tests/test_reddit_signals.py` (the offline suites
+the gate runs), `.github/workflows/python_version_bump.yml` (the separate
+runtime automation), and `docs/PYTHON_RUNTIME.md` (the deliberately managed
+CPython runtime pin).*

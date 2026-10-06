@@ -1,12 +1,13 @@
 # 🧪 CI + smoke test — full explanation (optional or required?)
 
-> **TL;DR:** `.github/workflows/ci.yml` + `tests/test_smoke.py` are
-> **REQUIRED for this repo's setup** — not optional. They are the ~15–30-second
-> offline safety gate that runs on **every commit/PR** (including
-> Dependabot's) and is the *only* thing that proves a script still imports
-> and behaves **before** it can post to Discord. Deleting them doesn't break
-> the monitor immediately, but it removes the protection that makes
-> Dependabot **auto-merge** (and any one-line bump) safe to enable.
+> **TL;DR:** `.github/workflows/ci.yml`, `tests/test_smoke.py`, and
+> `tests/test_reddit_signals.py` are **REQUIRED for this repo's setup** — not
+> optional. They are the offline safety gate that runs on **every pull request**
+> and on pushes to `main`, including Dependabot PRs. They prove that the
+> scripts still install, compile, import, and satisfy the offline behavior
+> guards before a change can be merged. Deleting them does not stop an already
+> scheduled monitor immediately, but it removes the protection that makes
+> Dependabot auto-merge and runtime bump review safe to use.
 
 ---
 
@@ -14,15 +15,16 @@
 
 | Piece | What it is | What it runs |
 |---|---|---|
-| `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every push and PR** (public repo = free) | Sets up exact **CPython 3.14.8**, then runs `pip install -r requirements.txt` → `python -m compileall` over every script → `python tests/test_smoke.py` |
+| `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every pull request** and every push to `main` (public repo = free) | Sets up exact **CPython 3.14.8**, then runs `pip install -r requirements.txt` → `python -m compileall` over every script → `python tests/test_smoke.py` → `python tests/test_reddit_signals.py` |
 | `tests/test_smoke.py` | An **offline** test (no network, no secrets, no Discord): every monitor script must **import cleanly**, the Reddit V3 card pipeline and safety gates must still behave (body cleaning, media extraction/dedup, i.redd.it swap, redlib scoping, OP comment, Components V2 layout, proxy parsers, archive/liveness gates, and — round 51 — `/user`, `/u`, and `/r/u_` profile-crosspost headers plus the media-less vxReddit shell fallback). The X V3 path is also pinned for GIF conversion, fallback parsing/order, and — round 51 — a visible but still deduplicated cached `TEST_TWEET_ID` skip. | `python tests/test_smoke.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
+| `tests/test_reddit_signals.py` | A pure offline Reddit gate/decision suite for NSFW classification, tombstones/retraction decisions, listing confirmation, and main-loop signal behavior. | `python tests/test_reddit_signals.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
 
 ## 2. Optional or required? — **Required (for how this repo is set up)**
 
 | Question | Answer |
 |---|---|
 | Does the *monitor itself* import ci.yml? | No — `reddit_monitor.yml` never calls it. The monitor runs fine with ci.yml deleted. |
-| So why is it required here? | Because this repo ships **Dependabot** (+ opt-in **auto-merge**) and a multi-file **testing-area workflow**. The CI job is the gate those rely on: Dependabot's auto-merge (and the 60-second manual review in `docs/DEPENDABOT.md` §7) is defined as "green checks + one-line diff = safe". **No CI = no green check = auto-merge must be turned off** and every PR (including your own pastes) loses its fast safety net. |
+| So why is it required here? | Because this repo ships **Dependabot** (+ opt-in **auto-merge**) and a multi-file **testing-area workflow**. The CI job is the gate those rely on: Dependabot's auto-merge (and the 60-second manual review in `docs/DEPENDABOT.md` §7) requires green checks on the exact PR head before merge. **No CI = no green check = auto-merge must be turned off** and every PR (including your own pastes) loses its fast safety net. |
 | What catches what? | A dependency bump that renames an API → `pip install` or the import check fails **before merge**. A paste that mangles a file (the round-12 backslash incident!) → `compileall` or the import check fails in ~15–30 s — **before any cron run can post** a broken card. |
 | Does it post to Discord? | Never. It has no webhook, no secrets, no network access (the test deliberately runs offline with stubbed `aiohttp`/`feedparser`/`dotenv`). |
 | Does it consume minutes? | Public repo: the check runs are free. Runtime ~15–30 s. |
@@ -37,9 +39,12 @@ offline behavioral suite. It does not contact Discord or external feeds; after
 a runtime bump, follow CI with the documented safe monitor dry-run.
 
 Dependabot does not manage this `python-version` workflow input. The version is
-updated by an explicit reviewed PR so a CPython patch cannot silently reach a
-live posting run. Full compatibility, performance, automation, and rollback
-policy: [Python runtime policy](PYTHON_RUNTIME.md).
+updated by the dedicated runtime bump workflow so a CPython patch cannot
+silently reach a live posting run. That workflow adds a wheels-only dependency
+install (`pip install --only-binary=:all:`), pre-rewrite and post-rewrite
+compile/test gates, an explicit current-runtime rewrite allowlist, and manual
+review for new minor series such as Python 3.15. Full compatibility,
+performance, automation, and rollback policy: [Python runtime policy](PYTHON_RUNTIME.md).
 
 ## 3. Why the smoke test is written the way it is
 
@@ -83,11 +88,14 @@ policy: [Python runtime policy](PYTHON_RUNTIME.md).
 
 ```bash
 pip install -r requirements.txt
+python -m compileall -q "testing area" tests
 python tests/test_smoke.py
+python tests/test_reddit_signals.py
 ```
 
-Expected: a `PASS …` line per check ending with `SMOKE TEST: ALL PASS`.
-It needs **no** `.env`, **no** secrets, and works fully offline.
+Expected: `PASS …` lines ending with `SMOKE TEST: ALL PASS` and a final
+`ALL PASS` from the Reddit signal suite. They need **no** `.env`, **no**
+secrets, and work fully offline.
 
 ## 5. When the check is red — what to do
 
@@ -103,5 +111,6 @@ It needs **no** `.env`, **no** secrets, and works fully offline.
 ---
 
 *Files involved: `.github/workflows/ci.yml`, `tests/test_smoke.py`,
-`.github/workflows/dependabot_auto_merge.yml` (the gate it waits on),
-`docs/DEPENDABOT.md` (why the gate exists).*
+`tests/test_reddit_signals.py`, `.github/workflows/dependabot_auto_merge.yml`
+(the gate it waits on), `docs/DEPENDABOT.md` (why the gate exists), and
+`docs/PYTHON_RUNTIME.md` (runtime-bump-specific validation).*

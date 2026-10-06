@@ -20,10 +20,12 @@ by an external cron (cron-job.org) via `workflow_dispatch`.
 | `uesu/wvkhabh2s22` (public) | **Twitter production.** Runs `twitter_monitor.yml` live. |
 
 Deployment is **manual**: merge a PR here, then the maintainer uploads the
-changed files to the prod repo(s) through the GitHub web UI. Agents usually
-cannot push anywhere — deliver work as local commits on the session branch;
-the maintainer opens the PR. Typical upload set per fix: the engine file +
-`tests/test_smoke.py` + the touched workflow yml.
+production-relevant files to the prod repo(s) through the GitHub web UI. Agents
+usually cannot push anywhere — deliver work as local commits on the session
+branch; the maintainer opens the PR. Typical upload set per fix: the engine
+file + `tests/test_smoke.py` + the touched workflow yml. Do **not** copy this
+repository's development documentation, historical audit records, or agent
+onboarding files into production unless a task explicitly asks for that.
 
 Both prod repos intentionally contain BOTH monitors' files. They are NOT
 leftovers. Never advise deleting the "other" platform's files.
