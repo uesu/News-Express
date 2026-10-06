@@ -1,6 +1,6 @@
-# Python runtime policy — CPython 3.14.7
+# Python runtime policy — CPython 3.14.8
 
-**Current production/CI pin:** `3.14.7`
+**Current production/CI pin:** `3.14.8`
 **Reviewed:** September 30, 2026
 
 The CI, Reddit monitor, and X monitor workflows all use the same exact
@@ -8,21 +8,21 @@ CPython version through `actions/setup-python@v7`:
 
 ```yaml
 with:
-  python-version: '3.14.7'
+  python-version: '3.14.8'
   cache: 'pip'
 ```
 
 This file is the source of truth for why that number is exact, how it is
 validated, and what is and is not automated.
 
-## Why 3.14.7
+## Why 3.14.8
 
-Python **3.14.7** is the latest stable production release on the current
+Python **3.14.8** is the latest stable production release on the current
 3.14 line (released August 5, 2026). Python 3.15 is still a release candidate
 on this review date, so it is intentionally not used in a production monitor.
 The authoritative release pages are:
 
-* [Python 3.14.7](https://www.python.org/downloads/release/python-3147/)
+* [Python 3.14.8](https://www.python.org/downloads/release/python-3148/)
 * [Python 3.15.0 RC1](https://www.python.org/downloads/release/python-3150rc1/)
 
 An exact patch pin gives every scheduled run, CI run, and manual dispatch the
@@ -46,7 +46,7 @@ This repository is compatible by design with standard (GIL-enabled) CPython
   free-threaded build, and its work is primarily asynchronous network I/O.
 
 Compatibility is **proved for a proposed change only when the PR's CI is
-green**: it installs the real requirements under 3.14.7, compiles every
+green**: it installs the real requirements under 3.14.8, compiles every
 script, and runs the offline smoke suite. A manual dry-run of each monitor
 remains the final recommended production check because third-party feeds and
 Discord webhooks are intentionally not exercised by CI.
@@ -84,7 +84,7 @@ Dependabot configuration has two update ecosystems:
 | GitHub Actions used by `uses:` | CPython major/minor/patch selection |
 
 Dependabot can update `actions/setup-python@v7`, but that action's
-`python-version: '3.14.7'` input is repository configuration, not a dependency
+`python-version: '3.14.8'` input is repository configuration, not a dependency
 manifest that Dependabot manages. The opt-in Dependabot auto-merge workflow
 can merge a **green Dependabot dependency PR**; it never changes the Python
 runtime itself.

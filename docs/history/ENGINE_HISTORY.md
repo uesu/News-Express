@@ -366,7 +366,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.14.7'
+          python-version: '3.14.8'
           cache: 'pip'
 
       - name: Install dependencies
@@ -1144,7 +1144,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.14.7'
+          python-version: '3.14.8'
           cache: 'pip'
 
       - name: Install dependencies

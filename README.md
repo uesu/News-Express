@@ -5,7 +5,7 @@
 **X (Twitter) + Reddit → Discord monitor — 100% serverless.**
 
 [![CI](https://github.com/uesu/News-Express/actions/workflows/ci.yml/badge.svg)](https://github.com/uesu/News-Express/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.14.7-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/python-3.14.8-3776AB?logo=python&logoColor=white)
 ![Runtime](https://img.shields.io/badge/runtime-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)
 ![Scheduler](https://img.shields.io/badge/scheduler-cron--job.org-3D8EB9)
 ![Discord](https://img.shields.io/badge/Discord-webhooks-5865F2?logo=discord&logoColor=white)
@@ -461,7 +461,7 @@ path — the folder name contains a space).
 |---|---|---|
 | **Discohook** | after each Reddit post, a share-link preview of the exact card is logged (keyless public API, no webhook URL ever leaves the repo; disable with `DISCOHOOK_PREVIEW=0`) | [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) |
 | **Dependabot** | weekly dependency PRs, CI-gated; optional opt-in auto-merge (`AUTO_MERGE_DEPENDABOT=yes`) | [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) |
-| **Python runtime** | CPython pinned to an exact stable version (3.14.7), bumped deliberately via a verified workflow — never silently floated | [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) |
+| **Python runtime** | CPython pinned to an exact stable version (3.14.8), bumped deliberately via a verified workflow — never silently floated | [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) |
 | **CI** | every PR: `pip install` + `compileall` + both offline suites | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) |
 
 ---
