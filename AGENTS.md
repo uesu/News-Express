@@ -40,9 +40,10 @@ leftovers. Never advise deleting the "other" platform's files.
   engines, switchable via one commented line in the workflows. NOT dead code.
 - `tests/test_smoke.py` — the main suite; every past bug is a named guard
   (`rNN: ...`). `tests/test_reddit_signals.py` — gate-logic suite.
-- `docs/` — current topic guides only: `CI_SMOKE.md`, `DEPENDABOT.md`,
-  `DISCOHOOK.md`, `PYTHON_RUNTIME.md`. For the live secrets-vs-Variables
-  inventory read `.env.example` and the workflow `env:` blocks.
+- `docs/` — current changelog + topic guides: `CHANGELOG.md` (current release
+  notes, round 63 onward), `CI_SMOKE.md`, `DEPENDABOT.md`, `DISCOHOOK.md`,
+  `PYTHON_RUNTIME.md`. For the live secrets-vs-Variables inventory read
+  `.env.example` and the workflow `env:` blocks.
 - `docs/history/` — the history archive: `ROUND_*.md` decision records per
   incident, `CHANGELOG_ARCHIVE.md` (full dated history, rounds 1–62),
   `ENGINE_HISTORY.md` (detailed round notes moved out of the README on
@@ -63,7 +64,7 @@ needed. If you must import an engine standalone, copy the stubbing pattern
 from the top of `test_smoke.py`.
 
 Convention: every behavioral fix gets (1) a `docs/history/ROUND_NN.md` decision
-record, (2) a README changelog entry, (3) named smoke guards (`rNN: ...`).
+record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 
 ## Invariants — NEVER violate these
 
@@ -125,7 +126,7 @@ record, (2) a README changelog entry, (3) named smoke guards (`rNN: ...`).
 
 - Refer to the Embeddit rewrite neutrally as "the Embeddit rewrite";
   do not link external PRs of other people's repos in PR bodies or docs.
-- Latest rounds at the top of the README changelog.
+- Latest rounds at the top of `docs/CHANGELOG.md`.
 - When a round intentionally changes behavior that an older guard test
   pins, update the guard IN THE SAME commit and annotate why in place
   (e.g. "r52 guard updated in round 66: ...") — never silently delete or
