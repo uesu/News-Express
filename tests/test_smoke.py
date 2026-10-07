@@ -4713,8 +4713,9 @@ check("r66: retraction reads message_ids and tombstones continuation parts",
 
 # ===========================================================================
 # ROUND 67 (2026-10-07) — REDDIT VIDEO QUALITY SELECTION
-# Evidence: docs/REDDIT_VIDEO_MEDIA_REPORT.md (live Discord/Discohook tests on
-# 1wzkhnu / 1wzkk1o / 1ww0mmv / 1wzlx8d). Deterministic guards for the whole
+# Evidence: docs/REDDIT_VIDEO_MEDIA_REPORT.md (live Discord/Discohook tests;
+# the post IDs are recorded there as evidence only — never in code).
+# Deterministic guards for the whole
 # resolver contract: EmbedEZ 1080p success, 1080p failure -> 720p, proxy
 # failure -> vxreddit, a "1080"-named URL that is NOT 1080p, timeouts, HTTP
 # failures, HTML error bodies with a 200 status, oversized media, missing
