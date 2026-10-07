@@ -181,7 +181,13 @@ jobs:
         run: |
           echo "MONITOR_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
           set -o pipefail
+          set +e
           python "testing area/reddit_main_v3.py" 2>&1 | tee monitor.log
+          statuses=("${PIPESTATUS[@]}")
+          echo "MONITOR_END_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          if [ "${statuses[0]}" -ne 0 ] || [ "${statuses[1]}" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Persist updated caches (retry safely on a concurrent main update)
         env:
@@ -270,7 +276,7 @@ jobs:
           [ -f monitor.log ] || : > monitor.log
           count_matches() { local pattern="$1"; grep -Ec "$pattern" monitor.log 2>/dev/null || true; }
           extract_number() { local value; value=$(grep -Eo "$1" monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1 || true); printf '%s\n' "${value:-0}"; }
-          runtime=$(( $(date +%s) - ${MONITOR_START_EPOCH:-$(date +%s)} ))
+          runtime=$(( ${MONITOR_END_EPOCH:-$(date +%s)} - ${MONITOR_START_EPOCH:-$(date +%s)} ))
           ok=$(count_matches 'proxy warm-up.*OK')
           failed=$(count_matches 'proxy warm-up.*(DOWN|FAILED|unavailable|error)')
           new_candidates=$(extract_number 'Found [0-9]+ new Reddit posts')
