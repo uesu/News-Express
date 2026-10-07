@@ -49,8 +49,12 @@ and per-run limits.
   HTTP error, HTML error page, oversized file or failed mux simply keeps it.
 - The EmbedEZ 1080p attempt is bounded by `VIDEO_QUALITY_WINDOW_SECONDS`
   (8 s; 15 s in `highest`), so it can never hold the post indefinitely.
-- A failed 1080p candidate never suppresses a valid 720p candidate: the
-  candidates are independent.
+- A failed 1080p attempt never costs the 720p rung its chance: in
+  `balanced` the EmbedEZ 720p rung is reached when the vxreddit base itself
+  failed to validate (a validated vxreddit result is never displaced by it),
+  and in `compatibility` the 720p rung is tried before the 1080p attempt.
+  The candidates are independent probes, so one failure never suppresses
+  the others.
 - A failed proxy never prevents the durable native ladder or, ultimately,
   the thumbnail + Read Post fallback.
 
