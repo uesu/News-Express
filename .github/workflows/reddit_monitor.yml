@@ -267,8 +267,9 @@ jobs:
       - name: Write monitor run summary
         if: always()
         run: |
+          [ -f monitor.log ] || : > monitor.log
           count_matches() { local pattern="$1"; grep -Ec "$pattern" monitor.log 2>/dev/null || true; }
-          extract_number() { local value; value=$(grep -Eo "$1" monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1); printf '%s\n' "${value:-0}"; }
+          extract_number() { local value; value=$(grep -Eo "$1" monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1 || true); printf '%s\n' "${value:-0}"; }
           runtime=$(( $(date +%s) - ${MONITOR_START_EPOCH:-$(date +%s)} ))
           ok=$(count_matches 'proxy warm-up.*OK')
           failed=$(count_matches 'proxy warm-up.*(DOWN|FAILED|unavailable|error)')

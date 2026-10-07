@@ -204,10 +204,11 @@ jobs:
       - name: Write Twitter monitor run summary
         if: always()
         run: |
+          [ -f twitter_monitor.log ] || : > twitter_monitor.log
           count_matches() { local pattern="$1"; grep -Ec "$pattern" twitter_monitor.log 2>/dev/null || true; }
-          extract_last_number() { local value; value=$(grep -Eo "$1" twitter_monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1); printf '%s\n' "${value:-0}"; }
-          total_feed_entries() { grep 'feed OK via' twitter_monitor.log 2>/dev/null | grep -Eo '[0-9]+ entries' | grep -Eo '[0-9]+' | awk '{ total += $1 } END { print total + 0 }'; }
-          feed_failures() { awk '/^\[[^]]+\] NO working nitter instance this run/ { n++ } END { print n + 0 }' twitter_monitor.log 2>/dev/null; }
+          extract_last_number() { local value; value=$(grep -Eo "$1" twitter_monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1 || true); printf '%s\n' "${value:-0}"; }
+          total_feed_entries() { local total; total=$(grep 'feed OK via' twitter_monitor.log 2>/dev/null | grep -Eo '[0-9]+ entries' | grep -Eo '[0-9]+' | awk '{ total += $1 } END { print total + 0 }' || true); printf '%s\n' "${total:-0}"; }
+          feed_failures() { awk '/^\[[^]]+\] NO working nitter instance this run/ { n++ } END { print n + 0 }' twitter_monitor.log 2>/dev/null || true; }
           runtime=$(( $(date +%s) - ${TWITTER_START_EPOCH:-$(date +%s)} ))
           feeds_ok=$(count_matches 'feed OK via')
           feeds_failed=$(feed_failures)
@@ -220,11 +221,7 @@ jobs:
             echo "**Runtime:** ${runtime}s"
             echo
             echo "### Feeds"
-            accounts_checked=$( {
-            grep -E '^\[[^]]+\] feed OK via' twitter_monitor.log 2>/dev/null
-            grep -E '^\[[^]]+\] NO working nitter instance this run' twitter_monitor.log 2>/dev/null
-            grep -E '^\[[^]]+\] skipping — no feed / 0 entries' twitter_monitor.log 2>/dev/null
-          } | sed -E 's/^\[([^]]+)\].*/\1/' | sort -u | wc -l | tr -d ' ')
+            accounts_checked=$(awk '/^\[[^]]+\] feed OK via/ || /^\[[^]]+\] NO working nitter instance this run/ || /^\[[^]]+\] skipping — no feed \/ 0 entries/ { account=$0; sub(/^\[/, "", account); sub(/\].*$/, "", account); print account }' twitter_monitor.log 2>/dev/null | sort -u | wc -l | tr -d ' ' || true)
             echo "- accounts checked: ${accounts_checked}"
             echo "- entries read: ${entries_read}"
             echo "- successful feeds: ${feeds_ok}"
