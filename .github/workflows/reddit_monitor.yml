@@ -268,10 +268,10 @@ jobs:
         if: always()
         run: |
           count_matches() { local pattern="$1"; grep -Ec "$pattern" monitor.log 2>/dev/null || true; }
-          extract_number() { grep -Eo "$1" monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1 || echo 0; }
+          extract_number() { local value; value=$(grep -Eo "$1" monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1); printf '%s\n' "${value:-0}"; }
           runtime=$(( $(date +%s) - ${MONITOR_START_EPOCH:-$(date +%s)} ))
           ok=$(count_matches 'proxy warm-up.*OK')
-          failed=$(count_matches 'proxy warm-up.*(FAILED|unavailable|error)')
+          failed=$(count_matches 'proxy warm-up.*(DOWN|FAILED|unavailable|error)')
           new_candidates=$(extract_number 'Found [0-9]+ new Reddit posts')
           {
             echo "## Reddit Feed Monitor — run summary"

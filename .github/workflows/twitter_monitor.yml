@@ -205,13 +205,13 @@ jobs:
         if: always()
         run: |
           count_matches() { local pattern="$1"; grep -Ec "$pattern" twitter_monitor.log 2>/dev/null || true; }
-          extract_last_number() { grep -Eo "$1" twitter_monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1 || echo 0; }
+          extract_last_number() { local value; value=$(grep -Eo "$1" twitter_monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1); printf '%s\n' "${value:-0}"; }
           total_feed_entries() { grep 'feed OK via' twitter_monitor.log 2>/dev/null | grep -Eo '[0-9]+ entries' | grep -Eo '[0-9]+' | awk '{ total += $1 } END { print total + 0 }'; }
-          feed_failures() { awk '/^\[[^]]+\].*HTTP [0-9]+ —|^\[[^]]+\].*feed (unavailable|error)/ && $0 !~ /HTTP 200/ { n++ } END { print n + 0 }' twitter_monitor.log 2>/dev/null; }
+          feed_failures() { awk '/^\[[^]]+\] NO working nitter instance this run/ { n++ } END { print n + 0 }' twitter_monitor.log 2>/dev/null; }
           runtime=$(( $(date +%s) - ${TWITTER_START_EPOCH:-$(date +%s)} ))
           feeds_ok=$(count_matches 'feed OK via')
           feeds_failed=$(feed_failures)
-          feeds_empty=$(count_matches 'HTTP 200 but 0 entries|skipping — no feed / 0 entries')
+          feeds_empty=$(count_matches 'skipping — no feed / 0 entries')
           entries_read=$(total_feed_entries)
           {
             echo "## Twitter Feed Monitor — run summary"
