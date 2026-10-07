@@ -2978,7 +2978,7 @@ def _provider_for_url(url: str) -> str:
     """Return a safe, stable provider label (never expose the full URL)."""
     host = urllib.parse.urlparse(str(url or "")).netloc.lower()
     if "embedez" in host or "redditez" in host:
-        return "embedez-1080p" if "1080" in str(url) else "embedez-default"
+        return "embedez"
     if "vxreddit" in host:
         return "vxreddit"
     if "embeddit" in host:

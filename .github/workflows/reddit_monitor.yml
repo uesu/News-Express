@@ -179,41 +179,15 @@ jobs:
         #       run: python "testing area/reddit_main_v3.py"          <- rich card (native media, no key)
         # ───────────────────────────────────────────────────────────────────
         run: |
+          echo "MONITOR_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
           set -o pipefail
           python "testing area/reddit_main_v3.py" 2>&1 | tee monitor.log
-
-      # Reporting only: this reads the local monitor log and performs no network
-      # or cache work. Keep this after the monitor so it cannot affect posting.
-      - name: Write monitor run summary
-        if: always()
-        run: |
-          {
-            echo "## Reddit Feed Monitor — run summary"
-            echo
-            if [ "${{ job.status }}" = "success" ]; then echo "**Result:** success"; else echo "**Result:** failure"; fi
-            echo "**Runtime:** $SECONDS seconds"
-            echo
-            echo "### Feed"
-            echo "- entries read: $(grep -o 'Combined feed OK: [0-9]* entries' monitor.log 2>/dev/null | tail -1 | grep -o '[0-9]*' || echo 0)"
-            echo "- new candidates: $(grep -c 'Found .* new Reddit posts' monitor.log 2>/dev/null || echo 0)"
-            echo "- posts delivered: $(grep -c 'Reddit V3 Posted:' monitor.log 2>/dev/null || echo 0)"
-            echo "- listing/retry deferrals: $(grep -c 'skipped.*next tick\|retried next tick' monitor.log 2>/dev/null || echo 0)"
-            echo
-            echo "### Providers and videos"
-            echo "- proxy warm-up health: $(grep -c 'proxy warm-up.*OK' monitor.log 2>/dev/null || echo 0) provider(s) OK"
-            echo "- accepted 1080p upgrades: $(grep -c 'EmbedEZ 1080p candidate accepted' monitor.log 2>/dev/null || echo 0)"
-            echo "- quality fallbacks: $(grep -c 'retaining validated base' monitor.log 2>/dev/null || echo 0)"
-            echo "- final video provider labels: $(grep -o 'card media via [^ ]*' monitor.log 2>/dev/null | sort -u | tr '\n' ' ' || echo none)"
-            echo
-            echo "### State"
-            echo "- cache/dedup: persisted by the following cache step"
-            echo "- summary source: local monitor.log only; no additional requests"
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Persist updated caches (retry safely on a concurrent main update)
         env:
           CACHE_BRANCH: ${{ github.ref_name }}
         run: |
+          echo "CACHE_RESULT=failed" >> "$GITHUB_ENV"
           set -o pipefail
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -224,6 +198,7 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "No cache changes to push."
+            echo "CACHE_RESULT=success" >> "$GITHUB_ENV"
           else
             if ! git commit -m "auto: update reddit monitor caches"; then
               echo "::error::CACHE COMMIT FAILED — dedup cache was not persisted; rerun this monitor after resolving the repository state."
@@ -286,3 +261,37 @@ jobs:
               exit 1
             fi
           fi
+          echo "CACHE_RESULT=success" >> "$GITHUB_ENV"
+
+      # Reporting only: reads the local monitor log and performs no network or cache work.
+      - name: Write monitor run summary
+        if: always()
+        run: |
+          count_matches() { local pattern="$1"; grep -Ec "$pattern" monitor.log 2>/dev/null || true; }
+          extract_number() { grep -Eo "$1" monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1 || echo 0; }
+          runtime=$(( $(date +%s) - ${MONITOR_START_EPOCH:-$(date +%s)} ))
+          ok=$(count_matches 'proxy warm-up.*OK')
+          failed=$(count_matches 'proxy warm-up.*(FAILED|unavailable|error)')
+          new_candidates=$(extract_number 'Found [0-9]+ new Reddit posts')
+          {
+            echo "## Reddit Feed Monitor — run summary"
+            echo
+            if [ "${{ job.status }}" = "success" ]; then echo "**Result:** success"; else echo "**Result:** failure"; fi
+            echo "**Runtime:** ${runtime}s"
+            echo
+            echo "### Feed"
+            echo "- entries read: $(extract_number 'Combined feed OK: [0-9]+ entries')"
+            echo "- new candidates: ${new_candidates}"
+            echo "- posts delivered: $(count_matches 'Reddit V3 Posted:')"
+            echo "- listing/retry deferrals: $(count_matches 'skipped.*next tick|retried next tick')"
+            echo
+            echo "### Providers and videos"
+            echo "- proxy warmups: ${ok} OK, ${failed} failed"
+            echo "- accepted 1080p upgrades: $(count_matches 'EmbedEZ 1080p candidate accepted')"
+            echo "- quality fallbacks: $(count_matches 'retaining validated base')"
+            echo "- final video provider labels: $(grep -Eo 'card media via [^ ]+' monitor.log 2>/dev/null | sort -u | tr '\n' ' ' || true)"
+            echo
+            echo "### State"
+            echo "- cache commit/push: ${CACHE_RESULT:-failed}"
+            echo "- summary source: local monitor.log only; no additional requests"
+          } >> "$GITHUB_STEP_SUMMARY"
