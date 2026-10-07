@@ -229,14 +229,10 @@ jobs:
             echo "### Posts"
             echo "- new posts found: $(count_matches 'new posts|new tweet')"
             echo "- posts delivered: $(count_matches 'V3 Posted:')"
-            echo "- posts skipped: $(count_matches 'skipping')"
-            echo "- posts retried: $(count_matches 'trying next|retry')"
+            echo "- skip log lines: $(count_matches 'skipping')"
+            echo "- retry/fallback log lines: $(count_matches 'trying next|retry')"
             echo
             echo "### Media"
-            echo "- GIF/media conversion successes: $(count_matches 'converted|GIF.*success')"
-            echo "- media fallback uses: $(count_matches 'fallback')"
-            echo "- media-heal attempts: $(count_matches 'MEDIA-HEAL queued|MEDIA-HEAL')"
-            echo "- media-heal failures: $(count_matches 'MEDIA-HEAL.*failed|heal.*error')"
             echo
             echo "### State"
             echo "- cache: ${TWITTER_CACHE_RESULT:-failed}"

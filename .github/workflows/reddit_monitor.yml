@@ -288,7 +288,7 @@ jobs:
             echo "### Providers and videos"
             echo "- proxy warmups: ${ok} OK, ${failed} failed"
             echo "- accepted 1080p upgrades: $(count_matches 'EmbedEZ 1080p candidate accepted')"
-            echo "- quality fallbacks: $(count_matches 'retaining validated base')"
+            echo "- quality fallback notices: $(count_matches 'retaining validated base')"
             echo "- final video provider labels: $(grep -Eo 'card media via [^ ]+' monitor.log 2>/dev/null | sort -u | tr '\n' ' ' || true)"
             echo
             echo "### State"
