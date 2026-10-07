@@ -124,12 +124,16 @@ jobs:
         #       run: python "testing area/twitter_v2_button_outside.py" <- V2 (card, buttons outside)
         #       run: python "testing area/twitter_v3.py"                <- V3 (card, buttons nested)
         # ───────────────────────────────────────────────────────────────────
-        run: python "testing area/twitter_v3.py"   # ← switch to testing area/twitter_v1.py / twitter_v2_button_outside.py here
+        run: |
+          echo "TWITTER_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          set -o pipefail
+          python "testing area/twitter_v3.py" 2>&1 | tee twitter_monitor.log   # ← V3
 
       - name: Persist updated posted_tweets.json cache (retry safely on a concurrent main update)
         env:
           CACHE_BRANCH: ${{ github.ref_name }}
         run: |
+          echo "TWITTER_CACHE_RESULT=failed" >> "$GITHUB_ENV"
           set -o pipefail
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -137,6 +141,7 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "No cache changes to push."
+            echo "TWITTER_CACHE_RESULT=success" >> "$GITHUB_ENV"
           else
             if ! git commit -m "auto: update posted_tweets.json cache"; then
               echo "::error::CACHE COMMIT FAILED — dedup cache was not persisted; rerun this monitor after resolving the repository state."
@@ -192,3 +197,45 @@ jobs:
               exit 1
             fi
           fi
+          echo "TWITTER_CACHE_RESULT=success" >> "$GITHUB_ENV"
+
+
+      - name: Write Twitter monitor run summary
+        if: always()
+        run: |
+          count_matches() { local pattern="$1"; grep -Ec "$pattern" twitter_monitor.log 2>/dev/null || true; }
+          extract_last_number() { grep -Eo "$1" twitter_monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1 || echo 0; }
+          runtime=$(( $(date +%s) - ${TWITTER_START_EPOCH:-$(date +%s)} ))
+          feeds_ok=$(count_matches 'feed OK via')
+          feeds_failed=$(count_matches 'HTTP [0-9]+|feed unavailable|failed')
+          feeds_empty=$(count_matches 'HTTP 200 but 0 entries|skipping — no feed / 0 entries')
+          {
+            echo "## Twitter Feed Monitor — run summary"
+            echo
+            if [ "${{ job.status }}" = "success" ]; then echo "**Result:** success"; else echo "**Result:** failure"; fi
+            echo "**Runtime:** ${runtime}s"
+            echo
+            echo "### Feeds"
+            echo "- accounts checked: $(grep -Eo '^\[[^]]+\]' twitter_monitor.log 2>/dev/null | sort -u | wc -l | tr -d ' ')"
+            echo "- entries read: $(extract_last_number 'feed OK via .* — [0-9]+ entries') (last feed only; per-account details are in the log)"
+            echo "- successful feeds: ${feeds_ok}"
+            echo "- failed feeds: ${feeds_failed}"
+            echo "- empty feeds: ${feeds_empty}"
+            echo
+            echo "### Posts"
+            echo "- new posts found: $(count_matches 'new posts|new tweet')"
+            echo "- posts delivered: $(count_matches 'V3 Posted:')"
+            echo "- posts skipped: $(count_matches 'skipping')"
+            echo "- posts retried: $(count_matches 'trying next|retry')"
+            echo
+            echo "### Media"
+            echo "- GIF/media conversion successes: $(count_matches 'converted|GIF.*success')"
+            echo "- media fallback uses: $(count_matches 'fallback')"
+            echo "- media-heal attempts: $(count_matches 'MEDIA-HEAL queued|MEDIA-HEAL')"
+            echo "- media-heal failures: $(count_matches 'MEDIA-HEAL.*failed|heal.*error')"
+            echo
+            echo "### State"
+            echo "- cache changes: $(count_matches 'cache|Cache changes')"
+            echo "- cache commit/push/recovery: ${TWITTER_CACHE_RESULT:-failed}"
+            echo "- summary source: local twitter_monitor.log only; no additional requests"
+          } >> "$GITHUB_STEP_SUMMARY"
