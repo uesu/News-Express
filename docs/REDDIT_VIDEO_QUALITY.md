@@ -139,3 +139,4 @@ representative corpus and record:
 
 Evidence base: [`REDDIT_VIDEO_MEDIA_REPORT.md`](REDDIT_VIDEO_MEDIA_REPORT.md).
 Decision record: [`history/ROUND_67.md`](history/ROUND_67.md).
+Confirmed acceptance policy: [`VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md`](VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md).

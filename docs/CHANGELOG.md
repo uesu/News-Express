@@ -53,7 +53,11 @@ rewritten when that happens, only relocated.
   1080p candidate may replace it only against the base's own probe facts,
   while `compatibility` keeps that video verbatim with zero extra requests.
   Images, GIFs, photos and ordinary galleries make no quality requests at
-  all. Evidence and the manual canary checklist:
+  all. The module header of `testing area/reddit_proxy.py` was also
+  corrected (comment-only) to describe the round-49 wave dispatch and the
+  vxreddit-first tie-break accurately, and the confirmed acceptance policy
+  is committed as `docs/VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md`.
+  Evidence and the manual canary checklist:
   [`docs/REDDIT_VIDEO_MEDIA_REPORT.md`](REDDIT_VIDEO_MEDIA_REPORT.md) and
   [`docs/REDDIT_VIDEO_QUALITY.md`](REDDIT_VIDEO_QUALITY.md). **Part 3** — the
   manual media test report is committed as the round's evidence base.

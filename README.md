@@ -578,6 +578,7 @@ of FxTwitter/FxEmbed — [donations welcome](https://github.com/sponsors/dangere
 | [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) | Round-by-round engine notes moved out of this README (2026-10-05) |
 | [`docs/history/ROUND_*.md`](docs/history/) | Decision records per incident |
 | [`docs/history/REPOSITORY_TRACKING_2026-10-01.md`](docs/history/REPOSITORY_TRACKING_2026-10-01.md) | File/config/policy inventory and audit record (historical snapshot, 2026-10-01) |
+| [`docs/REDDIT_VIDEO_QUALITY.md`](docs/REDDIT_VIDEO_QUALITY.md) · [`docs/REDDIT_VIDEO_MEDIA_REPORT.md`](docs/REDDIT_VIDEO_MEDIA_REPORT.md) · [`docs/VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md`](docs/VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md) | Round-67 video-quality policy, evidence report, and the confirmed acceptance policy |
 | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) · [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) · [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) · [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) | Topic guides |
 | [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md) · [`TERMS_OF_SERVICE.md`](TERMS_OF_SERVICE.md) | Policies |
 
