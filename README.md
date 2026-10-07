@@ -80,13 +80,13 @@ flowchart LR
 | | |
 |---|---|
 | **Rich cards** | *Components V2* card built from **Reddit's own URLs** — every photo (up to 20 → two containers), best rendition each |
-| **Video** | video posts show the **video only** (never a duplicate first-frame); native `v.redd.it` chain with audio, proxy mux fallbacks — **never a silent video** |
+| **Video** | video posts show the **video only** (never a duplicate first-frame); quality-aware resolver — EmbedEZ 1080p when it validates, vxreddit as the reliable base, durable `v.redd.it` DASH as the floor — **never a silent video**, and signed/expiring URLs are never card media (see [video quality](docs/REDDIT_VIDEO_QUALITY.md)) |
 | **YouTube** | thumbnail + animated `starwardspark3` button; optional real playback with `YOUTUBE_MEDIA_EMBED=1` |
 | **Body text** | clean markdown body (links stay clickable, spoilers → Discord spoilers, empty-blockquote artifacts dropped, entities unescaped exactly once on every path) |
 | **Feeds** | one **combined RSS request** for all subreddits (fits Reddit's ~1 req/min datacenter limit) with automatic per-subreddit fallback; the optional `REDDIT_FEED_TOKEN` moves requests to the logged-in tier |
 | **FULL MODE** | with an optional Reddit script app: 💬/👍 stats, the OP's stickied comment, and true crosspost embeds |
 | **Fallback fleet** | proxy services (redditez → vxreddit → Embeddit rewrite), Redlib instances, and the Arctic Shift archive — a dead source never breaks a run |
-| **Gates** | dedup cache + fail-closed NSFW gate + opt-in dead-post retraction (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
+| **Gates** | dedup cache + opt-in dead-post retraction (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
 | **Listing-safe delivery** | cache-busted `/new` confirmation posts an item on the first tick it is visible; listing outages are never treated as proof of absence |
 
 ### 🧱 Platform
@@ -304,10 +304,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `FRESH_HOLD_SECONDS` | `30` | flat minimum post age before a candidate is considered; `0` = off |
 | `LISTING_CONFIRM` | `1` | `0` = disable the pristine `/new` listing confirmation (restores round-63 delivery) |
 | `PENDING_RECHECK_SECONDS` | `1800` | the one uniform recheck interval for every held post |
-| `NSFW_ALLOWLIST` | *(empty)* | comma-separated author names or post IDs that bypass the NSFW gate |
-| `NSFW_FAIL_OPEN` | `0` | `1` restores the pre-round-42 fail-open NSFW behavior |
-| `NSFW_REQUIRE_SUBREDDIT` | `0` | `1` also demands a readable community (`over18`) record |
-| `NSFW_PAGE_FALLBACK` | `1` | `0` = strict archive-only NSFW check (hold instead of reading the live page badge) |
+| `REDDIT_VIDEO_QUALITY` | `balanced` | video-quality selection: `balanced` (EmbedEZ 1080p may replace vxreddit → 720p → durable DASH floor), `compatibility` (pre-round-67 order, instant rollback), `highest` (wider quality window) |
 | `RETRACT_DEAD_POSTS` | `0` | `1` enables the dead-post retraction seatbelt |
 | `RETRACT_MODE` | `edit` | `edit` (tombstone in place) or `delete` |
 | `RETRACT_WINDOW_SECONDS` | `21600` | how far back a delivered post can still be retracted (6 h) |
@@ -381,12 +378,12 @@ see [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) and the
    yet → skipped this tick only — never blocked, never cached; it posts the
    tick it first appears. All listing sources down → treated as an outage,
    never as absence.
-4. **Fail-closed NSFW gate** — every post is checked against Reddit's own
-   NSFW markers (`over_18`, the `nsfw` thumbnail sentinel, subreddit `over18`,
-   crosspost-source flags). Missing/unreadable metadata is **held and
-   re-checked, never read as safe**. This gate is non-negotiable and is never
-   removed or weakened.
-5. **Deliver** — the card posts; the key is cached.
+4. **Deliver** — the card posts; the key is cached.
+
+*(Round 67 removed the content-advisory gate and its four Variables: the
+monitor makes no content-based posting decision on any path. The truthful
+record of that removal lives in
+[`docs/history/ROUND_67.md`](docs/history/ROUND_67.md).)*
 
 **After delivery (opt-in):** the **retraction seatbelt** (`RETRACT_DEAD_POSTS=1`,
 off by default) can rewrite a confirmed-dead post's card as a tombstone (or
@@ -581,6 +578,7 @@ of FxTwitter/FxEmbed — [donations welcome](https://github.com/sponsors/dangere
 | [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) | Round-by-round engine notes moved out of this README (2026-10-05) |
 | [`docs/history/ROUND_*.md`](docs/history/) | Decision records per incident |
 | [`docs/history/REPOSITORY_TRACKING_2026-10-01.md`](docs/history/REPOSITORY_TRACKING_2026-10-01.md) | File/config/policy inventory and audit record (historical snapshot, 2026-10-01) |
+| [`docs/REDDIT_VIDEO_QUALITY.md`](docs/REDDIT_VIDEO_QUALITY.md) · [`docs/REDDIT_VIDEO_MEDIA_REPORT.md`](docs/REDDIT_VIDEO_MEDIA_REPORT.md) · [`docs/VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md`](docs/VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md) | Round-67 video-quality policy, evidence report, and the confirmed acceptance policy |
 | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) · [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) · [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) · [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) | Topic guides |
 | [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md) · [`TERMS_OF_SERVICE.md`](TERMS_OF_SERVICE.md) | Policies |
 

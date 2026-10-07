@@ -68,7 +68,13 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 
 ## Invariants — NEVER violate these
 
-1. **The NSFW gate is never removed or weakened.** Non-negotiable.
+1. **The monitor makes no content-based posting decision.** Round 67 removed
+   the content-advisory gate entirely (engine, Variables, tests, docs) at the
+   maintainer's request: do not reintroduce any content classification,
+   allowlist, fail-open/fail-closed logic or "unknown metadata" hold for it —
+   the post proceeds through dedup, the fresh hold, the pristine listing
+   confirmation and delivery. The truthful record of the removal is
+   `docs/history/ROUND_67.md`; active files stay free of the removed names.
 2. **Gates never guess.** Every hold/skip requires exact, provable evidence
    (same URL, same author+title, removal notice on the post's own page).
    Fuzzy/similarity matching has been explicitly rejected (see round 56/57
@@ -120,7 +126,13 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   (round 44; requires two independent proofs before touching a message).
   (Round 66 removed the workflow mappings for the round-42-45 gate Variables
   — settle windows, dup-media/repost/mod-queue gates, listing racing — that
-  round 63 had already deleted from the engine.)
+  round 63 had already deleted from the engine; round 67 removed the four
+  content-advisory Variables along with the gate itself.)
+- `REDDIT_VIDEO_QUALITY` — `balanced` (default) | `compatibility` | `highest`
+  (round 67). `compatibility` restores the pre-round-67 video ladder exactly,
+  so it is the zero-code rollback for the quality-aware resolver. The
+  resolver's budgets (window / candidate / per-post / per-run) are constants
+  in the engine, deliberately not Variables.
 
 ## Writing conventions
 

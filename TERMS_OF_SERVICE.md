@@ -32,7 +32,7 @@ You agree NOT to use the Service to:
 * violate Discord's [Terms of Service](https://discord.com/terms) or
   [Community Guidelines](https://discord.com/guidelines), X/Twitter's or Reddit's terms, or any
   applicable law;
-* repost private, paywalled, NSFW-into-SFW-channel, or otherwise restricted content;
+* repost private, paywalled, age-restricted-into-general-channel, or otherwise restricted content;
 * harass, defame, doxx, or target any person or community;
 * spam channels, or poll source services aggressively (keep the interval at **10 minutes or longer**;
   the free mirrors and APIs this project relies on are shared community resources);
