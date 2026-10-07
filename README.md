@@ -606,3 +606,21 @@ Historical records are preserved in
 * All trademarks belong to their respective owners; this project is an
   unofficial, non-affiliated automation tool for personal servers.
 
+
+## Workflow observability
+
+The Reddit and Twitter monitor workflows capture each monitor's local output and
+write a GitHub Actions Step Summary after cache persistence. Summaries report
+runtime, feed/post counters, provider or media diagnostics, and the actual cache
+result. Summary parsing is local-only and does not add feed, provider, media,
+Discord, retry, scheduling, or cache-selection work to the monitor path.
+
+Twitter's workflow supports the post-delivery media-heal controls
+`MEDIA_HEAL`, `MEDIA_HEAL_SCOPE`, `MEDIA_HEAL_DELAY_SECONDS`, and
+`MEDIA_HEAL_ATTEMPTS`. `MEDIA_HEAL_SCOPE=video` is the default; `off` disables
+healing and `all`/`on` includes additional media types.
+
+The former Reddit content-advisory/NSFW classification and gating settings are
+not active configuration. Do not add or enable `NSFW_ALLOWLIST`,
+`NSFW_FAIL_OPEN`, `NSFW_REQUIRE_SUBREDDIT`, or `NSFW_PAGE_FALLBACK`. Historical
+records under `docs/history/` retain the behavior that existed in those rounds.
