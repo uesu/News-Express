@@ -623,4 +623,4 @@ healing and `all`/`on` includes additional media types.
 The former Reddit content-advisory/NSFW classification and gating settings are
 not active configuration. Do not add or enable `NSFW_ALLOWLIST`,
 `NSFW_FAIL_OPEN`, `NSFW_REQUIRE_SUBREDDIT`, or `NSFW_PAGE_FALLBACK`. Historical
-records under `docs/history/` retain the behavior that existed in those rounds.
+Historical round documents remain under `docs/` and are not current configuration instructions.
