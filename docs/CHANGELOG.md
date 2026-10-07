@@ -47,7 +47,13 @@ rewritten when that happens, only relocated.
   zero-code rollback) and `highest`. Strict budgets keep latency bounded:
   8 s quality window (15 s in `highest`), 20 s per proxy candidate, 10 s per
   native candidate, 40 s per post, 180 s of quality attempts per run.
-  Evidence and the manual canary checklist:
+  The opportunity covers every path that can put a Reddit video in a card —
+  including the **proxy-delivered** video (the default configuration): there
+  the round-49 wave's validated mux is the held base and one bounded EmbedEZ
+  1080p candidate may replace it only against the base's own probe facts,
+  while `compatibility` keeps that video verbatim with zero extra requests.
+  Images, GIFs, photos and ordinary galleries make no quality requests at
+  all. Evidence and the manual canary checklist:
   [`docs/REDDIT_VIDEO_MEDIA_REPORT.md`](REDDIT_VIDEO_MEDIA_REPORT.md) and
   [`docs/REDDIT_VIDEO_QUALITY.md`](REDDIT_VIDEO_QUALITY.md). **Part 3** — the
   manual media test report is committed as the round's evidence base.

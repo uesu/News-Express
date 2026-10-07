@@ -3002,6 +3002,96 @@ def prefer_quality_candidate(quality: dict | None, base: dict | None) -> dict | 
     return quality
 
 
+async def probe_video_facts(session: aiohttp.ClientSession, url: str, *,
+                            timeout: float = 10.0) -> dict | None:
+    """Best-effort MP4 facts for a media URL that is ALREADY validated.
+
+    Round 67 proxy-path comparison helper. It never gates the URL itself —
+    the caller has already range-checked it as card media — it only gives
+    ``prefer_quality_candidate`` real dimension/audio evidence with which to
+    compare the established proxy video against the EmbedEZ 1080p
+    opportunity. Never raises; None when the prefix cannot be read.
+    """
+    url = str(url or "").strip()
+    if not url:
+        return None
+    try:
+        async with session.get(
+                url,
+                headers={"User-Agent": "Discordbot/2.0",
+                         "Range": f"bytes=0-{max(1, int(VIDEO_PROBE_BYTES)) - 1}"},
+                timeout=aiohttp.ClientTimeout(total=max(1.0, float(timeout)))) as resp:
+            if resp.status not in (200, 206):
+                return None
+            prefix = await resp.content.read(max(1, int(VIDEO_PROBE_BYTES)))
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        return None
+    if _looks_like_error_body(prefix):
+        return None
+    return mp4_media_facts(prefix)
+
+
+async def proxy_video_quality_upgrade(session: aiohttp.ClientSession, vid: str | None,
+                                      base_url: str, label: str = "") -> str:
+    """One bounded EmbedEZ 1080p opportunity for a PROXY-delivered video.
+
+    The proxy chain's already-validated muxed mp4 stays the HELD base: this
+    only replaces it when a validated EmbedEZ 1080p candidate survives
+    ``prefer_quality_candidate`` against the base's own probe facts (never an
+    orientation flip, never fewer pixels, never an audio-track loss). Any
+    failure — timeout, HTTP error, error body, oversize, unreadable probe, a
+    spent per-run budget, or compatibility mode — returns ``base_url``
+    unchanged, so a proxy video is never lost to the quality attempt and the
+    extra probe happens only on Reddit-video posts (never on image, GIF,
+    photo or gallery paths).
+    """
+    global _video_quality_budget_used
+    if not vid or not base_url:
+        return base_url
+    mode = VIDEO_QUALITY_MODE if VIDEO_QUALITY_MODE in VIDEO_QUALITY_MODES else "balanced"
+    if mode == "compatibility":
+        return base_url
+    if _video_quality_budget_used >= float(VIDEO_RUN_BUDGET_SECONDS):
+        logging.info(f"[{label or 'proxy'}] per-run quality budget spent — keeping "
+                     f"the validated proxy video.")
+        return base_url
+    started = time.monotonic()
+    cmaf1080 = cmaf_urls(vid, 1080)
+    embedez_1080 = VIDEO_PROXY_EMBEDEZ.format(
+        video_url=quote(cmaf1080["video_mp4"], safe=""),
+        audio_url=quote(cmaf1080["audio_mp4"], safe=""))
+    window = (float(VIDEO_QUALITY_WINDOW_HIGHEST_SECONDS) if mode == "highest"
+              else float(VIDEO_QUALITY_WINDOW_SECONDS))
+    try:
+        quality = await asyncio.wait_for(
+            video_candidate(session, embedez_1080,
+                            timeout=float(VIDEO_CANDIDATE_TIMEOUT_SECONDS),
+                            quality_hint=1080,
+                            label=f"{label or 'proxy'} embedez-1080p"),
+            timeout=max(0.05, window))
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        quality = None
+    _video_quality_budget_used += max(0.0, time.monotonic() - started)
+    if not quality:
+        return base_url
+    facts = await probe_video_facts(session, base_url,
+                                   timeout=float(VIDEO_NATIVE_TIMEOUT_SECONDS))
+    base = {"url": base_url,
+            "width": (facts or {}).get("width"),
+            "height": (facts or {}).get("height"),
+            "has_audio": (facts or {}).get("has_audio")}
+    winner = prefer_quality_candidate(quality, base)
+    if isinstance(winner, dict) and str(winner.get("url") or "") == str(quality.get("url")):
+        logging.info(f"[{label or 'proxy'}] video upgraded to embedez-1080p "
+                     f"({_video_evidence(quality)}).")
+        return quality["url"]
+    return base_url
+
+
 def _task_video_facts(task) -> dict | None:
     """Validated facts from a finished task, else None (never raises)."""
     if task is None or not task.done() or task.cancelled():
@@ -4015,6 +4105,14 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
 
             video_dead = bool(proxy_video) and not video_ok
             if proxy_video and video_ok:
+                # Round 67: one bounded quality opportunity for a PROXY-muxed
+                # Reddit video — the validated proxy result is the held base,
+                # so this can only ever improve it (video-only; the helper
+                # returns the base unchanged on any failure).
+                _q_url = await proxy_video_quality_upgrade(
+                    session, vid, proxy_video["url"], label or "proxy")
+                if _q_url and _q_url != proxy_video["url"]:
+                    proxy_video = dict(proxy_video, url=_q_url)
                 # video post: the proxy's muxed mp4 tile ONLY (never a dup
                 # first-frame thumbnail)
                 media = [proxy_video]

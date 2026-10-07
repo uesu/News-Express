@@ -5093,6 +5093,175 @@ async def _r67_gallery_contract():
 asyncio.run(_r67_gallery_contract())
 asyncio.run(_r67_media_contract())
 
+# ---- round 67 follow-up: the PROXY-delivered video path --------------------
+# Production runs native RSS mode with PROXY_MEDIA=1 by default, so a video
+# post usually arrives from the round-49 proxy chain (tie-break vxreddit
+# first). Those videos now get the SAME bounded EmbedEZ 1080p opportunity:
+# the validated proxy mux is the held base and can only be replaced by a
+# better validated candidate, never lost to the quality attempt.
+
+_r67b_base = "https://vxreddit.com/redditvideo.mp4?video_url=x&audio_url=y"
+
+
+async def _r67b_cand_ok(session, url, *, timeout=None, quality_hint=None, label=""):
+    return {"url": "https://proxy.embedez.com/render/video.mp4?videoUrl=1080",
+            "size": 4321, "width": 1920, "height": 1080, "has_video": True,
+            "has_audio": True, "quality_hint": 1080, "label": label}
+
+
+async def _r67b_probe_base_720(session, url, *, timeout=10.0):
+    check("r67b: the base probe reads the ALREADY-validated proxy video",
+          url == _r67b_base, url)
+    return {"width": 1280, "height": 720, "has_video": True, "has_audio": True}
+
+
+def _r67b_upgrade(candidate, probe=_r67b_probe_base_720, mode="balanced",
+                  spent=0.0, vid="abc123"):
+    """Run the proxy-path quality helper under controlled globals."""
+    with patch.object(v3, "video_candidate", candidate), \
+         patch.object(v3, "probe_video_facts", probe), \
+         patch.object(v3, "VIDEO_QUALITY_MODE", mode), \
+         patch.object(v3, "_video_quality_budget_used", spent):
+        return asyncio.run(v3.proxy_video_quality_upgrade(None, vid, _r67b_base, "r67b"))
+
+
+_r67b_cand = AsyncMock(side_effect=_r67b_cand_ok)
+_r67b_none = AsyncMock(return_value=None)
+_r67b_probe = AsyncMock(side_effect=_r67b_probe_base_720)
+
+check("r67b: a validated EmbedEZ 1080p upgrade replaces the proxy-muxed video "
+      "(1920x1080 vs the base's 1280x720)",
+      _r67b_upgrade(_r67b_cand) == "https://proxy.embedez.com/render/video.mp4?videoUrl=1080")
+
+_r67b_cand.reset_mock(); _r67b_probe.reset_mock()
+check("r67b: an EmbedEZ failure returns the proxy video verbatim — and never "
+      "spends the base probe",
+      _r67b_upgrade(_r67b_none) == _r67b_base and _r67b_probe.await_count == 0)
+
+_r67b_cand.reset_mock()
+check("r67b: compatibility mode never makes the quality request at all "
+      "(exact pre-round-67 proxy path)",
+      _r67b_upgrade(_r67b_cand, mode="compatibility") == _r67b_base
+      and _r67b_cand.await_count == 0)
+
+
+async def _r67b_probe_flip(session, url, *, timeout=10.0):
+    return {"width": 1080, "height": 1920, "has_video": True, "has_audio": True}
+
+
+async def _r67b_cand_silent(session, url, *, timeout=None, quality_hint=None, label=""):
+    return {"url": "https://proxy.embedez.com/render/video.mp4?silent=1", "size": 4321,
+            "width": 1920, "height": 1080, "has_video": True, "has_audio": False,
+            "quality_hint": 1080, "label": label}
+
+
+async def _r67b_probe_smaller(session, url, *, timeout=10.0):
+    return {"width": 3840, "height": 2160, "has_video": True, "has_audio": True}
+
+
+check("r67b: a portrait source is never replaced by a landscape candidate "
+      "(orientation flip keeps the proxy video)",
+      _r67b_upgrade(_r67b_cand, probe=_r67b_probe_flip) == _r67b_base)
+check("r67b: a candidate that loses the base's audio track is refused",
+      _r67b_upgrade(_r67b_cand_silent, probe=_r67b_probe_base_720) == _r67b_base)
+check("r67b: a candidate with FEWER pixels than the base is refused",
+      _r67b_upgrade(_r67b_cand, probe=_r67b_probe_smaller) == _r67b_base)
+check("r67b: with the per-run budget spent the proxy video is kept untouched",
+      _r67b_upgrade(_r67b_cand, spent=float(v3.VIDEO_RUN_BUDGET_SECONDS) + 1) == _r67b_base)
+check("r67b: a post with no Reddit video id (YouTube/redgifs) skips the "
+      "opportunity entirely",
+      _r67b_upgrade(_r67b_cand, vid=None) == _r67b_base)
+
+_r67b_cand.reset_mock()
+_r67b_upgrade(_r67b_cand, spent=float(v3.VIDEO_RUN_BUDGET_SECONDS) + 1)
+_r67b_upgrade(_r67b_cand, vid=None)
+check("r67b: no quality request is made when the budget is spent or the post "
+      "is not a Reddit video", _r67b_cand.await_count == 0)
+
+
+async def _r67b_hang(session, url, *, timeout=None, quality_hint=None, label=""):
+    await asyncio.sleep(5)
+    return {"url": "https://proxy.embedez.com/render/video.mp4?late=1", "size": 1}
+
+
+_r67b_t0 = time.monotonic()
+with patch.object(v3, "VIDEO_QUALITY_WINDOW_SECONDS", 0.1):
+    _r67b_hang_out = _r67b_upgrade(_r67b_hang)
+_r67b_hang_dt = time.monotonic() - _r67b_t0
+check("r67b: a hung EmbedEZ candidate is cut off by the quality window and "
+      "yields the proxy video (bounded, never stalls the post)",
+      _r67b_hang_out == _r67b_base and _r67b_hang_dt < 2.0,
+      f"{_r67b_hang_out} after {_r67b_hang_dt:.2f}s")
+
+
+async def _r67b_proxy_flow():
+    """The proxy branch of resolve_post_media: quality attempt is video-only."""
+    _r67b_ns = SimpleNamespace(
+        fetch_proxy_post=AsyncMock(return_value={
+            "service": "vxreddit",
+            "media": [{"kind": "video", "url": _r67b_base}],
+            "stats": None, "body": ""}),
+        fetch_embeddit_stats=AsyncMock(return_value=None))
+    _r67b_post_base = {"title": "t", "author": "a", "body": "", "youtube_url": None,
+                       "vred_id": "abc123", "redgifs_url": None,
+                       "content_html": "", "thumb": None}
+    _r67b_calls = AsyncMock(side_effect=_r67b_cand_ok)
+    _r67b_rv = AsyncMock(return_value=None)
+    with patch.object(v3, "reddit_proxy", _r67b_ns), \
+         patch.object(v3, "PROXY_MEDIA", True), \
+         patch.object(v3, "fetch_arctic_post", AsyncMock(return_value=None)), \
+         patch.object(v3, "enrich_gallery_redlib", AsyncMock(return_value=[])), \
+         patch.object(v3, "media_url_ok", AsyncMock(return_value=(True, 999))), \
+         patch.object(v3, "video_candidate", _r67b_calls), \
+         patch.object(v3, "probe_video_facts", _r67b_probe), \
+         patch.object(v3, "VIDEO_QUALITY_MODE", "balanced"), \
+         patch.object(v3, "resolve_video_url", _r67b_rv), \
+         patch.object(v3, "_video_quality_budget_used", 0.0):
+        _r67b_res = await v3.resolve_post_media(
+            None, dict(_r67b_post_base), None, "/r/Sub/comments/abc123/title/")
+        check("r67b: a proxy-muxed video post upgrades to the validated "
+              "EmbedEZ 1080p tile (video only, no duplicate poster)",
+              _r67b_res["media"] == [{"kind": "video",
+                                      "url": "https://proxy.embedez.com/render/video.mp4?videoUrl=1080"}],
+              str(_r67b_res["media"]))
+        check("r67b: the native resolver is never called once the proxy "
+              "supplied the video", _r67b_rv.await_count == 0)
+        _r67b_ns.fetch_proxy_post = AsyncMock(return_value={
+            "service": "vxreddit",
+            "media": [{"kind": "image", "url": "https://i.redd.it/p.jpg"}],
+            "stats": None, "body": ""})
+        _r67b_calls.reset_mock()
+        await v3.resolve_post_media(None, dict(_r67b_post_base), None,
+                                    "/r/Sub/comments/img1/title/")
+        check("r67b: an image post never touches the video quality path",
+              _r67b_calls.await_count == 0, str(_r67b_calls.await_count))
+
+    # compatibility mode: the proxy video is used verbatim, exactly as before.
+    with patch.object(v3, "reddit_proxy", _r67b_ns), \
+         patch.object(v3, "PROXY_MEDIA", True), \
+         patch.object(v3, "fetch_arctic_post", AsyncMock(return_value=None)), \
+         patch.object(v3, "enrich_gallery_redlib", AsyncMock(return_value=[])), \
+         patch.object(v3, "media_url_ok", AsyncMock(return_value=(True, 999))), \
+         patch.object(v3, "video_candidate", _r67b_calls), \
+         patch.object(v3, "VIDEO_QUALITY_MODE", "compatibility"):
+        _r67b_ns.fetch_proxy_post = AsyncMock(return_value={
+            "service": "vxreddit",
+            "media": [{"kind": "video", "url": _r67b_base}],
+            "stats": None, "body": ""})
+        _r67b_calls.reset_mock()
+        _r67b_res = await v3.resolve_post_media(
+            None, dict(_r67b_post_base), None, "/r/Sub/comments/abc123/title/")
+        check("r67b: compatibility keeps the proxy video verbatim and makes no "
+              "quality request",
+              _r67b_res["media"] == [{"kind": "video", "url": _r67b_base}]
+              and _r67b_calls.await_count == 0, str(_r67b_res["media"]))
+
+
+asyncio.run(_r67b_proxy_flow())
+check("r67b: the proxy branch is wired to the bounded quality helper",
+      "proxy_video_quality_upgrade(" in inspect.getsource(v3.resolve_post_media))
+
+
 
 if failures:
     print(f"SMOKE TEST FAILURES ({len(failures)}): {failures}")

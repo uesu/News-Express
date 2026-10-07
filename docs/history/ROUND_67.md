@@ -106,6 +106,13 @@ unchanged).
   candidate, 8 s quality window (15 s in `highest`), 180 s of quality
   attempts per run; then the native ladder directly. At most two probes in
   flight per post.
+- **Covered paths**: the quality opportunity runs on every path that can put
+  a Reddit video in a card — the native / FULL MODE resolver, the redlib
+  gallery video, and (follow-up, same round) the PROXY-delivered video path.
+  On the proxy path the round-49 wave's validated mux is the held base and
+  one bounded EmbedEZ 1080p candidate may replace it against the base's own
+  probe facts; `compatibility` makes no extra request there at all. Image,
+  GIF, photo and ordinary gallery paths still make zero quality requests.
 - **Evidence**: [`docs/REDDIT_VIDEO_MEDIA_REPORT.md`](../REDDIT_VIDEO_MEDIA_REPORT.md)
   and the policy doc [`docs/REDDIT_VIDEO_QUALITY.md`](../REDDIT_VIDEO_QUALITY.md).
 

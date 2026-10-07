@@ -3,6 +3,25 @@
 Video-only policy. Images, GIFs, photos, galleries, cache/state files,
 webhooks, secrets and monitor scheduling are untouched by it.
 
+## Which paths are covered
+
+Every Reddit-hosted video a card can end up showing goes through the same
+bounded quality opportunity:
+
+| Path | Behavior |
+| --- | --- |
+| Native / FULL MODE (`resolve_video_url`) | vxreddit base + EmbedEZ 1080p raced inside the quality window, then 720p, then the durable native DASH ladder. |
+| Proxy-delivered video (`PROXY_MEDIA=1`, the default: the round-49 wave muxed a video) | The validated proxy mux is the **held base**; one bounded EmbedEZ 1080p candidate may replace it, and only when the base's own probe facts allow it. Any failure keeps the proxy video verbatim. |
+| Redlib gallery video | Same resolver as the native path. |
+| Images, GIFs, photos, ordinary galleries | **Never** touch this subsystem: no quality request is made. |
+
+Request accounting for the proxy path: exactly one extra request (the
+EmbedEZ 1080p probe) when it fails; one more short 64 KiB probe of the
+already-validated proxy video only when the EmbedEZ candidate validated and
+the comparison needs the base's dimensions/audio evidence. `compatibility`
+mode makes **zero** extra requests, so it is byte-for-byte the pre-round-67
+proxy path.
+
 The variable is optional and empty-string-safe:
 
 | Variable | Values | Default |
@@ -34,8 +53,9 @@ unrecognized value logs one warning and also resolves to `balanced`.
 ### `compatibility`
 
 The pre-round-67 ladder, unchanged in order: durable native `v.redd.it`
-first, then EmbedEZ 720p, then vxreddit, then EmbedEZ 1080p. This is the
-zero-code rollback: switch the Variable, no deploy needed.
+first, then EmbedEZ 720p, then vxreddit, then EmbedEZ 1080p — and on the
+proxy path the round-49 proxy video is used verbatim with no extra request.
+This is the zero-code rollback: switch the Variable, no deploy needed.
 
 ### `highest`
 
@@ -95,8 +115,10 @@ resort before the thumbnail fallback.
 | One run, total quality attempts | 180 s |
 
 After the per-run budget is spent, the resolver goes straight to the durable
-native ladder. Concurrency is bounded: at most two candidate probes are in
-flight per post (vxreddit and EmbedEZ 1080p), and posts are processed
+native ladder (on the proxy path it keeps the validated proxy video
+untouched). Concurrency is bounded: at most two candidate probes are in
+flight per post (vxreddit and EmbedEZ 1080p), the proxy-path opportunity is
+one awaited probe plus at most one comparison probe, and posts are processed
 sequentially.
 
 Nothing in this subsystem writes candidate URLs, proxy state or temporary
