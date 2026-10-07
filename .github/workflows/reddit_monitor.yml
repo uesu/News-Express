@@ -283,7 +283,7 @@ jobs:
             echo "- entries read: $(extract_number 'Combined feed OK: [0-9]+ entries')"
             echo "- new candidates: ${new_candidates}"
             echo "- posts delivered: $(count_matches 'Reddit V3 Posted:')"
-            echo "- listing/retry deferrals: $(count_matches 'skipped.*next tick|retried next tick')"
+            echo "- listing/retry-related log lines: $(count_matches 'skipped.*next tick|retried next tick')"
             echo
             echo "### Providers and videos"
             echo "- proxy warmups: ${ok} OK, ${failed} failed"

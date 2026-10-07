@@ -13,7 +13,7 @@ This document tracks current monitor observability and selected workflow variabl
 `MEDIA_HEAL_SCOPE=video` is the default. `off` disables the pass; `on` or
 `all` includes additional media types. The workflow-only run summary reports
 actual runtime, aggregate feed entries, terminal feed failures, empty accounts,
-post counters, media-heal diagnostics, and cache status.
+post counters, and cache status.
 
 ## Reddit V3
 

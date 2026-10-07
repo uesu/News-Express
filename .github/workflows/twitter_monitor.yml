@@ -220,7 +220,12 @@ jobs:
             echo "**Runtime:** ${runtime}s"
             echo
             echo "### Feeds"
-            echo "- accounts checked: $(grep -Eo '^\[[^]]+\]' twitter_monitor.log 2>/dev/null | sort -u | wc -l | tr -d ' ')"
+            accounts_checked=$( {
+            grep -E '^\[[^]]+\] feed OK via' twitter_monitor.log 2>/dev/null
+            grep -E '^\[[^]]+\] NO working nitter instance this run' twitter_monitor.log 2>/dev/null
+            grep -E '^\[[^]]+\] skipping — no feed / 0 entries' twitter_monitor.log 2>/dev/null
+          } | sed -E 's/^\[([^]]+)\].*/\1/' | sort -u | wc -l | tr -d ' ')
+            echo "- accounts checked: ${accounts_checked}"
             echo "- entries read: ${entries_read}"
             echo "- successful feeds: ${feeds_ok}"
             echo "- failed feeds: ${feeds_failed}"
@@ -231,8 +236,6 @@ jobs:
             echo "- posts delivered: $(count_matches 'V3 Posted:')"
             echo "- skip log lines: $(count_matches 'skipping')"
             echo "- retry/fallback log lines: $(count_matches 'trying next|retry')"
-            echo
-            echo "### Media"
             echo
             echo "### State"
             echo "- cache: ${TWITTER_CACHE_RESULT:-failed}"

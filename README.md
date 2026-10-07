@@ -611,9 +611,11 @@ Historical records are preserved in
 
 The Reddit and Twitter monitor workflows capture each monitor's local output and
 write a GitHub Actions Step Summary after cache persistence. Summaries report
-runtime, feed/post counters, provider or media diagnostics, and the actual cache
-result. Summary parsing is local-only and does not add feed, provider, media,
-Discord, retry, scheduling, or cache-selection work to the monitor path.
+runtime, feed/post counters, provider and video diagnostics, and the actual cache
+result. The Reddit summary includes provider and video diagnostics. The Twitter
+summary focuses on feed, entry, delivery, runtime, and cache status. Summary
+parsing is local-only and does not add feed, provider, media, Discord, retry,
+scheduling, or cache-selection work to the monitor path.
 
 Twitter's workflow supports the post-delivery media-heal controls
 `MEDIA_HEAL`, `MEDIA_HEAL_SCOPE`, `MEDIA_HEAL_DELAY_SECONDS`, and
@@ -622,5 +624,7 @@ healing and `all`/`on` includes additional media types.
 
 The former Reddit content-advisory/NSFW classification and gating settings are
 not active configuration. Do not add or enable `NSFW_ALLOWLIST`,
-`NSFW_FAIL_OPEN`, `NSFW_REQUIRE_SUBREDDIT`, or `NSFW_PAGE_FALLBACK`. Historical
-Historical round documents remain under `docs/` and are not current configuration instructions.
+`NSFW_FAIL_OPEN`, `NSFW_REQUIRE_SUBREDDIT`, or `NSFW_PAGE_FALLBACK`.
+
+Historical round documents remain under `docs/` and are not current
+configuration instructions.

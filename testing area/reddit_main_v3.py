@@ -3105,8 +3105,10 @@ async def proxy_video_quality_upgrade(session: aiohttp.ClientSession, vid: str |
             "has_audio": (facts or {}).get("has_audio")}
     winner = prefer_quality_candidate(quality, base)
     if isinstance(winner, dict) and str(winner.get("url") or "") == str(quality.get("url")):
+        content_type = (quality.get("content_type") or quality.get("mime_type")
+                       or "validated")
         logging.info(f"[{label or 'proxy'}] EmbedEZ 1080p candidate accepted: "
-                     f"provider=embedez, content_type=video/mp4, "
+                     f"provider=embedez, content_type={content_type}, "
                      f"{_video_evidence(quality)}, reason=validated quality improvement.")
         return quality["url"]
     return base_url
