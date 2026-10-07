@@ -178,7 +178,37 @@ jobs:
         #       run: python "testing area/reddit_main_v2_embedez.py"  <- rich card (EmbedEZ key)
         #       run: python "testing area/reddit_main_v3.py"          <- rich card (native media, no key)
         # ───────────────────────────────────────────────────────────────────
-        run: python "testing area/reddit_main_v3.py"   # ← V3 (proxy media + native fallback)
+        run: |
+          set -o pipefail
+          python "testing area/reddit_main_v3.py" 2>&1 | tee monitor.log
+
+      # Reporting only: this reads the local monitor log and performs no network
+      # or cache work. Keep this after the monitor so it cannot affect posting.
+      - name: Write monitor run summary
+        if: always()
+        run: |
+          {
+            echo "## Reddit Feed Monitor — run summary"
+            echo
+            if [ "${{ job.status }}" = "success" ]; then echo "**Result:** success"; else echo "**Result:** failure"; fi
+            echo "**Runtime:** $SECONDS seconds"
+            echo
+            echo "### Feed"
+            echo "- entries read: $(grep -o 'Combined feed OK: [0-9]* entries' monitor.log 2>/dev/null | tail -1 | grep -o '[0-9]*' || echo 0)"
+            echo "- new candidates: $(grep -c 'Found .* new Reddit posts' monitor.log 2>/dev/null || echo 0)"
+            echo "- posts delivered: $(grep -c 'Reddit V3 Posted:' monitor.log 2>/dev/null || echo 0)"
+            echo "- listing/retry deferrals: $(grep -c 'skipped.*next tick\|retried next tick' monitor.log 2>/dev/null || echo 0)"
+            echo
+            echo "### Providers and videos"
+            echo "- proxy warm-up health: $(grep -c 'proxy warm-up.*OK' monitor.log 2>/dev/null || echo 0) provider(s) OK"
+            echo "- accepted 1080p upgrades: $(grep -c 'EmbedEZ 1080p candidate accepted' monitor.log 2>/dev/null || echo 0)"
+            echo "- quality fallbacks: $(grep -c 'retaining validated base' monitor.log 2>/dev/null || echo 0)"
+            echo "- final video provider labels: $(grep -o 'card media via [^ ]*' monitor.log 2>/dev/null | sort -u | tr '\n' ' ' || echo none)"
+            echo
+            echo "### State"
+            echo "- cache/dedup: persisted by the following cache step"
+            echo "- summary source: local monitor.log only; no additional requests"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Persist updated caches (retry safely on a concurrent main update)
         env:
