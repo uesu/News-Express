@@ -16,6 +16,42 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-07 — Round 67: content-gate removal + video quality selection.**
+  **Part 1 — complete removal of the content-advisory gate.** The Reddit
+  engine no longer reads, classifies, holds, caches or logs any
+  content-advisory metadata: the gate, its four repository Variables, the
+  batched archive lookup, the Redlib badge reader, the crosspost-source
+  checks, the allowlist and the fail-closed "unknown metadata" hold are gone
+  from `reddit_main_v3.py`, `reddit_signals.py`, `reddit_monitor.yml`,
+  `.env.example`, the tests and the current docs. A case-insensitive search
+  for the removed names returns nothing in any active file; the truthful
+  record of the removal — every removed name and behavior — lives in
+  [`docs/history/ROUND_67.md`](history/ROUND_67.md). The remaining
+  protections are unchanged: dedup cache, `FRESH_HOLD_SECONDS`, the pristine
+  `/new` listing confirmation, the pending-recheck throttle, archive
+  liveness, media handling and the opt-in retraction seatbelt. No cache,
+  webhook, secret, proxy-order, image, GIF, photo or gallery behavior
+  changed. **Part 2 — video quality selection.** `resolve_video_url` is now
+  quality-aware and fully bounded: EmbedEZ 1080p and vxreddit are attempted
+  together (vxreddit started first — it stays the winner path and the
+  immediate fallback), a validated EmbedEZ 1080p result may replace it,
+  EmbedEZ 720p is only tried when vxreddit itself is unusable, and the
+  durable `v.redd.it` DASH ladder is the reliability floor before the
+  thumbnail + Read Post button. Every candidate is validated (status,
+  content type, HTML/JSON error body, 256 MiB limit, candidate timeout, and
+  real MP4 dimensions + audio-track evidence read from the byte prefix) —
+  a URL containing "1080" is never proof of quality, and signed/expiring
+  `packaged-media.redd.it` URLs are never card media and are never
+  persisted. New `REDDIT_VIDEO_QUALITY` Variable: `balanced` (default),
+  `compatibility` (the pre-round-67 ladder, byte-order identical — the
+  zero-code rollback) and `highest`. Strict budgets keep latency bounded:
+  8 s quality window (15 s in `highest`), 20 s per proxy candidate, 10 s per
+  native candidate, 40 s per post, 180 s of quality attempts per run.
+  Evidence and the manual canary checklist:
+  [`docs/REDDIT_VIDEO_MEDIA_REPORT.md`](REDDIT_VIDEO_MEDIA_REPORT.md) and
+  [`docs/REDDIT_VIDEO_QUALITY.md`](REDDIT_VIDEO_QUALITY.md). **Part 3** — the
+  manual media test report is committed as the round's evidence base.
+
 * **2026-10-06 — Python automation documentation sanitation.** Current docs
   now spell out CPython 3.14.8, patch/minor/major terminology, wheels-only
   runtime bump validation, the 30-day new-minor soak, `AUTO_MERGE_PYTHON_BUMP=yes`
@@ -92,13 +128,18 @@ rewritten when that happens, only relocated.
   instantly on the tick it first appears. Plus a stateless
   `FRESH_HOLD_SECONDS=30` floor computed from the post's own timestamp — no
   trackers, no pending entries, no inference. `LISTING_CONFIRM=0` restores
-  round-63 behavior. Dedup, fail-closed NSFW, and the retraction seatbelt
-  are unchanged.
+  round-63 behavior. Dedup, the round-42/45 fail-closed content-advisory gate
+  (REMOVED in round 67 — see
+  [`docs/history/ROUND_67.md`](history/ROUND_67.md)), and the retraction
+  seatbelt were unchanged at the time.
 * **2026-10-05 — Round 63: The Great Simplification.** The Reddit engine is
-  reduced to three protections: the dedup cache, the fail-closed NSFW gate
-  (polished: over_18 + thumbnail marker + subreddit flag + page markers on
-  every data path), and the opt-in retraction seatbelt (edit/delete/off —
-  all three verified by tests). Removed: settle window, mod-queue gate,
+  reduced to three protections: the dedup cache, the round-42/45 fail-closed
+  content-advisory gate (polished: over_18 + thumbnail marker + subreddit
+  flag + page markers on every data path; that gate was itself REMOVED in
+  round 67 — see
+  [`docs/history/ROUND_67.md`](history/ROUND_67.md)), and the opt-in
+  retraction seatbelt (edit/delete/off — all three verified by tests).
+  Removed: settle window, mod-queue gate,
   dup-media gate, repost gate, page-identity check, listing health guards
   and all their Variables. Posts now deliver as-is at cron speed.
 * **2026-10-05 — Docs: README restructure.** The README was rebuilt around
