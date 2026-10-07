@@ -133,6 +133,7 @@ jobs:
         env:
           CACHE_BRANCH: ${{ github.ref_name }}
         run: |
+          cache_result=failed
           echo "TWITTER_CACHE_RESULT=failed" >> "$GITHUB_ENV"
           set -o pipefail
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -141,7 +142,8 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "No cache changes to push."
-            echo "TWITTER_CACHE_RESULT=success" >> "$GITHUB_ENV"
+            cache_result=no-changes
+            echo "TWITTER_CACHE_RESULT=no-changes" >> "$GITHUB_ENV"
           else
             if ! git commit -m "auto: update posted_tweets.json cache"; then
               echo "::error::CACHE COMMIT FAILED — dedup cache was not persisted; rerun this monitor after resolving the repository state."
@@ -197,18 +199,20 @@ jobs:
               exit 1
             fi
           fi
-          echo "TWITTER_CACHE_RESULT=success" >> "$GITHUB_ENV"
-
+          if [ "$cache_result" != "no-changes" ]; then echo "TWITTER_CACHE_RESULT=success" >> "$GITHUB_ENV"; fi
 
       - name: Write Twitter monitor run summary
         if: always()
         run: |
           count_matches() { local pattern="$1"; grep -Ec "$pattern" twitter_monitor.log 2>/dev/null || true; }
           extract_last_number() { grep -Eo "$1" twitter_monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1 || echo 0; }
+          total_feed_entries() { grep 'feed OK via' twitter_monitor.log 2>/dev/null | grep -Eo '[0-9]+ entries' | grep -Eo '[0-9]+' | awk '{ total += $1 } END { print total + 0 }'; }
+          feed_failures() { awk '/^\[[^]]+\].*HTTP [0-9]+ —|^\[[^]]+\].*feed (unavailable|error)/ && $0 !~ /HTTP 200/ { n++ } END { print n + 0 }' twitter_monitor.log 2>/dev/null; }
           runtime=$(( $(date +%s) - ${TWITTER_START_EPOCH:-$(date +%s)} ))
           feeds_ok=$(count_matches 'feed OK via')
-          feeds_failed=$(count_matches 'HTTP [0-9]+|feed unavailable|failed')
+          feeds_failed=$(feed_failures)
           feeds_empty=$(count_matches 'HTTP 200 but 0 entries|skipping — no feed / 0 entries')
+          entries_read=$(total_feed_entries)
           {
             echo "## Twitter Feed Monitor — run summary"
             echo
@@ -217,7 +221,7 @@ jobs:
             echo
             echo "### Feeds"
             echo "- accounts checked: $(grep -Eo '^\[[^]]+\]' twitter_monitor.log 2>/dev/null | sort -u | wc -l | tr -d ' ')"
-            echo "- entries read: $(extract_last_number 'feed OK via .* — [0-9]+ entries') (last feed only; per-account details are in the log)"
+            echo "- entries read: ${entries_read}"
             echo "- successful feeds: ${feeds_ok}"
             echo "- failed feeds: ${feeds_failed}"
             echo "- empty feeds: ${feeds_empty}"
@@ -235,7 +239,6 @@ jobs:
             echo "- media-heal failures: $(count_matches 'MEDIA-HEAL.*failed|heal.*error')"
             echo
             echo "### State"
-            echo "- cache changes: $(count_matches 'cache|Cache changes')"
-            echo "- cache commit/push/recovery: ${TWITTER_CACHE_RESULT:-failed}"
+            echo "- cache: ${TWITTER_CACHE_RESULT:-failed}"
             echo "- summary source: local twitter_monitor.log only; no additional requests"
           } >> "$GITHUB_STEP_SUMMARY"
