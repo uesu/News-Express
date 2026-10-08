@@ -18,12 +18,13 @@ not win.
 each existing post-attempt fallback path:
 
 ```text
-quality fallback: retaining validated base provider=vxreddit; reason=quality_candidate_unavailable
-quality fallback: retaining validated base provider=vxreddit; reason=quality_candidate_not_superior_or_unvalidated
+quality fallback: candidate=embedez; retaining validated base provider=vxreddit; reason=quality_candidate_unavailable
+quality fallback: candidate=embedez; retaining validated base provider=vxreddit; reason=quality_candidate_not_superior_or_unvalidated
 ```
 
-The provider is computed from the retained base URL through
-`_provider_for_url()`:
+Each notice identifies the optional quality provider being evaluated as
+`candidate=embedez`; the retained base provider is computed from the retained
+URL through `_provider_for_url()`:
 
 - `vxreddit` → `vxreddit`
 - EmbedEZ / RedditEZ → `embedez`

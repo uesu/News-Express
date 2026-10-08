@@ -106,17 +106,19 @@ When the optional quality candidate is unavailable (for example, a failed
 HTTP response, invalid body, or timeout), the log says:
 
 ```text
-quality fallback: retaining validated base provider=vxreddit; reason=quality_candidate_unavailable
+quality fallback: candidate=embedez; retaining validated base provider=vxreddit; reason=quality_candidate_unavailable
 ```
 
 When a candidate was returned but the existing selector did not accept it as
 a superior validated result, the log says:
 
 ```text
-quality fallback: retaining validated base provider=vxreddit; reason=quality_candidate_not_superior_or_unvalidated
+quality fallback: candidate=embedez; retaining validated base provider=vxreddit; reason=quality_candidate_not_superior_or_unvalidated
 ```
 
-The provider label is computed from the retained URL, not hard-coded:
+`candidate=embedez` identifies the optional EmbedEZ quality candidate being
+compared; the retained-base `provider` label is computed from its URL, not
+hard-coded:
 
 | URL family | Fallback provider label |
 | --- | --- |

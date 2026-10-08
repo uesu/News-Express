@@ -5322,7 +5322,8 @@ check("r68: HTTP 400 logs unavailable and retains the validated vxreddit base "
       "with no extra request or unsupported quality claim",
       _r68_http400_url == _r67b_base and len(_r68_http400_calls) == 1
       and _r68_http400_fallbacks == [
-          "[r68] quality fallback: retaining validated base provider=vxreddit; "
+          "[r68] quality fallback: candidate=embedez; "
+          "retaining validated base provider=vxreddit; "
           "reason=quality_candidate_unavailable"]
       and not any(word in _r68_http400_fallbacks[0]
                   for word in ("720p", "1080p", "dimensions=", "audio=")),
@@ -5334,7 +5335,8 @@ _r68_invalid_url, _r68_invalid_calls, _r68_invalid_logs = _r68_run_real_quality_
 check("r68: an invalid HTML quality response uses the unavailable fallback "
       "reason and retains the base",
       _r68_invalid_url == _r67b_base and len(_r68_invalid_calls) == 1
-      and any("quality fallback: retaining validated base provider=vxreddit; "
+      and any("quality fallback: candidate=embedez; "
+              "retaining validated base provider=vxreddit; "
               "reason=quality_candidate_unavailable" in line
               for line in _r68_invalid_logs),
       str((_r68_invalid_url, _r68_invalid_calls, _r68_invalid_logs)))
@@ -5351,7 +5353,8 @@ _r68_offline_url, _r68_offline_calls, _r68_offline_logs = _r68_run_real_quality_
 check("r68: a failed quality request emits the unavailable fallback without "
       "probing or losing vxreddit",
       _r68_offline_url == _r67b_base and len(_r68_offline_calls) == 1
-      and any("quality fallback: retaining validated base provider=vxreddit; "
+      and any("quality fallback: candidate=embedez; "
+              "retaining validated base provider=vxreddit; "
               "reason=quality_candidate_unavailable" in line
               for line in _r68_offline_logs),
       str((_r68_offline_url, _r68_offline_calls, _r68_offline_logs)))
@@ -5371,7 +5374,8 @@ check("r68: a validated candidate that is not superior retains the base with "
       _r68_not_superior_url == _r67b_base
       and len(_r68_not_superior_calls) == 2
       and _r68_not_superior_fallbacks == [
-          "[r68] quality fallback: retaining validated base provider=vxreddit; "
+          "[r68] quality fallback: candidate=embedez; "
+          "retaining validated base provider=vxreddit; "
           "reason=quality_candidate_not_superior_or_unvalidated"],
       str((_r68_not_superior_url, _r68_not_superior_calls,
            _r68_not_superior_logs)))
@@ -5393,7 +5397,7 @@ for _r68_base_url, _r68_expected_provider in _r68_provider_cases:
     _r68_result, _r68_messages = _r68_run_mock_quality_attempt(
         _r68_no_candidate, _r68_no_probe, _r68_base_url)
     _r68_expected_log = (
-        "[r68] quality fallback: retaining validated base "
+        "[r68] quality fallback: candidate=embedez; retaining validated base "
         f"provider={_r68_expected_provider}; reason=quality_candidate_unavailable")
     _r68_provider_results.append(
         _r68_result == _r68_base_url
