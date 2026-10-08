@@ -95,6 +95,52 @@ A candidate is usable only when all of the following hold:
 **A URL containing `1080` is never proof of 1080p.** URL quality hints are
 used for ordering only.
 
+### Quality fallback logging (round 68)
+
+The proxy-path quality opportunity now states why an already validated base
+video was retained. This is a logging-only change: it does not alter provider
+selection, validation, request counts, timeouts, budgets, or the returned
+media URL.
+
+When the optional quality candidate is unavailable (for example, a failed
+HTTP response, invalid body, or timeout), the log says:
+
+```text
+quality fallback: candidate=embedez; retaining validated base provider=vxreddit; reason=quality_candidate_unavailable
+```
+
+When a candidate was returned but the existing selector did not accept it as
+a superior validated result, the log says:
+
+```text
+quality fallback: candidate=embedez; retaining validated base provider=vxreddit; reason=quality_candidate_not_superior_or_unvalidated
+```
+
+`candidate=embedez` identifies the optional EmbedEZ quality candidate being
+compared; the retained-base `provider` label is computed from its URL, not
+hard-coded:
+
+| URL family | Fallback provider label |
+| --- | --- |
+| vxreddit | `vxreddit` |
+| EmbedEZ / RedditEZ | `embedez` |
+| Embeddit | `embeddit` |
+| native `v.redd.it` DASH | `native-dash` |
+| unrecognized video host | `unknown` |
+
+Add future host mappings to `_provider_for_url()`; an unrecognized host is
+never mislabeled as a thumbnail. The explicit accepted-upgrade message is
+unchanged. Dimensions and audio are reported only from probe facts; absent
+evidence remains `unverified` / `unknown`, and a URL quality hint is marked
+as non-evidence. These messages do not claim that the Reddit source is capped
+at 720p or establish the source's maximum quality.
+
+The workflow summary continues to count the stable `retaining validated
+base` phrase from its local `monitor.log`. That total is a count of fallback
+notices, not a complete count of all quality decisions; bypasses such as
+compatibility mode or a spent quality budget need not create a fallback
+notice. The summary adds no network or cache operation.
+
 ### Signed / expiring native URLs
 
 Signed and expiring `packaged-media.redd.it` URLs (any URL carrying
