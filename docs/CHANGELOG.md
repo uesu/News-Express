@@ -16,6 +16,20 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-08 — Round 69: Reddit provider-order docs + Arctic outage reasons.**
+  The README and the Reddit V3 module comments now describe the live proxy
+  priority/tie-break order (`vxreddit → redditez → Embeddit rewrite`), dispatched
+  as bounded concurrent waves rather than a serial chain. The stale V3 header
+  that said EmbedEZ was absent from the quality path is corrected: EmbedEZ is an
+  optional, validated 1080p candidate. The Arctic Shift search diagnostic now
+  logs the exception class name when `str(exception)` is empty
+  (`Arctic Shift search unavailable: TimeoutError`). HTTP messages such as
+  `HTTP 422` and descriptive exception text are unchanged. Offline smoke
+  coverage was added for blank-exception Arctic failures. No provider order,
+  request, retry, timeout, probe, cache, posting, scheduling, quality-selection,
+  or image/GIF/gallery/non-video behavior changed. See
+  [`docs/history/ROUND_69.md`](history/ROUND_69.md).
+
 * **2026-10-08 — Round 68: Reddit video-quality fallback diagnostics (logging only).**
   The optional EmbedEZ quality path now logs `candidate=embedez` separately
   from the dynamically identified retained-base provider, with an explicit
