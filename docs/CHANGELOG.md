@@ -16,6 +16,23 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-08 — Round 68: Reddit video-quality fallback diagnostics (logging only).**
+  The optional EmbedEZ quality path now logs an explicit fallback reason when
+  its candidate is unavailable or is not accepted as a superior validated
+  result, while keeping the stable `retaining validated base` phrase used by
+  the existing local workflow-summary counter. The retained base provider is
+  labeled dynamically (`vxreddit`, `embedez` for EmbedEZ/RedditEZ, `embeddit`,
+  `native-dash`, or conservatively `unknown` for unrecognized hosts). The
+  accepted-upgrade message and candidate-selection logic are unchanged.
+  No provider order, reliability fallback, request/probe, timeout, quality
+  budget, cache, deduplication, posting, Discord payload, scheduling, retry,
+  or image/GIF/gallery/non-video behavior changed. URL text is not quality
+  evidence; unprobed dimensions/audio stay unverified/unknown. The summary
+  remains local-log-only and its fallback-notice count is not a complete
+  quality-decision count. See
+  [`docs/REDDIT_VIDEO_QUALITY.md`](REDDIT_VIDEO_QUALITY.md) and
+  [`docs/history/ROUND_68.md`](history/ROUND_68.md).
+
 * **2026-10-07 — Round 67: content-gate removal + video quality selection.**
   **Part 1 — complete removal of the content-advisory gate.** The Reddit
   engine no longer reads, classifies, holds, caches or logs any
