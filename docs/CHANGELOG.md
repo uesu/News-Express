@@ -16,6 +16,14 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-11 — Round 70: bounded Twitter video media heal (4 attempts).**
+  The default Twitter media-heal re-edit count rises from 2 to 4 for
+  unresolved video tiles, hard-capped at 4 (`MEDIA_HEAL_ATTEMPTS`). The 45-second
+  delay, immediate exit on resolved media, video-only scope, and 256 MiB
+  preflight cap are unchanged. This does not add automatic 4K-to-lower-quality
+  switching or cross-run healing. See
+  [`docs/history/ROUND_70.md`](history/ROUND_70.md).
+
 * **2026-10-08 — Round 69: Reddit provider-order docs + Arctic outage reasons.**
   The README and the Reddit V3 module comments now describe the live proxy
   priority/tie-break order (`vxreddit → redditez → Embeddit rewrite`), dispatched

@@ -71,7 +71,7 @@ flowchart LR
 | **Full Articles** | article tweets post cover image, title, full body text and every in-article image/GIF |
 | **Translation** | non-English tweets get a *Translated from X* block with the original preserved (via FxTwitter's `/en` endpoint); an identical "translation" (X language mis-detection) is dropped automatically |
 | **Links** | clickable `#hashtags` and `@mentions`, exactly like fxtwitter embeds |
-| **Self-heal** | Discord's media proxy occasionally serves a broken tile — affected cards are automatically re-edited once after posting (`MEDIA_HEAL*` Variables) |
+| **Self-heal** | Discord's media proxy occasionally serves a broken tile — affected cards are automatically re-edited after posting, up to 4 bounded same-payload attempts (`MEDIA_HEAL*` Variables) |
 | **Resilient feeds** | an 11-instance nitter fallback fleet, ordered by live evidence; optional `NITTER_RSS_TOKEN` unlocks the token-gated instance |
 | **Repost attribution** | reposted tweets credit the original author |
 
@@ -325,7 +325,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `MEDIA_HEAL` | `on` | `off` = disable the post-posting media re-edit pass |
 | `MEDIA_HEAL_SCOPE` | `video` | `on`/`all` = also heal photos/gif/webp; `off` = never re-edit |
 | `MEDIA_HEAL_DELAY_SECONDS` | `45` | wait before each re-edit (30–60 is sane) |
-| `MEDIA_HEAL_ATTEMPTS` | `2` | max re-edits per message |
+| `MEDIA_HEAL_ATTEMPTS` | `4` | max same-payload re-edits per message; hard-capped at 4 |
 
 **FULL MODE probe**
 
@@ -584,6 +584,36 @@ of FxTwitter/FxEmbed — [donations welcome](https://github.com/sponsors/dangere
 
 ---
 
+## Workflow observability
+
+The Reddit and Twitter monitor workflows capture each monitor's local output
+and write a GitHub Actions Step Summary after cache persistence.
+
+The summaries report runtime, feed and post counters, provider and video
+diagnostics where applicable, delivery results, and cache status. The Reddit
+summary includes provider and video diagnostics; the Twitter summary focuses on
+feed, entry, delivery, runtime, and cache status. Summary generation is
+local-only and does not add feed, provider, media, Discord, retry, scheduling,
+or cache-selection work to the monitor path.
+
+The Twitter workflow supports these post-delivery media-heal controls:
+
+- `MEDIA_HEAL` — enables or disables healing; default: enabled.
+- `MEDIA_HEAL_SCOPE` — defaults to `video`; `off` disables healing and `on`/`all`
+  includes additional media types.
+- `MEDIA_HEAL_DELAY_SECONDS` — delay before each re-edit; default: 45 seconds.
+- `MEDIA_HEAL_ATTEMPTS` — maximum same-payload re-edits; default: 4, hard-capped
+  at 4.
+
+Healthy media exits immediately and does not wait for the heal delay.
+
+The former Reddit content-advisory/NSFW classification and gating settings are
+not active configuration. Do not add or enable `NSFW_ALLOWLIST`,
+`NSFW_FAIL_OPEN`, `NSFW_REQUIRE_SUBREDDIT`, or `NSFW_PAGE_FALLBACK`.
+
+Historical round documents remain under `docs/` and are not current
+configuration instructions.
+
 ## 🗒 Changelog
 
 Latest release and current changes are documented in
@@ -605,26 +635,3 @@ Historical records are preserved in
   Nitter's author.
 * All trademarks belong to their respective owners; this project is an
   unofficial, non-affiliated automation tool for personal servers.
-
-
-## Workflow observability
-
-The Reddit and Twitter monitor workflows capture each monitor's local output and
-write a GitHub Actions Step Summary after cache persistence. Summaries report
-runtime, feed/post counters, provider and video diagnostics, and the actual cache
-result. The Reddit summary includes provider and video diagnostics. The Twitter
-summary focuses on feed, entry, delivery, runtime, and cache status. Summary
-parsing is local-only and does not add feed, provider, media, Discord, retry,
-scheduling, or cache-selection work to the monitor path.
-
-Twitter's workflow supports the post-delivery media-heal controls
-`MEDIA_HEAL`, `MEDIA_HEAL_SCOPE`, `MEDIA_HEAL_DELAY_SECONDS`, and
-`MEDIA_HEAL_ATTEMPTS`. `MEDIA_HEAL_SCOPE=video` is the default; `off` disables
-healing and `all`/`on` includes additional media types.
-
-The former Reddit content-advisory/NSFW classification and gating settings are
-not active configuration. Do not add or enable `NSFW_ALLOWLIST`,
-`NSFW_FAIL_OPEN`, `NSFW_REQUIRE_SUBREDDIT`, or `NSFW_PAGE_FALLBACK`.
-
-Historical round documents remain under `docs/` and are not current
-configuration instructions.
