@@ -1,6 +1,6 @@
 # Round 71 — Reddit Markdown-table readability
 
-**Status:** In review — PR opened from `arena/316a205d-news-express`
+**Status:** Shipped in PR #58
 **Scope:** Active Reddit V3 card body rendering (readability only)
 **Date:** 2026-10-11
 **Supersedes:** the round-66 table rendering (per-row `**bold-label**` bullets)
