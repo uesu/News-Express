@@ -343,9 +343,9 @@ RETRACT_MODE = os.getenv("RETRACT_MODE", "edit").strip().lower() or "edit"
 RETRACT_WINDOW_SECONDS = _env_int("RETRACT_WINDOW_SECONDS", 21600)
 POSTED_MESSAGES_FILE = "posted_messages.json"
 
-# Round 72: Discord can probe a generated proxy video before its media
-# metadata is ready. Re-edit the same card once after delivery; ordinary
-# cards keep their existing POST path (no wait=true or extra request).
+# Round 72: inspect Discord's response for video cards. Only a video tile
+# with unresolved metadata may get one same-message edit; ordinary cards
+# keep their existing POST path (no wait=true or extra request).
 PROXY_VIDEO_HEAL = (os.getenv("PROXY_VIDEO_HEAL") or "1").strip().lower() not in ("0", "false", "no", "off")
 PROXY_VIDEO_HEAL_DELAY = max(0, min(60, _env_int("PROXY_VIDEO_HEAL_DELAY", 6)))
 
@@ -4615,39 +4615,95 @@ async def live_removal_reason(session, path: str, label: str = "") -> str | None
     return None
 
 
-def _has_generated_proxy_video(data: dict) -> bool:
-    """Only generated proxy video tiles need Discord's cold-start re-probe.
+# Video classification is by media kind in the outgoing card and by Discord's
+# returned media record, not by a fixed proxy-provider hostname list. URL
+# extension is a fallback for the pure response inspector (Discord omits the
+# kind when content_type is empty); the main loop also passes its known video
+# URLs so extensionless providers remain covered.
+_REDDIT_VIDEO_EXTENSION_RE = re.compile(r"\.(?:mp4|m4v|mov|webm|m3u8)$", re.I)
 
-    Compare host and path (not a substring of the full URL) so a native URL
-    with proxy-looking query parameters, or a lookalike hostname, is excluded.
-    """
-    if not PROXY_VIDEO_HEAL or not isinstance(data, dict):
+
+def _has_video_media(data: dict) -> bool:
+    return (PROXY_VIDEO_HEAL and isinstance(data, dict)
+            and any(isinstance(m, dict) and m.get("kind") == "video" and m.get("url")
+                    for m in data.get("media") or []))
+
+
+def _native_reddit_media_url(url: str) -> bool:
+    """Native Reddit videos stay on their original delivery path (no edit)."""
+    try:
+        host = urllib.parse.urlparse(str(url or "")).hostname or ""
+    except ValueError:
         return False
-    paths = {
-        "vxreddit.com": "/redditvideo.mp4",
-        "www.vxreddit.com": "/redditvideo.mp4",
-        "redditez.com": "/redditvideo.mp4",
-        "embeddit.com": "/redditvideo.mp4",
-        "proxy.embedez.com": "/render/video.mp4",
-    }
-    for item in data.get("media") or []:
-        if not isinstance(item, dict) or item.get("kind") != "video":
-            continue
+    return (host in ("reddit.com", "redd.it")
+            or host.endswith((".reddit.com", ".redd.it")))
+
+
+def unresolved_reddit_video_items(message: dict | None,
+                                  video_urls=()) -> list[str]:
+    """Return video URLs Discord reported with unresolved media metadata.
+
+    Walk gallery items in all Components V2 containers, including split
+    galleries. Ignore unrelated images, thumbnails and absent/malformed
+    responses. A video with both dimensions > 0 and a content type is healthy.
+    This pure inspector deliberately detects native videos too; the caller
+    excludes native URLs before queuing a repair.
+    """
+    if not isinstance(message, dict):
+        return []
+    known_urls = set(video_urls)
+    bad = []
+
+    def positive(value):
         try:
-            url = urllib.parse.urlparse(str(item.get("url") or ""))
-            host = url.hostname
-        except ValueError:
-            continue
-        if url.scheme not in ("https", "http"):
-            continue
-        path = url.path.lower()
-        if host in paths and path == paths[host]:
-            return True
-        # The live Embeddit instance exposes muxed/renderer files beneath
-        # /video/<id>/..., not the generic /redditvideo.mp4 route.
-        if host == "embeddit.deltandy.me" and path.startswith("/video/") and path.endswith(".mp4"):
-            return True
-    return False
+            return not isinstance(value, bool) and float(value) > 0
+        except (ValueError, TypeError):
+            return False
+
+    def walk(node):
+        if isinstance(node, list):
+            for child in node:
+                walk(child)
+            return
+        if not isinstance(node, dict):
+            return
+        items = node.get("items")
+        if isinstance(items, list):
+            for item in items:
+                media = item.get("media") if isinstance(item, dict) else None
+                if not isinstance(media, dict):
+                    continue
+                url = media.get("url")
+                if not isinstance(url, str) or not url:
+                    continue
+                try:
+                    path = urllib.parse.urlparse(url).path
+                except ValueError:
+                    continue
+                kind = str(media.get("content_type") or "").strip().lower()
+                if not (url in known_urls or kind.startswith("video/")
+                        or _REDDIT_VIDEO_EXTENSION_RE.search(path)):
+                    continue
+                if (not positive(media.get("width"))
+                        or not positive(media.get("height")) or not kind):
+                    bad.append(url)
+        walk(node.get("components"))
+
+    walk(message.get("components"))
+    return bad
+
+
+def _unresolved_healable_video_items(message: dict | None, data: dict) -> list[str]:
+    """Response-based heal eligibility; native Reddit media is untouched."""
+    if not _has_video_media(data):
+        return []
+    video_urls = {str(m["url"]) for m in data["media"]
+                  if isinstance(m, dict) and m.get("kind") == "video" and m.get("url")
+                  and not _native_reddit_media_url(m["url"])}
+    if not video_urls:
+        return []
+    return [url for url in unresolved_reddit_video_items(message, video_urls)
+            if url in video_urls]
 
 
 async def heal_proxy_video_message(session, webhook_url: str, message_id: str,
@@ -5256,16 +5312,17 @@ async def main():
                                      f"(YouTube link only): {data['youtube_url']}")
                     continue
 
-                needs_proxy_video_heal = _has_generated_proxy_video(data)
+                inspect_video_response = _has_video_media(data)
                 target_url = f"{webhook_url}?with_components=true"
-                # Only a later edit (or the retraction seatbelt) needs the ID.
-                if RETRACT_DEAD_POSTS or needs_proxy_video_heal:
+                # Only video cards (or the retraction seatbelt) need the
+                # created message JSON. Ordinary cards still use the old POST.
+                if RETRACT_DEAD_POSTS or inspect_video_response:
                     target_url += "&wait=true"
                 async with session.post(target_url, json=payload,
                                         timeout=aiohttp.ClientTimeout(total=15)) as resp:
                     if resp.status in (200, 204):
                         message_json = None
-                        if (RETRACT_DEAD_POSTS or needs_proxy_video_heal) and resp.status == 200:
+                        if (RETRACT_DEAD_POSTS or inspect_video_response) and resp.status == 200:
                             try:
                                 message_json = await resp.json(content_type=None)
                             except Exception:
@@ -5363,11 +5420,16 @@ async def main():
                                 logging.error(f"YouTube link message failed: {yt_e}")
                             await asyncio.sleep(1.0)
                         # A missing/invalid wait=true response cannot be edited.
-                        # The card is already delivered and cached either way.
-                        if (needs_proxy_video_heal and isinstance(message_json, dict)
+                        # Only Discord-reported unresolved *non-native* video
+                        # items queue a repair; healthy cards are left alone.
+                        unresolved = _unresolved_healable_video_items(message_json, data)
+                        if (unresolved and isinstance(message_json, dict)
                                 and message_json.get("id")):
                             proxy_video_heal_queue.append(
                                 (webhook_url, str(message_json["id"]), payload, unique_key))
+                            logging.info(f"[{unique_key}] proxy-video heal queued: "
+                                         f"Discord reported {len(unresolved)} unresolved "
+                                         "video item(s).")
                         await asyncio.sleep(1.5)
                     else:
                         body = await resp.text()

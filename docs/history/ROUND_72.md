@@ -2,46 +2,62 @@
 
 **Status:** In review — follow-up PR pending
 
-**Scope:** Active Reddit V3 generated proxy-video delivery
+**Scope:** Active Reddit V3 video delivery across all configured subreddits
 
 **Date:** 2026-10-12
 
-**Predecessor:** Round 71 Reddit Markdown-table readability
-
 ## Problem
 
-A generated proxy-video URL can be reachable and downloadable before Discord
-has completed its own media probe. The initial Components V2 card can then
-show a one-off `0 × 0` media record or `Image failed to load`, even though
-the same proxy URL becomes playable moments later in a browser and in
-Discord after a manual edit.
+A Reddit video endpoint can be reachable before Discord has completed its
+media probe. The initial Components V2 card may then contain a media item with
+`width: 0`, `height: 0`, and an empty `content_type`, which appears as
+`Image failed to load`. The same URL can become playable shortly afterward.
 
-The observed case used a vxreddit CMAF gateway URL. The monitor successfully
-validated the video bytes, but Discord received the card while the proxy
-render endpoint was still becoming ready. This is a transient media-probe
-readiness issue, not a Reddit delivery failure or a bad source video.
+The observed incident was an AnantaLeaks vxreddit video. Other Genshin cards
+in the same testing period returned valid dimensions and rendered correctly.
 
-## Behavior
+## Detection and behavior
 
-The initial Reddit V3 post remains unchanged. For cards containing a generated
-proxy-video URL, the monitor:
+The monitor follows the response-based pattern already proven by the Twitter
+media-heal path:
 
-1. posts the card normally;
-2. receives the message ID using the webhook's `wait=true` response;
-3. once all cards and follow-ups have been delivered, waits the bounded
-   `PROXY_VIDEO_HEAL_DELAY` interval (multiple repairs wait concurrently);
-4. edits the same Discord message once with the identical Components V2
-   payload, allowing Discord to re-fetch the now-ready media URL.
+1. Video cards use `wait=true` so Discord returns the created message JSON.
+2. The returned Components V2 gallery media items are inspected.
+3. A repair is queued only when Discord reports a video item with missing or
+   zero width/height, or missing `content_type`.
+4. Healthy videos are not edited.
+5. Queued repairs run concurrently after the posting loop and perform one
+   identical same-message edit.
 
-The repair covers generated proxy-video URL shapes from vxreddit, redditez,
-Embeddit-style proxies, and EmbedEZ render-video endpoints. Host and path are
-matched rather than trusting arbitrary URLs containing a proxy-looking query
-string. It does not replace the provider winner, change the media URL,
-delete/repost the message, or lower video quality. A missing message ID or a
-failed PATCH logs/skips the repair without failing the already delivered card.
+Video detection uses the outgoing card's media kind together with Discord's
+returned media metadata, not an allowlist of vxreddit, redditez, Embeddit,
+EmbedEZ, or other provider hosts. It also handles extensionless video URLs
+when the outgoing card identifies them as video. The pure inspector can
+recognize an unresolved native `v.redd.it` video too, but **native Reddit
+media is not queued for repair**: this round preserves its existing no-edit
+behavior. For all non-native video providers the edit decision comes from
+Discord's returned metadata, not the provider name. The returned URL must
+match a video in the outgoing card; unrelated gallery images and thumbnails
+cannot trigger a repair.
 
-Native Reddit media, images, text posts, buttons, cache behavior, provider
-selection, continuation components, and YouTube previews are unchanged.
+Images, text posts, resolved videos, native Reddit media, provider selection,
+buttons, continuation components, YouTube previews, and cache behavior are
+unchanged. An already-posted historical card is not automatically revisited;
+that card must be manually edited if it needs repair.
+
+## Performance and safety
+
+Healthy video cards receive no PATCH/edit and no six-second heal delay. The
+initial `wait=true` response is used only to inspect the message returned by
+the same webhook POST; it does not add a second request. Only Discord-
+unresolved non-native video cards receive the delayed PATCH. When
+`RETRACT_DEAD_POSTS=1`, its original message ID and payload are still saved.
+
+Repairs are bounded to one identical edit per unresolved video card, run
+concurrently after delivery, and use a 15-second request timeout. A failed
+or missing repair does not fail or undo the already-delivered card. There is
+no retry loop, provider fallback change, cache reset, lower-resolution
+fallback, or media-cap change.
 
 ## Configuration
 
@@ -51,23 +67,9 @@ PROXY_VIDEO_HEAL_DELAY=6
 ```
 
 Both optional repository Variables are wired in the Reddit workflow; empty
-values use defaults. Setting `PROXY_VIDEO_HEAL=0` disables the repair. Delay
-is in seconds, clamped to 0–60, and applies only to generated proxy-video
-cards.
-
-## Performance and safety
-
-Normal posts have no additional wait or edit. Affected proxy-video cards
-receive one same-message edit after the initial post; deferring repairs until
-after the posting loop avoids delaying subsequent posts. There is no retry
-loop, provider fallback change, cache reset, lower-resolution fallback,
-media-cap change, or remote request before the normal post. The PATCH has
-a 15-second request timeout. Enabling the opt-in dead-post retraction seatbelt
-still stores the original message ID and payload for future tombstones.
-
-An already-posted historical card is not automatically revisited. Existing
-failed cards must be manually edited once if they need repair; this feature
-applies to future delivery attempts.
+values use defaults. `PROXY_VIDEO_HEAL=0` disables the inspection/repair path.
+The delay is clamped to 0–60 seconds and applies only after Discord has
+reported unresolved non-native video metadata.
 
 ## Validation
 
@@ -78,9 +80,7 @@ python tests/test_reddit_signals.py
 git diff --check
 ```
 
-Results in this checkout: `SMOKE TEST: ALL PASS` and
-`REDDIT SIGNAL TEST: ALL PASS (96 pass)`.
-
-Offline smoke guards cover eligible and ineligible URLs, feature opt-out,
-workflow wiring, bounded same-payload edit behavior, error handling, and the
-conditional `wait=true` response path (including a mocked main-loop delivery).
+The regression coverage includes zero-dimension detection, missing content
+type, healthy video no-op behavior, native-video detection without edit,
+provider-agnostic and extensionless URLs, opt-out behavior, same-payload
+editing, error handling, retraction coexistence and workflow wiring.
