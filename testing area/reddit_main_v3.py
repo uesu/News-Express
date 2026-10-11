@@ -343,6 +343,12 @@ RETRACT_MODE = os.getenv("RETRACT_MODE", "edit").strip().lower() or "edit"
 RETRACT_WINDOW_SECONDS = _env_int("RETRACT_WINDOW_SECONDS", 21600)
 POSTED_MESSAGES_FILE = "posted_messages.json"
 
+# Round 72: Discord can probe a generated proxy video before its media
+# metadata is ready. Re-edit the same card once after delivery; ordinary
+# cards keep their existing POST path (no wait=true or extra request).
+PROXY_VIDEO_HEAL = (os.getenv("PROXY_VIDEO_HEAL") or "1").strip().lower() not in ("0", "false", "no", "off")
+PROXY_VIDEO_HEAL_DELAY = max(0, min(60, _env_int("PROXY_VIDEO_HEAL_DELAY", 6)))
+
 # ---------------------------------------------------------------------------
 # ■ ROUND 64 ("Pristine Listing Protocol", 2026-10-05)
 # A new post is delivered only when a pristine, cache-busted read of the
@@ -4609,6 +4615,65 @@ async def live_removal_reason(session, path: str, label: str = "") -> str | None
     return None
 
 
+def _has_generated_proxy_video(data: dict) -> bool:
+    """Only generated proxy video tiles need Discord's cold-start re-probe.
+
+    Compare host and path (not a substring of the full URL) so a native URL
+    with proxy-looking query parameters, or a lookalike hostname, is excluded.
+    """
+    if not PROXY_VIDEO_HEAL or not isinstance(data, dict):
+        return False
+    paths = {
+        "vxreddit.com": "/redditvideo.mp4",
+        "www.vxreddit.com": "/redditvideo.mp4",
+        "redditez.com": "/redditvideo.mp4",
+        "embeddit.com": "/redditvideo.mp4",
+        "proxy.embedez.com": "/render/video.mp4",
+    }
+    for item in data.get("media") or []:
+        if not isinstance(item, dict) or item.get("kind") != "video":
+            continue
+        try:
+            url = urllib.parse.urlparse(str(item.get("url") or ""))
+            host = url.hostname
+        except ValueError:
+            continue
+        if url.scheme not in ("https", "http"):
+            continue
+        path = url.path.lower()
+        if host in paths and path == paths[host]:
+            return True
+        # The live Embeddit instance exposes muxed/renderer files beneath
+        # /video/<id>/..., not the generic /redditvideo.mp4 route.
+        if host == "embeddit.deltandy.me" and path.startswith("/video/") and path.endswith(".mp4"):
+            return True
+    return False
+
+
+async def heal_proxy_video_message(session, webhook_url: str, message_id: str,
+                                   payload: dict, label: str) -> bool:
+    """Make one identical same-message edit after a generated video's warm-up."""
+    if not message_id or not webhook_url or not PROXY_VIDEO_HEAL:
+        return False
+    await asyncio.sleep(PROXY_VIDEO_HEAL_DELAY)
+    try:
+        async with session.patch(
+                f"{webhook_url}/messages/{message_id}?with_components=true",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status in (200, 204):
+                logging.info(f"[{label}] proxy-video media heal edit succeeded "
+                             f"after {PROXY_VIDEO_HEAL_DELAY}s")
+                return True
+            logging.warning(f"[{label}] proxy-video media heal edit HTTP {resp.status}: "
+                            f"{(await resp.text())[:200]}")
+    except Exception as exc:
+        # aiohttp exceptions can include the webhook URL (and its token).
+        logging.warning(f"[{label}] proxy-video media heal edit failed: "
+                        f"{type(exc).__name__}")
+    return False
+
+
 async def retract_dead_posts(session, posted_messages: dict, now: float) -> None:
     if not RETRACT_DEAD_POSTS or not posted_messages:
         return
@@ -4918,6 +4983,10 @@ async def main():
         # re-post storm.
         new_posts = cap_new_posts(new_posts, MAX_POSTS_PER_RUN)
 
+        # Round 72: defer edits until every card/continuation has been sent.
+        # Multiple proxy videos warm up concurrently; healthy posts never
+        # wait behind a preceding card's repair delay.
+        proxy_video_heal_queue = []
         for subreddit, path, unique_key, published_ts, activity_ts, entry in new_posts:
             # Round 34: double dedup (belt and braces) — collect() already
             # skips keys in the loaded cache, but a key can surface twice in
@@ -5187,14 +5256,16 @@ async def main():
                                      f"(YouTube link only): {data['youtube_url']}")
                     continue
 
+                needs_proxy_video_heal = _has_generated_proxy_video(data)
                 target_url = f"{webhook_url}?with_components=true"
-                if RETRACT_DEAD_POSTS:
+                # Only a later edit (or the retraction seatbelt) needs the ID.
+                if RETRACT_DEAD_POSTS or needs_proxy_video_heal:
                     target_url += "&wait=true"
                 async with session.post(target_url, json=payload,
                                         timeout=aiohttp.ClientTimeout(total=15)) as resp:
                     if resp.status in (200, 204):
                         message_json = None
-                        if RETRACT_DEAD_POSTS and resp.status == 200:
+                        if (RETRACT_DEAD_POSTS or needs_proxy_video_heal) and resp.status == 200:
                             try:
                                 message_json = await resp.json(content_type=None)
                             except Exception:
@@ -5291,12 +5362,23 @@ async def main():
                             except Exception as yt_e:
                                 logging.error(f"YouTube link message failed: {yt_e}")
                             await asyncio.sleep(1.0)
+                        # A missing/invalid wait=true response cannot be edited.
+                        # The card is already delivered and cached either way.
+                        if (needs_proxy_video_heal and isinstance(message_json, dict)
+                                and message_json.get("id")):
+                            proxy_video_heal_queue.append(
+                                (webhook_url, str(message_json["id"]), payload, unique_key))
                         await asyncio.sleep(1.5)
                     else:
                         body = await resp.text()
                         logging.error(f"Discord error {resp.status} for {unique_key}: {body}")
             except Exception as e:
                 logging.error(f"Failed building/posting {unique_key}: {e}")
+
+        if proxy_video_heal_queue:
+            await asyncio.gather(*(
+                heal_proxy_video_message(session, url, mid, payload, label)
+                for url, mid, payload, label in proxy_video_heal_queue))
 
         if RETRACT_DEAD_POSTS and not DRY_RUN:
             await retract_dead_posts(session, posted_messages, now)
