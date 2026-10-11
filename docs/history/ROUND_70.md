@@ -1,6 +1,6 @@
 # Round 70 — Bounded Twitter Discord Media Healing
 
-**Status:** Shipped in PR #57
+**Status:** Proposed in PR #57
 **Scope:** Active Twitter V3 media delivery
 **Date:** 2026-10-11
 
