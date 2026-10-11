@@ -4385,6 +4385,46 @@ check("r71: ordinary prose containing a pipe is left unchanged",
       and v3._format_markdown_tables(
           "Suoming | 5\\* Electro Sword\nLily | 5\\* Spectro Gun")
       == "Suoming | 5\\* Electro Sword\nLily | 5\\* Spectro Gun")
+# r71 review fix (PR #58): a following line that merely CONTAINS a pipe is
+# not a table continuation — only a line with real table-row boundaries
+# (leading or trailing pipe) can mark the run malformed. These three checks
+# pin the reviewer's regression test, the harder no-blank-line variant (a
+# different cell count is what tripped the original guard), and the
+# boundary-pipe case that must still stay byte-identical.
+check("r71: a valid table is still formatted before ordinary pipe prose",
+      v3._format_markdown_tables(
+          "| Patch | Drip Market |\n"
+          "|---|---|\n"
+          "| 3.7 | August 25/26, 2026 |\n\n"
+          "Suoming | 5\\* Electro Sword")
+      ==
+      "Patch 3.7\n"
+      "- Drip Market: August 25/26, 2026\n\n"
+      "Suoming | 5\\* Electro Sword",
+      repr(v3._format_markdown_tables(
+          "| Patch | Drip Market |\n|---|---|\n| 3.7 | August 25/26, 2026 |\n\n"
+          "Suoming | 5\\* Electro Sword")))
+check("r71: pipe prose with a DIFFERENT cell count straight after a table "
+      "(no blank line) still formats the table",
+      v3._format_markdown_tables(
+          "| Patch | Drip Market | Notes |\n"
+          "|---|---|---|\n"
+          "| 3.7 | August 25/26, 2026 | x |\n"
+          "Suoming | 5\\* Electro Sword")
+      ==
+      "Patch 3.7\n"
+      "- Drip Market: August 25/26, 2026\n"
+      "- Notes: x\n\n"
+      "Suoming | 5\\* Electro Sword",
+      repr(v3._format_markdown_tables(
+          "| Patch | Drip Market | Notes |\n|---|---|---|\n| 3.7 | August 25/26, 2026 | x |\n"
+          "Suoming | 5\\* Electro Sword")))
+_r71_boundary = "| a | b |\n|---|---|\n| x | y |\n| c | d | e |"
+check("r71: a mismatched row WITH table boundaries still leaves the run byte-identical",
+      v3._format_markdown_tables(_r71_boundary) == _r71_boundary
+      and v3._format_markdown_tables("| a | b |\n|---|---|\n| x | y |\nc | d | e |")
+      == "| a | b |\n|---|---|\n| x | y |\nc | d | e |",
+      repr(v3._format_markdown_tables(_r71_boundary)))
 check("r71: FAQ question gets a blank line after the heading",
       v3._format_markdown_tables("Frequently Asked Questions (FAQ):\nQ1: Banners?")
       == "Frequently Asked Questions (FAQ):\n\nQ1: Banners?")

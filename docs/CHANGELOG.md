@@ -33,7 +33,12 @@ rewritten when that happens, only relocated.
   Components V2 text budgets still bound the output. Reddit media handling,
   provider fallback, cache behavior, continuation components, buttons and
   YouTube previews are unchanged, as is the round-67 no-content-decision
-  policy. 13 new smoke guards (843/843; 96/96 signals). See
+  policy. Review fix (PR #58): a following pipe line only counts as a table
+  continuation when it has real table-row boundaries (leading/trailing `|`),
+  so ordinary pipe prose (`Suoming | 5\* Electro Sword`) can no longer
+  suppress formatting of the valid table above it — while mismatched
+  boundary rows and glued tables still stay byte-identical. 16 new smoke
+  guards (846/846; 96/96 signals). See
   [`docs/history/ROUND_71.md`](history/ROUND_71.md).
 
 * **2026-10-11 — Round 70: bounded Twitter video media heal (4 attempts).**

@@ -54,6 +54,32 @@ nothing is date-converted — a range like `October 9/10` cannot become a
 Discord timestamp without guessing, so the card's posted-time 🕐 stays the only
 timestamp.
 
+### Review fix (PR #58): pipe prose never disables a valid table
+
+The first revision treated **any** following line containing a pipe as a
+malformed table continuation, so a valid table that sat directly above pipe
+prose with a different cell count was left unformatted. A following pipe line
+now counts as a table continuation only when it carries real table-row
+boundaries — a leading or trailing `|`:
+
+```python
+next_line = lines[j].strip() if j < n else ""
+malformed = (
+    _split_markdown_table_row(next_line) is not None
+    and (next_line.startswith("|") or next_line.endswith("|")))
+```
+
+Consequences, all pinned by tests:
+
+* A valid table above ordinary pipe prose (`Suoming | 5\* Electro Sword`, with
+  or without a blank line between) now formats, and the prose stays
+  byte-identical.
+* A same-width pipe line without boundaries is still a data row — exactly how
+  Reddit's own renderer reads it (rows such as
+  `3.7 | August 25/26, 2026 | …` have no boundary pipes at all).
+* A mismatched row **with** boundaries (`| c | d | e |`) and glued tables still
+  leave the whole run byte-identical.
+
 ## Performance and safety
 
 The transformation is local and linear in body length. It adds **no** provider,
@@ -78,9 +104,10 @@ git diff --check
 
 The formatting regression checks cover the real live 1wxfuj5 table, grouped
 patch blocks, entity decoding, FAQ spacing, the never-doubled label, escaped
-pipes, empty cells/headers, and leaving ordinary pipe-containing prose and
-malformed/glued tables byte-identical. The smoke suite passes 843/843
-(838/838 before this round) and the signal suite 96/96.
+pipes, empty cells/headers, leaving ordinary pipe-containing prose and
+malformed/glued tables byte-identical, and (review fix, PR #58) a valid table
+formatted ahead of pipe prose with and without a blank line. The smoke suite
+passes 846/846 (838/838 before this round) and the signal suite 96/96.
 
 ## Not in this round
 

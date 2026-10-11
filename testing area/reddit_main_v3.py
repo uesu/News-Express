@@ -1877,7 +1877,15 @@ def _format_markdown_tables(body: str | None) -> str:
         # the whole run byte-identical rather than guess at a repair.
         glued = any(all(_TABLE_SEPARATOR_CELL_RE.fullmatch(cell.replace(" ", ""))
                         for cell in row) for row in rows)
-        malformed = j < n and _split_markdown_table_row(lines[j]) is not None
+        # Round 71 review fix (PR #58): only a following pipe line that
+        # actually looks like a table row — a leading or trailing boundary
+        # pipe — may mark the run malformed. A prose line that merely
+        # contains a pipe (the live "Suoming | 5\* Electro Sword" shape)
+        # must never disable a valid table above it.
+        next_line = lines[j].strip() if j < n else ""
+        malformed = (
+            _split_markdown_table_row(next_line) is not None
+            and (next_line.startswith("|") or next_line.endswith("|")))
         if glued or malformed:
             run_end = j
             while run_end < n and _split_markdown_table_row(lines[run_end]) is not None:
