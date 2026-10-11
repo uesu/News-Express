@@ -16,6 +16,18 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-12 — Round 72: Reddit proxy-video cold-start media heal.**
+  Discord may initially show a 0×0 or failed tile for a video that becomes
+  playable shortly afterward. Video cards request a message ID (`wait=true`)
+  so the returned gallery metadata can identify unresolved video tiles.
+  Only unresolved non-native videos get one identical same-message webhook
+  edit after delivery and a bounded default 6-second delay; healthy videos
+  get no edit. Detection covers future providers without a hostname list.
+  Native media is not edited; ordinary cards, provider selection, YouTube and
+  dedup behavior remain unchanged. `PROXY_VIDEO_HEAL=0` disables it;
+  `PROXY_VIDEO_HEAL_DELAY` adjusts the delay (0–60 seconds). See
+  [`docs/history/ROUND_72.md`](history/ROUND_72.md).
+
 * **2026-10-11 — Round 71: Reddit Markdown-table readability.**
   The active Reddit V3 formatter now renders a detected Markdown table as
   compact, grouped row blocks — a plain label line (`Patch 3.7`) followed by
