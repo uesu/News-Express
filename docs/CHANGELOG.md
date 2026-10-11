@@ -16,6 +16,31 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-11 — Round 71: Reddit Markdown-table readability.**
+  The active Reddit V3 formatter now renders a detected Markdown table as
+  compact, grouped row blocks — a plain label line (`Patch 3.7`) followed by
+  one `- <column>: <value>` bullet per populated column, a blank line between
+  rows, HTML entities decoded (`&amp;` → `&`), and a blank line before a
+  `Q1:`-style FAQ question that follows text. This **supersedes the round-66
+  rendering** (per-row `**bold-label**` bullets), which read as a wall of bold
+  on mobile. Detection is unchanged: header row + a well-formed separator of
+  the same width + a full run of data rows; malformed/glued tables and
+  ordinary prose containing a pipe stay byte-identical, and nothing is
+  date-converted (the card's 🕐 stays the only timestamp). The transform is
+  local and linear in body length, runs at the single card-build choke point
+  (RSS, FULL MODE, Arctic and proxy bodies all render identically), and adds
+  no provider, proxy, media, cache, retry or Discord request; existing
+  Components V2 text budgets still bound the output. Reddit media handling,
+  provider fallback, cache behavior, continuation components, buttons and
+  YouTube previews are unchanged, as is the round-67 no-content-decision
+  policy. Review fix (PR #58): a following pipe line only counts as a table
+  continuation when it has real table-row boundaries (leading/trailing `|`),
+  so ordinary pipe prose (`Suoming | 5\* Electro Sword`) can no longer
+  suppress formatting of the valid table above it — while mismatched
+  boundary rows and glued tables still stay byte-identical. 16 new smoke
+  guards (846/846; 96/96 signals). See
+  [`docs/history/ROUND_71.md`](history/ROUND_71.md).
+
 * **2026-10-11 — Round 70: bounded Twitter video media heal (4 attempts).**
   The default Twitter media-heal re-edit count rises from 2 to 4 for
   unresolved video tiles, hard-capped at 4 (`MEDIA_HEAL_ATTEMPTS`). The 45-second
