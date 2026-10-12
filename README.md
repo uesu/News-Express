@@ -84,7 +84,7 @@ flowchart LR
 | **YouTube** | thumbnail + animated `starwardspark3` button; optional real playback with `YOUTUBE_MEDIA_EMBED=1` |
 | **Body text** | clean markdown body (links stay clickable, spoilers → Discord spoilers, empty-blockquote artifacts dropped, entities unescaped exactly once on every path) |
 | **Readable tables** | Markdown tables become compact, grouped row blocks — a `Patch 3.7` label plus `- Column: value` bullets, entities decoded, FAQ/section spacing preserved — because Discord renders no table markdown; malformed tables and ordinary prose containing a pipe stay byte-identical |
-| **Proxy-video cold-start heal** | Video cards inspect Discord's returned media metadata; only unresolved non-native video tiles receive one delayed identical same-message edit. Healthy videos, ordinary posts and native media are not edited (see [Round 72](docs/history/ROUND_72.md)) |
+| **Proxy-video cold-start heal** | Video cards inspect Discord's returned media metadata; only unresolved non-native video tiles with explicit evidence (a returned width/height ≤ 0) queue one same-message edit, and the edit revalidates the delivered card first and re-checks the exact queued video URL — omitted metadata is treated as unknown, not failure. Initially healthy videos receive no repair work; ordinary posts and native media never enter the repair path (see [Round 72](docs/history/ROUND_72.md)) |
 | **Feeds** | one **combined RSS request** for all subreddits (fits Reddit's ~1 req/min datacenter limit) with automatic per-subreddit fallback; the optional `REDDIT_FEED_TOKEN` moves requests to the logged-in tier |
 | **FULL MODE** | with an optional Reddit script app: 💬/👍 stats, the OP's stickied comment, and true crosspost embeds |
 | **Fallback fleet** | proxy services (vxreddit → redditez → Embeddit rewrite — the priority/tie-break order, dispatched as bounded concurrent waves with Embeddit held back), Redlib instances, and the Arctic Shift archive — a dead source never breaks a run |
@@ -288,8 +288,8 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | Variable | Default | Meaning |
 |---|---|---|
 | `PROXY_MEDIA` | `1` | `0` = keep the native RSS/media fallback only (skip the proxy services) |
-| `PROXY_VIDEO_HEAL` | `1` | `0` = disable response-based, same-message repair for unresolved non-native video tiles |
-| `PROXY_VIDEO_HEAL_DELAY` | `6` | seconds before that edit, clamped to 0–60; healthy videos receive no edit or delay |
+| `PROXY_VIDEO_HEAL` | `1` | `0` = disable response-based, same-message repair for unresolved non-native video tiles (queued only on explicit evidence: a returned width/height ≤ 0) |
+| `PROXY_VIDEO_HEAL_DELAY` | `6` | seconds before the revalidated edit, clamped to 0–60. Initially healthy videos receive no edit, delay, or revalidation; a card flagged as a candidate may receive the configured delay and one revalidation GET, but receives no PATCH if it has rendered by then |
 | `PROXY_WARMUP_POST` | `HonkaiStarRail_leaks/1whbjbh` | stable public post used to skip proxy services that are down this run |
 | `EMBEDDIT_INSTANCE` | `https://embeddit.deltandy.me` | bare host, host:port, or full URL |
 | `PROXY_WAVE_DELAY` | `0.5` | seconds before the 3rd proxy service joins the parallel dispatch |

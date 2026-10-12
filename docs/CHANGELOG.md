@@ -16,6 +16,29 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-12 — Round 72 follow-up: explicit-evidence + revalidated Reddit
+  proxy-video heal.** The shipped round-72 pass inferred "unresolved" from
+  missing metadata, so Discord's sparse-but-healthy create responses could
+  re-edit a card that already rendered. Two corrections to the same one-card
+  path: (1) a repair is queued only on explicit evidence — a returned
+  `width`/`height` `<= 0`; omitted fields, `null`, non-numeric values and an
+  empty `content_type` are unknown, not failure (empty type alone is no longer
+  evidence); (2) the queued edit re-reads the delivered message
+  (`GET …?with_components=true`) and PATCHes the identical payload only when
+  one of the EXACT URLs the create response queued is still explicitly
+  unresolved — a healthy or sparse revalidation means no edit, an unrelated
+  video component in the same message can never trigger a PATCH, and a failed
+  revalidation fails closed. Initially healthy videos are never flagged (no
+  edit, no delay, no revalidation); a flagged candidate always spends one
+  revalidation read, and no PATCH when it has rendered by then. Video classification
+  stays provider-agnostic (video-rendition URL or Discord's `video/...` type,
+  no proxy hostname list); native Reddit media and ordinary posts are still
+  untouched, repairs stay bounded to one concurrent edit, and both Variables
+  keep their defaults and workflow wiring. The round-72 smoke section grows
+  from 24 to 59 guards, including the 2026-10-12 production regression and the
+  URL-specific revalidation end-to-end through `main()`. See
+  [`docs/history/ROUND_72.md`](history/ROUND_72.md).
+
 * **2026-10-12 — Documentation/configuration audit: retain Reddit operational pending state.**
   Canonical `main` and both production repositories still run Reddit V3 code
   that reads and writes `pending_reddit.json`; the empty object is not evidence
@@ -31,7 +54,10 @@ rewritten when that happens, only relocated.
   so the returned gallery metadata can identify unresolved video tiles.
   Only unresolved non-native videos get one identical same-message webhook
   edit after delivery and a bounded default 6-second delay; healthy videos
-  get no edit. Detection covers future providers without a hostname list.
+  get no edit. Detection covers future providers without a hostname list
+  (refined by the follow-up entry below: a tile is covered when Discord
+  returns a video type or the URL exposes a recognized video rendition, so an
+  untyped extensionless URL is deliberately left untouched).
   Native media is not edited; ordinary cards, provider selection, YouTube and
   dedup behavior remain unchanged. `PROXY_VIDEO_HEAL=0` disables it;
   `PROXY_VIDEO_HEAL_DELAY` adjusts the delay (0–60 seconds). See
