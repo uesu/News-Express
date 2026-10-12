@@ -16,6 +16,15 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-12 — Documentation/configuration audit: retain Reddit operational pending state.**
+  Canonical `main` and both production repositories still run Reddit V3 code
+  that reads and writes `pending_reddit.json`; the empty object is not evidence
+  that the active cache is obsolete. Current docs now distinguish those
+  operational rechecks from the stateless round-64 fresh-age/listing checks,
+  clarify Twitter V3's response-based in-memory media-heal queue, document
+  `MEDIA_HEAL_SCOPE`, and mark Round 72 shipped in merged PR #59. No runtime,
+  workflow persistence, cache contents, or production repository was changed.
+
 * **2026-10-12 — Round 72: Reddit proxy-video cold-start media heal.**
   Discord may initially show a 0×0 or failed tile for a video that becomes
   playable shortly afterward. Video cards request a message ID (`wait=true`)
