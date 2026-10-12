@@ -16,6 +16,25 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-12 — Round 72 follow-up: explicit-evidence + revalidated Reddit
+  proxy-video heal.** The shipped round-72 pass inferred "unresolved" from
+  missing metadata, so Discord's sparse-but-healthy create responses could
+  re-edit a card that already rendered. Two corrections to the same one-card
+  path: (1) a repair is queued only on explicit evidence — a returned
+  `width`/`height` `<= 0`; omitted fields, `null`, non-numeric values and an
+  empty `content_type` are unknown, not failure (empty type alone is no longer
+  evidence); (2) the queued edit re-reads the delivered message
+  (`GET …?with_components=true`) and PATCHes the identical payload only when
+  the video is still explicitly unresolved — a healthy or sparse revalidation
+  means no edit, and a failed revalidation fails closed. Video classification
+  stays provider-agnostic (video-rendition URL or Discord's `video/...` type,
+  no proxy hostname list); native Reddit media and ordinary posts are still
+  untouched, repairs stay bounded to one concurrent edit, and both Variables
+  keep their defaults and workflow wiring. The round-72 smoke section grows
+  from 24 to 49 guards, including the 2026-10-12 production regression
+  end-to-end through `main()`. See
+  [`docs/history/ROUND_72.md`](history/ROUND_72.md).
+
 * **2026-10-12 — Documentation/configuration audit: retain Reddit operational pending state.**
   Canonical `main` and both production repositories still run Reddit V3 code
   that reads and writes `pending_reddit.json`; the empty object is not evidence
