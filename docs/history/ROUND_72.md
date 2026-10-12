@@ -38,12 +38,16 @@ Twitter media-heal path:
 
 This is provider-agnostic. The decision is based on Discord's returned media
 metadata, not on whether the URL belongs to vxreddit, redditez, Embeddit,
-EmbedEZ, or another supported provider. It applies to future posts in every
-configured subreddit, including subreddits added later.
+EmbedEZ, or another supported provider: a tile is classified as video when
+Discord returns a video type or the URL exposes a recognized video rendition
+(every supported rendition is covered; a future provider is covered without
+a hostname list). It applies to future posts in every configured subreddit,
+including subreddits added later.
 
 Images, text posts, resolved videos, native Reddit media, provider selection,
 buttons, continuation components, YouTube previews, and cache behavior are
-unchanged. An already-posted historical card is not automatically revisited;
+unchanged — native Reddit media and ordinary posts never enter the repair
+path. An already-posted historical card is not automatically revisited;
 that card must be manually edited if it needs repair.
 
 ## Follow-up precision correction (2026-10-12)

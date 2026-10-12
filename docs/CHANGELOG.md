@@ -54,7 +54,10 @@ rewritten when that happens, only relocated.
   so the returned gallery metadata can identify unresolved video tiles.
   Only unresolved non-native videos get one identical same-message webhook
   edit after delivery and a bounded default 6-second delay; healthy videos
-  get no edit. Detection covers future providers without a hostname list.
+  get no edit. Detection covers future providers without a hostname list
+  (refined by the follow-up entry below: a tile is covered when Discord
+  returns a video type or the URL exposes a recognized video rendition, so an
+  untyped extensionless URL is deliberately left untouched).
   Native media is not edited; ordinary cards, provider selection, YouTube and
   dedup behavior remain unchanged. `PROXY_VIDEO_HEAL=0` disables it;
   `PROXY_VIDEO_HEAL_DELAY` adjusts the delay (0–60 seconds). See

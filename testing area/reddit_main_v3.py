@@ -353,9 +353,9 @@ POSTED_MESSAGES_FILE = "posted_messages.json"
 # width or height) is heal-eligible — omitted metadata is unknown, not
 # failure. Healthy videos are never flagged, so they get no edit, delay or
 # revalidation; a flagged candidate gets one revalidation read and no edit
-# when it has rendered by then. Native Reddit media and ordinary posts are
-# untouched; ordinary cards keep their existing POST path (no wait=true and
-# no extra request).
+# when it has rendered by then. Native Reddit media and ordinary posts never
+# enter the repair path; ordinary cards keep their existing POST path
+# (no wait=true and no extra request).
 PROXY_VIDEO_HEAL = (os.getenv("PROXY_VIDEO_HEAL") or "1").strip().lower() not in ("0", "false", "no", "off")
 PROXY_VIDEO_HEAL_DELAY = max(0, min(60, _env_int("PROXY_VIDEO_HEAL_DELAY", 6)))
 
@@ -4672,8 +4672,10 @@ def unresolved_reddit_video_items(message: dict | None) -> list[str]:
     itself, so a sparse-but-healthy response produces no unnecessary edit.
 
     A tile counts as a video when its URL is a video rendition or Discord
-    itself typed it ``video/...`` — no proxy hostname list, so future providers
-    are covered. This pure inspector deliberately detects native videos too;
+    itself typed it ``video/...`` — there is no proxy hostname list, so every
+    supported rendition is covered and a future provider is covered as soon
+    as Discord types its tile or its URL exposes a recognized video
+    rendition. This pure inspector deliberately detects native videos too;
     the caller excludes native Reddit media before queuing a repair.
     """
     if not isinstance(message, dict):
