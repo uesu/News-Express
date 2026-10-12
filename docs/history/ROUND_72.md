@@ -24,11 +24,11 @@ Twitter media-heal path:
 
 1. Video cards use `wait=true` so Discord returns the created message JSON.
 2. The returned Components V2 media items are inspected.
-3. A repair is queued only when Discord explicitly reports a video item with
+3. A repair is flagged only when Discord explicitly reports a video item with
    a non-positive width or height. Omitted width/height/content-type fields are
    treated as unknown rather than failure, preventing healthy sparse responses
    from causing unnecessary edits.
-4. Healthy videos are not edited.
+4. Videos that are healthy in the initial response are never flagged.
 5. Queued candidates wait for the configured delay, then re-read the complete
    existing Discord message (including Components V2 metadata). If the media
    is now healthy or the revalidation response is sparse, no PATCH is sent, and
@@ -85,11 +85,14 @@ the revalidation can only ever act on one of them.
 
 ## Performance and safety
 
-Healthy video cards receive no PATCH/edit and no six-second heal delay. The
-initial `wait=true` response is used only to inspect the message returned by
-the same webhook POST; it does not add a second request. Only a card Discord
-explicitly reports as unresolved receives the delayed revalidation read (and,
-only if it is still unresolved, the identical edit).
+Videos that are healthy in the initial response receive no PATCH, delay, or
+revalidation. Candidate cards receive one delayed revalidation; if the queued
+URL has become healthy, no PATCH is sent. The initial `wait=true` response is
+used only to inspect the message returned by the same webhook POST; it does
+not add a second request. So the only extra work the feature can ever add is
+one revalidation read (plus, only when the queued video is still explicitly
+unresolved, one identical edit) for a card Discord explicitly reported as
+unresolved.
 
 Repairs are bounded to one identical edit per unresolved video card, run
 concurrently after delivery, and use the existing 15-second request timeout.

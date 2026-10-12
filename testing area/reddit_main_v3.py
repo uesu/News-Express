@@ -351,9 +351,11 @@ POSTED_MESSAGES_FILE = "posted_messages.json"
 # identical webhook edit is needed, and a queued edit revalidates the
 # message first. Only EXPLICIT unresolved evidence (a returned non-positive
 # width or height) is heal-eligible — omitted metadata is unknown, not
-# failure — so healthy videos receive no edit. Native Reddit media and
-# ordinary posts are untouched; ordinary cards keep their existing POST
-# path (no wait=true and no extra request).
+# failure. Healthy videos are never flagged, so they get no edit, delay or
+# revalidation; a flagged candidate gets one revalidation read and no edit
+# when it has rendered by then. Native Reddit media and ordinary posts are
+# untouched; ordinary cards keep their existing POST path (no wait=true and
+# no extra request).
 PROXY_VIDEO_HEAL = (os.getenv("PROXY_VIDEO_HEAL") or "1").strip().lower() not in ("0", "false", "no", "off")
 PROXY_VIDEO_HEAL_DELAY = max(0, min(60, _env_int("PROXY_VIDEO_HEAL_DELAY", 6)))
 

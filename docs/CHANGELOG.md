@@ -28,7 +28,9 @@ rewritten when that happens, only relocated.
   one of the EXACT URLs the create response queued is still explicitly
   unresolved — a healthy or sparse revalidation means no edit, an unrelated
   video component in the same message can never trigger a PATCH, and a failed
-  revalidation fails closed. Video classification
+  revalidation fails closed. Initially healthy videos are never flagged (no
+  edit, no delay, no revalidation); a flagged candidate always spends one
+  revalidation read, and no PATCH when it has rendered by then. Video classification
   stays provider-agnostic (video-rendition URL or Discord's `video/...` type,
   no proxy hostname list); native Reddit media and ordinary posts are still
   untouched, repairs stay bounded to one concurrent edit, and both Variables
