@@ -4730,19 +4730,32 @@ def _unresolved_healable_video_items(message: dict | None, data: dict) -> list[s
 
 
 async def heal_proxy_video_message(session, webhook_url: str, message_id: str,
-                                   payload: dict, label: str) -> bool:
+                                   payload: dict, label: str,
+                                   queued_urls=()) -> bool:
     """Revalidate, then edit one still-explicitly-unresolved video once.
 
     The create response is an early signal, not a promise that a client still
     sees a cold tile after the delay — production showed cards whose returned
     metadata was 0x0 while the same post was already playable. So re-read the
     existing Discord message (Components V2 included) first: healthy or sparse
-    metadata means no PATCH is necessary. Only a still-explicitly-unresolved
-    non-native video receives one IDENTICAL same-message edit (the Discohook
-    "Edit without changing anything" cure). A failed revalidation or edit
-    fails closed and never turns a delivered card into a failure.
+    metadata means no PATCH is necessary.
+
+    `queued_urls` are the unresolved video URLs the CREATE response produced
+    (main's `_unresolved_healable_video_items` output — the card's own
+    non-native video media). Revalidation is URL-specific: only one of those
+    exact URLs may still trigger the edit, so an unrelated video component in
+    the same message can never cause a PATCH. No queued URLs ⇒ nothing to
+    revalidate, so no edit.
+
+    Only a still-explicitly-unresolved queued video receives one IDENTICAL
+    same-message edit (the Discohook "Edit without changing anything" cure).
+    A failed revalidation or edit fails closed and never turns a delivered
+    card into a failure.
     """
     if not message_id or not webhook_url or not PROXY_VIDEO_HEAL:
+        return False
+    expected_urls = {str(u).strip() for u in queued_urls if u}
+    if not expected_urls:
         return False
     await asyncio.sleep(PROXY_VIDEO_HEAL_DELAY)
     try:
@@ -4760,11 +4773,12 @@ async def heal_proxy_video_message(session, webhook_url: str, message_id: str,
                 logging.info(f"[{label}] proxy-video media heal skipped: "
                              "revalidation response was not JSON")
                 return False
-        if not [url for url in unresolved_reddit_video_items(current)
-                if not _native_reddit_media_url(url)]:
+        still_unresolved = [url for url in unresolved_reddit_video_items(current)
+                            if url.strip() in expected_urls]
+        if not still_unresolved:
             logging.info(f"[{label}] proxy-video media heal skipped after "
-                         f"{PROXY_VIDEO_HEAL_DELAY}s revalidation: media is no "
-                         "longer explicitly unresolved")
+                         f"{PROXY_VIDEO_HEAL_DELAY}s revalidation: the queued "
+                         "video is no longer explicitly unresolved")
             return False
 
         async with session.patch(
@@ -5480,13 +5494,14 @@ async def main():
                         # the returned metadata is EXPLICIT evidence (a
                         # non-positive width/height). Omitted metadata is
                         # unknown, not failure — healthy cards stay untouched.
-                        # The queued edit revalidates the message before it
-                        # changes anything (see heal_proxy_video_message).
+                        # The queued URLs travel with the entry: the edit below
+                        # revalidates them and may only act on one of them.
                         unresolved = _unresolved_healable_video_items(message_json, data)
                         if (unresolved and isinstance(message_json, dict)
                                 and message_json.get("id")):
                             proxy_video_heal_queue.append(
-                                (webhook_url, str(message_json["id"]), payload, unique_key))
+                                (webhook_url, str(message_json["id"]), payload,
+                                 unique_key, unresolved))
                             logging.info(f"[{unique_key}] proxy-video heal queued: Discord "
                                          f"returned {len(unresolved)} video item(s) with "
                                          "explicit non-positive dimensions; the edit is "
@@ -5503,8 +5518,8 @@ async def main():
                          "video card(s) queued; revalidating them concurrently after "
                          "delivery and editing only the still-unresolved ones.")
             await asyncio.gather(*(
-                heal_proxy_video_message(session, url, mid, payload, label)
-                for url, mid, payload, label in proxy_video_heal_queue),
+                heal_proxy_video_message(session, url, mid, payload, label, urls)
+                for url, mid, payload, label, urls in proxy_video_heal_queue),
                 return_exceptions=True)
 
         if RETRACT_DEAD_POSTS and not DRY_RUN:

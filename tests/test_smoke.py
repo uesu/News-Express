@@ -5646,7 +5646,9 @@ check("r69 arctic: descriptive exception text preserved",
 #       not failure, so a sparse-but-rendering response can never produce an
 #       unnecessary edit (the 2026-10-12 production regression);
 #   (2) a queued edit REVALIDATES the delivered message first and PATCHes only
-#       a still-explicitly-unresolved non-native video.
+#       a still-explicitly-unresolved non-native video — and only one of the
+#       EXACT URLs the create response queued, so an unrelated video component
+#       in the same message can never trigger an edit.
 # Guards updated in place (never weakened): round 72's "missing content_type
 # alone detects an unresolved video" check is superseded by the sparse-response
 # checks below, and every round-72 failure mode keeps its guard.
@@ -5825,13 +5827,13 @@ _r72_webhook = "https://discord.test/webhooks/token"
 
 
 def _r72_heal(session, message_id="msg-1", enabled=True, delay=6,
-              payload=None, label="sub_post"):
+              payload=None, label="sub_post", queued_urls=(_r72_url,)):
     with patch.object(v3, "PROXY_VIDEO_HEAL", enabled), \
          patch.object(v3, "PROXY_VIDEO_HEAL_DELAY", delay), \
          patch.object(v3.asyncio, "sleep", _r72_sleep):
         return asyncio.run(v3.heal_proxy_video_message(
             session, _r72_webhook, message_id,
-            _r72_payload if payload is None else payload, label))
+            _r72_payload if payload is None else payload, label, queued_urls))
 
 
 # Production regression: Discord's create response can report 0x0 while the
@@ -5866,6 +5868,35 @@ check("r72 follow-up: sparse revalidation metadata means no PATCH",
 _r72_native_heal = _R72Session(_r72_native_message)
 check("r72: a revalidated native Reddit video is never edited",
       _r72_heal(_r72_native_heal) is False and not _r72_native_heal.patches)
+_r72_other_heal = _R72Session(_r72_message(_r72_media(_r72_embedz)))
+check("r72 follow-up: an unrelated unresolved video cannot trigger the PATCH",
+      _r72_heal(_r72_other_heal) is False
+      and len(_r72_other_heal.gets) == 1 and not _r72_other_heal.patches)
+_r72_moved_heal = _R72Session(_r72_message(
+    _r72_media(_r72_url, 1662, 1080, "video/mp4"), _r72_media(_r72_embedz)))
+check("r72 follow-up: only a still-unresolved QUEUED url is edited",
+      _r72_heal(_r72_moved_heal) is False and not _r72_moved_heal.patches)
+_r72_multi = _R72Session(_r72_message(_r72_media(_r72_url), _r72_media(_r72_embedz)))
+_r72_sleep.reset_mock()
+check("r72 follow-up: when the queued url itself is unresolved the edit still fires",
+      _r72_heal(_r72_multi) is True
+      and len(_r72_multi.patches) == 1
+      and _r72_multi.patches[0][1] is _r72_payload
+      and _r72_sleep.await_args_list == [((6,), {})])
+_r72_no_urls = _R72Session(_r72_bad_message)
+_r72_sleep.reset_mock()
+check("r72 follow-up: no queued urls means no revalidation, no wait and no edit",
+      _r72_heal(_r72_no_urls, queued_urls=()) is False
+      and not _r72_no_urls.gets and not _r72_no_urls.patches
+      and _r72_sleep.await_count == 0)
+_r72_blank_urls = _R72Session(_r72_bad_message)
+check("r72 follow-up: blank queued urls fail closed too",
+      _r72_heal(_r72_blank_urls, queued_urls=("", None)) is False
+      and not _r72_blank_urls.gets and not _r72_blank_urls.patches)
+_r72_ws_urls = _R72Session(_r72_message(
+    _r72_media(f"  {_r72_url}  ")))
+check("r72 follow-up: a whitespace-padded rendition still matches its queued url",
+      _r72_heal(_r72_ws_urls) is True and len(_r72_ws_urls.patches) == 1)
 _r72_http = _R72Session(_r72_bad_message, get_status=429)
 check("r72: a failed revalidation (HTTP) fails closed with no PATCH",
       _r72_heal(_r72_http) is False and not _r72_http.patches)
@@ -5921,6 +5952,11 @@ check("r72: only an explicit unresolved item with message ID queues an edit afte
 check("r72: repairs stay bounded, concurrent and out of DRY_RUN",
       "if proxy_video_heal_queue and not DRY_RUN:" in _r72_main
       and "return_exceptions=True)" in _r72_main)
+check("r72 follow-up: the queue entry carries the create response's exact URLs",
+      "unique_key, unresolved))" in _r72_main
+      and "for url, mid, payload, label, urls in proxy_video_heal_queue" in _r72_main
+      and "heal_proxy_video_message(session, url, mid, payload, label, urls)"
+      in _r72_main)
 
 
 # Exercise main()'s webhook POST/response/GET-revalidation/PATCH wiring, not
@@ -6038,6 +6074,17 @@ _r72_main_rendered, _, _ = asyncio.run(_r72_main_case(
     current=_r72_good_message))
 check("r72 main: the 2026-10-12 regression — 0x0 create response that already renders is left alone",
       len(_r72_main_rendered.gets) == 1 and not _r72_main_rendered.patches)
+_r72_main_other, _, _ = asyncio.run(_r72_main_case(
+    [{"kind": "video", "url": _r72_url}], _r72_bad_message,
+    current=_r72_message(_r72_media(_r72_embedz))))
+check("r72 main: an unrelated unresolved video in the revalidated card is not edited",
+      len(_r72_main_other.gets) == 1 and not _r72_main_other.patches)
+_r72_main_moved, _, _ = asyncio.run(_r72_main_case(
+    [{"kind": "video", "url": _r72_url}], _r72_bad_message,
+    current=_r72_message(_r72_media(_r72_url, 1662, 1080, "video/mp4"),
+                         _r72_media(_r72_embedz))))
+check("r72 main: a resolved queued video is skipped even if another video is cold",
+      len(_r72_main_moved.gets) == 1 and not _r72_main_moved.patches)
 _r72_main_sparse, _, _ = asyncio.run(_r72_main_case(
     [{"kind": "video", "url": _r72_url}], _r72_sparse_message))
 check("r72 main: a sparse create response queues no edit at all",

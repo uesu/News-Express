@@ -31,9 +31,10 @@ Twitter media-heal path:
 4. Healthy videos are not edited.
 5. Queued candidates wait for the configured delay, then re-read the complete
    existing Discord message (including Components V2 metadata). If the media
-   is now healthy or the revalidation response is sparse, no PATCH is sent.
-   Only a still-explicitly-unresolved video receives one identical same-message
-   edit; repairs remain concurrent after delivery.
+   is now healthy or the revalidation response is sparse, no PATCH is sent, and
+   only one of the exact URLs the create response queued can lead to an edit.
+   Only a still-explicitly-unresolved queued video receives one identical
+   same-message edit; repairs remain concurrent after delivery.
 
 This is provider-agnostic. The decision is based on Discord's returned media
 metadata, not on whether the URL belongs to vxreddit, redditez, Embeddit,
@@ -65,17 +66,22 @@ Two bounded corrections, both in the same one-card path:
    (`.mp4`/`.m4v`/`.mov`/`.webm`/`.m3u8`) or Discord's own `video/...`
    content type — no proxy hostname list. An extensionless URL that carries no
    video content type is therefore left untouched (unknown ⇒ no edit).
-2. **The edit revalidates before it changes anything.** After the delay the
-   monitor re-reads the delivered message (`GET
-   /messages/<id>?with_components=true`) and PATCHes the identical payload only
-   if the media is *still* explicitly unresolved. A healthy or sparse
-   revalidation means no edit; a failed revalidation (HTTP error, non-JSON
-   body, network exception) fails closed and never fails the delivered card.
+2. **The edit revalidates before it changes anything — and only for the
+   queued URL.** After the delay the monitor re-reads the delivered message
+   (`GET /messages/<id>?with_components=true`) and PATCHes the identical
+   payload only if one of the *exact* URLs the create response queued is
+   **still** explicitly unresolved. A healthy or sparse revalidation means no
+   edit, and an unrelated video component in the same message can never
+   trigger a PATCH; a failed revalidation (HTTP error, non-JSON body, network
+   exception) fails closed and never fails the delivered card. With no queued
+   URL there is nothing to revalidate, so nothing is edited.
 
 Native Reddit media, ordinary posts, images, provider selection, buttons,
 continuations, YouTube previews, cache behavior, and the `RETRACT_DEAD_POSTS`
 message-ID/payload record are unchanged. A returned video that the outgoing
-card did not carry as a non-native video still cannot trigger a repair.
+card did not carry as a non-native video still cannot trigger a repair — and
+the queue entry carries the exact unresolved URLs from the create response so
+the revalidation can only ever act on one of them.
 
 ## Performance and safety
 

@@ -25,14 +25,16 @@ rewritten when that happens, only relocated.
   empty `content_type` are unknown, not failure (empty type alone is no longer
   evidence); (2) the queued edit re-reads the delivered message
   (`GET …?with_components=true`) and PATCHes the identical payload only when
-  the video is still explicitly unresolved — a healthy or sparse revalidation
-  means no edit, and a failed revalidation fails closed. Video classification
+  one of the EXACT URLs the create response queued is still explicitly
+  unresolved — a healthy or sparse revalidation means no edit, an unrelated
+  video component in the same message can never trigger a PATCH, and a failed
+  revalidation fails closed. Video classification
   stays provider-agnostic (video-rendition URL or Discord's `video/...` type,
   no proxy hostname list); native Reddit media and ordinary posts are still
   untouched, repairs stay bounded to one concurrent edit, and both Variables
   keep their defaults and workflow wiring. The round-72 smoke section grows
-  from 24 to 49 guards, including the 2026-10-12 production regression
-  end-to-end through `main()`. See
+  from 24 to 59 guards, including the 2026-10-12 production regression and the
+  URL-specific revalidation end-to-end through `main()`. See
   [`docs/history/ROUND_72.md`](history/ROUND_72.md).
 
 * **2026-10-12 — Documentation/configuration audit: retain Reddit operational pending state.**
