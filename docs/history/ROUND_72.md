@@ -1,7 +1,7 @@
 # Round 72 — Reddit proxy-video cold-start media heal
 
 **Status:** Shipped — merged in [PR #59](https://github.com/uesu/News-Express/pull/59);
-precision follow-up in this PR
+precision follow-up in [PR #61](https://github.com/uesu/News-Express/pull/61)
 
 **Scope:** Active Reddit V3 video delivery across all configured subreddits
 
