@@ -71,7 +71,7 @@ flowchart LR
 | **Full Articles** | article tweets post cover image, title, full body text and every in-article image/GIF |
 | **Translation** | non-English tweets get a *Translated from X* block with the original preserved (via FxTwitter's `/en` endpoint); an identical "translation" (X language mis-detection) is dropped automatically |
 | **Links** | clickable `#hashtags` and `@mentions`, exactly like fxtwitter embeds |
-| **Self-heal** | Discord's media proxy occasionally serves a broken tile — affected cards are automatically re-edited after posting, up to 4 bounded same-payload attempts (`MEDIA_HEAL*` Variables) |
+| **Self-heal** | Twitter V3 inspects Discord's returned message; unresolved videos (video-only by default) queue up to 4 bounded same-payload edits after posting, while healthy media is a no-op (`MEDIA_HEAL*` Variables) |
 | **Resilient feeds** | an 11-instance nitter fallback fleet, ordered by live evidence; optional `NITTER_RSS_TOKEN` unlocks the token-gated instance |
 | **Repost attribution** | reposted tweets credit the original author |
 
@@ -88,7 +88,7 @@ flowchart LR
 | **Feeds** | one **combined RSS request** for all subreddits (fits Reddit's ~1 req/min datacenter limit) with automatic per-subreddit fallback; the optional `REDDIT_FEED_TOKEN` moves requests to the logged-in tier |
 | **FULL MODE** | with an optional Reddit script app: 💬/👍 stats, the OP's stickied comment, and true crosspost embeds |
 | **Fallback fleet** | proxy services (vxreddit → redditez → Embeddit rewrite — the priority/tie-break order, dispatched as bounded concurrent waves with Embeddit held back), Redlib instances, and the Arctic Shift archive — a dead source never breaks a run |
-| **Gates** | dedup cache + opt-in dead-post retraction (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
+| **Delivery checks & state** | dedup, stateless fresh-age and pristine `/new` checks, plus operational pending rechecks for selected liveness/media-readiness holds; optional post-delivery retraction (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
 | **Listing-safe delivery** | cache-busted `/new` confirmation posts an item on the first tick it is visible; listing outages are never treated as proof of absence |
 
 ### 🧱 Platform
@@ -307,7 +307,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 |---|---|---|
 | `FRESH_HOLD_SECONDS` | `30` | flat minimum post age before a candidate is considered; `0` = off |
 | `LISTING_CONFIRM` | `1` | `0` = disable the pristine `/new` listing confirmation (restores round-63 delivery) |
-| `PENDING_RECHECK_SECONDS` | `1800` | the one uniform recheck interval for every held post |
+| `PENDING_RECHECK_SECONDS` | `1800` | shared throttle for retryable operational holds; confirmed removed/deleted archive entries use a no-recheck path unless they reappear via RSS |
 | `REDDIT_VIDEO_QUALITY` | `balanced` | video-quality selection: `balanced` (EmbedEZ 1080p may replace vxreddit → 720p → durable DASH floor), `compatibility` (pre-round-67 order, instant rollback), `highest` (wider quality window) |
 | `RETRACT_DEAD_POSTS` | `0` | `1` enables the dead-post retraction seatbelt |
 | `RETRACT_MODE` | `edit` | `edit` (tombstone in place) or `delete` |
@@ -367,27 +367,40 @@ STATIC_BUTTONS = [
 
 ## 📬 Reddit delivery pipeline
 
-Current behavior (rounds 63–65). For the full history of how this evolved,
+Current behavior (rounds 63–72). For the full history of how this evolved,
 see [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) and the
 [changelog archive](docs/history/CHANGELOG_ARCHIVE.md).
 
 **A post delivers when, in order:**
 
 1. **Dedup cache** — already posted? skip. (`<subreddit>_<post_id>` key, retained per the cache caps above.)
-2. **Fresh hold** — a flat, stateless `FRESH_HOLD_SECONDS` (30 s) minimum age
-   computed from the post's own timestamp. No trackers, no pending entries.
-3. **Pristine listing confirmation** — a cache-busted read of the
+2. **Pending recheck throttle** — retryable operational holds already recorded
+   for a candidate are re-evaluated according to `PENDING_RECHECK_SECONDS`
+   (default 1800 s). Confirmed removed/deleted archive entries use a no-recheck
+   path unless they reappear via RSS.
+3. **Fresh hold** — a flat, stateless `FRESH_HOLD_SECONDS` (30 s) minimum age
+   computed from the post's own timestamp. This check itself creates no
+   tracker or pending entry.
+4. **Pristine listing confirmation** — a cache-busted read of the
    subreddit's `/new` listing (unique `_fresh=` buster + `no-cache` headers,
    never reused across runs) proves the post is live right now. Not listed
    yet → skipped this tick only — never blocked, never cached; it posts the
    tick it first appears. All listing sources down → treated as an outage,
    never as absence.
-4. **Deliver** — the card posts; the key is cached.
+5. **Operational liveness/media checks** — source evidence about a post's
+   liveness or removal/approval state, or incomplete archive media, can defer
+   delivery. Retryable holds are recorded with a reason in
+   `pending_reddit.json` and revisited on the configured interval; the
+   removed/deleted no-recheck exception above still applies.
+6. **Deliver** — the card posts; the dedup key is cached.
 
-*(Round 67 removed the content-advisory gate and its four Variables: the
-monitor makes no content-based posting decision on any path. The truthful
-record of that removal lives in
-[`docs/history/ROUND_67.md`](docs/history/ROUND_67.md).)*
+The round-64 fresh-age and pristine-listing skips remain stateless; they do not
+write `pending_reddit.json`. The active operational pending cache is separate
+from the removed Round-63 settle-window, dedicated moderator-queue, and
+duplicate-media/repost gates. Round 67 also removed the content-advisory gate
+and its four Variables, so the monitor makes no content-based posting decision
+on any path. The truthful record of that removal lives in
+[`docs/history/ROUND_67.md`](docs/history/ROUND_67.md).
 
 **After delivery (opt-in):** the **retraction seatbelt** (`RETRACT_DEAD_POSTS=1`,
 off by default) can rewrite a confirmed-dead post's card as a tombstone (or
@@ -609,7 +622,13 @@ The Twitter workflow supports these post-delivery media-heal controls:
 - `MEDIA_HEAL_ATTEMPTS` — maximum same-payload re-edits; default: 4, hard-capped
   at 4.
 
-Healthy media exits immediately and does not wait for the heal delay.
+Twitter V3 requests Discord's created-message response (`wait=true`) and
+inspects the returned media metadata. Only unresolved media eligible for the
+configured scope is added to an in-memory message repair queue; the queue runs
+after the posting loop and re-edits the same payload up to the configured
+attempt cap. The default scope is video-only, and healthy media gets no edit.
+This per-message Twitter repair queue is not persisted and is distinct from
+Reddit's `pending_reddit.json` operational candidate-recheck cache.
 
 The former Reddit content-advisory/NSFW classification and gating settings are
 not active configuration. Do not add or enable `NSFW_ALLOWLIST`,

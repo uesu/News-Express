@@ -71,10 +71,13 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 1. **The monitor makes no content-based posting decision.** Round 67 removed
    the content-advisory gate entirely (engine, Variables, tests, docs) at the
    maintainer's request: do not reintroduce any content classification,
-   allowlist, fail-open/fail-closed logic or "unknown metadata" hold for it —
-   the post proceeds through dedup, the fresh hold, the pristine listing
-   confirmation and delivery. The truthful record of the removal is
-   `docs/history/ROUND_67.md`; active files stay free of the removed names.
+   allowlist, fail-open/fail-closed logic or "unknown metadata" hold for it.
+   Current delivery still includes dedup, the stateless fresh-age and pristine
+   listing checks, plus operational liveness/media-readiness checks. Some
+   operational holds are recorded in `pending_reddit.json` and rechecked
+   according to `PENDING_RECHECK_SECONDS` (default 1800 s); the two round-64
+   stateless checks do not write pending entries. The truthful record of
+   content-gate removal is `docs/history/ROUND_67.md`.
 2. **Gates never guess.** Every hold/skip requires exact, provable evidence
    (same URL, same author+title, removal notice on the post's own page).
    Fuzzy/similarity matching has been explicitly rejected (see round 56/57
@@ -120,7 +123,11 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 
 - `FRESH_HOLD_SECONDS=30` — flat minimum post age before a candidate is
   considered (round 64); `LISTING_CONFIRM` (default on) requires a pristine
-  /new listing read before posting.
+  /new listing read before posting. These two checks are stateless.
+- `PENDING_RECHECK_SECONDS=1800` — active throttle for retryable operational
+  holds tracked in `pending_reddit.json`; confirmed removed/deleted archive
+  entries use a no-recheck path unless they reappear via RSS. Distinct from
+  the stateless age/listing checks.
 - `MEDIA_HEAL_SCOPE` — `video` (default) | `on`/`all` | `off` (round 56/56b).
 - `RETRACT_DEAD_POSTS` — default OFF; `1` enables dead-post tombstoning
   (round 44; requires two independent proofs before touching a message).
