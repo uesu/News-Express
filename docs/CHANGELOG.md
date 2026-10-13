@@ -16,6 +16,19 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-13 — Round 74: Reddit cold Discord video-proxy healing.** Reddit
+  V3 now recognizes the observed cold-proxy response: a video tile has a
+  Discord `proxy_url`, but does not yet have both positive dimensions and a
+  `video/*` content type. The existing explicit non-positive-dimension signal
+  remains supported; sparse metadata without a proxy attempt is still unknown
+  and is not queued. Initial delivery, selected provider/URL, and the delayed
+  revalidation path are unchanged: after the default six-second wait, one
+  Discord GET skips the edit if the proxy has resolved, otherwise at most one
+  identical PATCH is sent. Healthy videos, photos, provider selection and
+  Twitter behavior are unaffected. Focused offline regression checks cover
+  cold, sparse-without-proxy, healthy, image-only, resolved-during-wait and
+  still-cold cases. See [`docs/history/ROUND_74.md`](history/ROUND_74.md).
+
 * **2026-10-13 — Round 73: Twitter mixed-media order + GIF fallback quality.**
   Two X (Twitter) V3 media-presentation fixes. (1) The gallery now follows the
   tweet's **canonical order**: FxEmbed/FxTwitter's `media.all` (its own
