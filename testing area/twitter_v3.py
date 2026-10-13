@@ -767,11 +767,16 @@ def gif_converter_candidates(video_url: str) -> tuple:
 
 
 def gif_avif_candidates(video_url: str) -> tuple:
-    """ROUND 73: the two known AVIF routes, as (url, source) pairs.
+    """ROUND 73: the two known AVIF routes, as (url, source, referer) triples
+    — the same shape as gif_converter_candidates(), for the same reason.
 
     Only the last-resort path probes these (see probe_gif_avif_routes): an
     AVIF can preview as a static frame in Discord's gallery, so it must never
     win over an animated WebP/GIF or over a playable mp4.
+
+    gifconvert is HEADER-GATED (500 to plain clients), so its AVIF route
+    carries the same browser Referer as its .webp/.gif probes — without it
+    the route would look dead in production even when it is serving.
     """
     match = _GIF_MP4_RE.search(str(video_url or ""))
     if not match:
@@ -779,8 +784,9 @@ def gif_avif_candidates(video_url: str) -> tuple:
     key = match.group(1)
     vc_quoted = url_quote(video_url, safe="")
     return (
-        (GIF_WEBP_BASE + key + ".avif", "gif.fxtwitter-avif"),
-        (GIFCONVERT_BASE + "avif?url=" + vc_quoted, "gifconvert-avif"),
+        (GIF_WEBP_BASE + key + ".avif", "gif.fxtwitter-avif", None),
+        (GIFCONVERT_BASE + "avif?url=" + vc_quoted, "gifconvert-avif",
+         "https://vxtwitter.com"),
     )
 
 
@@ -824,9 +830,14 @@ async def probe_gif_avif_routes(session: aiohttp.ClientSession,
 
     Called only when a GIF has no animated rendition AND no playable mp4, so
     a healthy card (or one the mp4 can cover) never pays for these probes.
+    Each route is probed with the headers it needs: gifconvert is
+    header-gated, so its AVIF probe carries the browser Referer exactly like
+    its .webp/.gif probes (a Referer-less probe would 500 and make a working
+    route look dead).
     """
-    for candidate, source in gif_avif_candidates(video_url):
-        if image_format_tier(await _probe_media_content_type(session, candidate)) == "avif":
+    for candidate, source, referer in gif_avif_candidates(video_url):
+        if image_format_tier(await _probe_media_content_type(
+                session, candidate, referer=referer)) == "avif":
             return candidate, source
     return "", ""
 

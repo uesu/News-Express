@@ -400,6 +400,21 @@ check("r73 gif: the documented AVIF route is probed last when nothing else answe
       _src == "gifconvert-avif" and "/convert.avif" in _url
       and _s.heads()[-1].endswith("avif?url=" + _quoted(_GIF1)),
       f"{_url} {_src} {_s.heads()}")
+# gifconvert is header-gated (500 to plain clients) — its AVIF probe must
+# carry the same browser Referer as its .webp/.gif probes, or a route that is
+# actually serving would look dead and the tile would lose the AVIF fallback.
+_avif_probe = [h for _, u, h in _s.requests if u.endswith("avif?url=" + _quoted(_GIF1))]
+check("r73 gif: the gifconvert AVIF probe carries the browser Referer",
+      len(_avif_probe) == 1
+      and _avif_probe[0].get("Referer") == "https://vxtwitter.com",
+      str(_s.requests))
+
+_s = _Session().image(x3.GIF_WEBP_BASE + "GifOneAAA.avif", "image/avif")
+_url, _src = _gif_chain(_s, allow_avif=True)
+check("r73 gif: the gif.fxtwitter AVIF route is probed without a Referer (like its .webp)",
+      _src == "gif.fxtwitter-avif"
+      and "Referer" not in _s.requests[-1][2],
+      f"{_url} {_src} {_s.requests[-1]}")
 
 _s = _Session().image("gif.fxtwitter.com/tweet_video/", "image/webp")
 _url, _src = _gif_chain(_s, allow_avif=True)
@@ -444,7 +459,7 @@ check("r73 gif: the last resort is reached only AFTER the animated candidates fa
 # added requests.
 _counts = _probe_counts(_s)
 _chain_urls = [u for u, _, _ in x3.gif_converter_candidates(_GIF1)]
-_avif_urls = [u for u, _ in x3.gif_avif_candidates(_GIF1)]
+_avif_urls = [u for u, _, _ in x3.gif_avif_candidates(_GIF1)]
 check("r73 cost: the last-resort path re-probes NO converter candidate (single pass)",
       all(_counts.get(u, 0) == 1 for u in _chain_urls) and len(_chain_urls) == 4,
       str(_counts))
@@ -485,8 +500,9 @@ check("r73 api: the candidate/route lists are derived from the mp4 URL",
           x3.GIFCONVERT_BASE + "gif?url=" + _quoted(_GIF1),
           "https://fastgif-production.up.railway.app/tweet_video/GifOneAAA.gif",
       ] and x3.gif_avif_candidates(_GIF1) == (
-          ("https://gif.fxtwitter.com/tweet_video/GifOneAAA.avif", "gif.fxtwitter-avif"),
-          (x3.GIFCONVERT_BASE + "avif?url=" + _quoted(_GIF1), "gifconvert-avif"),
+          ("https://gif.fxtwitter.com/tweet_video/GifOneAAA.avif", "gif.fxtwitter-avif", None),
+          (x3.GIFCONVERT_BASE + "avif?url=" + _quoted(_GIF1), "gifconvert-avif",
+           "https://vxtwitter.com"),
       ))
 check("r73 api: non-tweet_video URLs get no candidates at all",
       x3.gif_converter_candidates("https://video.twimg.com/ext_tw_video/x.mp4") == ()

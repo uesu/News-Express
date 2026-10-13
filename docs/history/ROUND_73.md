@@ -65,9 +65,12 @@ The pass is split so a caller never pays for it twice:
   candidates (≤ 4 HEADs). It returns `(url, source, avif_url, avif_source)`:
   the first *animated* answer and the first AVIF answer seen along the way.
 * `probe_gif_avif_routes(session, video_url)` — the AVIF-only routes
-  (`gif.fxtwitter` `.avif`, then `gifconvert` `/convert.avif`, ≤ 2 HEADs),
-  asked **only** when the caller already knows the mp4 is unusable and the
-  first pass remembered no AVIF.
+  (`gif.fxtwitter` `.avif` — plain, like its `.webp`; then `gifconvert`
+  `/convert.avif`, ≤ 2 HEADs), asked **only** when the caller already knows
+  the mp4 is unusable and the first pass remembered no AVIF. gifconvert is
+  header-gated, so its AVIF probe carries the **same browser Referer** as its
+  `.webp`/`.gif` probes — a Referer-less probe answers 500 and would make a
+  route that is actually serving look dead.
 * `resolve_gif_image(session, video_url, allow_avif=False)` — the single-GIF
   convenience wrapper over both; with `allow_avif=True` it reuses the AVIF
   remembered by its own pass and only then asks the AVIF routes.
@@ -153,7 +156,9 @@ probes per URL and pins that (a) no converter candidate is ever probed twice
 on the last-resort path, (b) the animated chain contributes ≤ 4 HEADs and the
 AVIF routes ≤ 2, (c) an AVIF remembered by the first pass is reused with the
 AVIF routes never asked, and (d) a card whose mp4 plays probes the chain once
-plus the mp4 size and nothing else.
+plus the mp4 size and nothing else. It also pins the **header contract**: the
+gifconvert AVIF probe carries `Referer: https://vxtwitter.com` (exactly like
+its `.webp`/`.gif` probes) while the `gif.fxtwitter` AVIF probe carries none.
 
 The round-11 and round-47/56/70 smoke guards (`tests/test_smoke.py`) pass
 unchanged — including the `twitter_proxy` GIF-chain order assertions, which
