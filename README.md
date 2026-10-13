@@ -67,11 +67,12 @@ flowchart LR
 | | |
 |---|---|
 | **Rich cards** | *Components V2* container — media gallery, stats line, `🕐` Discord-native timestamp, per-tweet accent color |
-| **Media** | photos, GIFs (re-rendered animated via a converter chain), videos with **real file-size probing** — oversized videos are swapped for the biggest playable mp4 variant, or thumbnail + "Watch on X" |
+| **Media** | photos, GIFs, videos in the tweet's **canonical source order** (a mixed post keeps the observed order `JPG → GIF 1 → GIF 2 → GIF 3`), with **real file-size probing** — oversized videos are swapped for the biggest playable mp4 variant, or thumbnail + "Watch on X" |
+| **GIF re-rendering** | animated `.webp`/`.gif` converter chain (`gif.fxtwitter.com` → gifconvert → fastgif), probed **once** per GIF and each answer classed by its **actual response content type**, never by the URL extension. An AVIF is a **last resort** only — it can preview as a static frame in Discord's gallery — and the original mp4 always outranks it (see [Round 73](docs/history/ROUND_73.md)) |
 | **Full Articles** | article tweets post cover image, title, full body text and every in-article image/GIF |
 | **Translation** | non-English tweets get a *Translated from X* block with the original preserved (via FxTwitter's `/en` endpoint); an identical "translation" (X language mis-detection) is dropped automatically |
 | **Links** | clickable `#hashtags` and `@mentions`, exactly like fxtwitter embeds |
-| **Self-heal** | Twitter V3 inspects Discord's returned message; unresolved videos (video-only by default) queue up to 4 bounded same-payload edits after posting, while healthy media is a no-op (`MEDIA_HEAL*` Variables) |
+| **Self-heal** | Twitter V3 inspects Discord's returned message; **only explicitly unresolved** videos (video-only by default) queue up to 4 bounded same-payload edits after posting, so healthy media is posted immediately — no delay, no revalidation, no edit (`MEDIA_HEAL*` Variables) |
 | **Resilient feeds** | an 11-instance nitter fallback fleet, ordered by live evidence; optional `NITTER_RSS_TOKEN` unlocks the token-gated instance |
 | **Repost attribution** | reposted tweets credit the original author |
 
@@ -161,6 +162,7 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 ├── tests/
 │   ├── test_smoke.py              # offline smoke suite (run by CI)
 │   ├── test_reddit_signals.py     # pure gate/unit suite
+│   ├── test_twitter_media.py      # focused X media suite (run by CI)
 │   └── fixtures/posted_cards.py   # production-card replay fixtures
 ├── AGENTS.md                      # onboarding for AI coding agents
 ├── posted_tweets.json · posted_reddit.json · pending_reddit.json · proxy_health.json
@@ -420,10 +422,16 @@ proven fine post-round-64).
 ```bash
 python3 tests/test_smoke.py           # expect: SMOKE TEST: ALL PASS
 python3 tests/test_reddit_signals.py  # expect: ALL PASS
+python3 tests/test_twitter_media.py   # expect: TWITTER MEDIA TEST: ALL PASS
 ```
 
 No network, no secrets — the suites stub `aiohttp`/`feedparser`/`dotenv`.
-CI runs both on every PR (see [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md)).
+CI runs all three on every PR (see [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md)).
+
+`tests/test_twitter_media.py` is the focused X media suite: canonical source
+order (photo-only, video-only, mixed, legacy providers), the GIF converter
+chain and its content-type rules, mp4-vs-AVIF priority, and the
+healthy-media / explicit-evidence heal contract.
 
 ### The `testing area/` procedure
 
@@ -544,8 +552,14 @@ See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
   remove the tweet from `posted_tweets.json` → re-run. If it ever becomes
   frequent, lower `GALLERY_VIDEO_LIMIT`.
 * **A GIF shows as a video player instead of an animated image** — every GIF
-  converter was unreachable at post time; the mp4 is the safe fallback. They
-  recover on their own.
+  converter was unreachable at post time; the mp4 is the safe fallback
+  (deliberately preferred over a possibly-static AVIF tile). They recover on
+  their own.
+* **A GIF tile looks frozen until you open it** — that is the AVIF last
+  resort (used only for a GIF whose mp4 cannot play in the gallery at all).
+  Discord's gallery preview can paint an AVIF as its first frame while it
+  still animates once opened; regenerate with FxTwitter reachable and the
+  animated `.webp` returns.
 * **A portrait/vertical video loads but won't play right after posting** —
   transient Discord proxy warm-up (plays fine shortly after). If you ever
   confirm *persistent* portrait breakage, set `PORTRAIT_PROXY = True` near
@@ -626,7 +640,10 @@ Twitter V3 requests Discord's created-message response (`wait=true`) and
 inspects the returned media metadata. Only unresolved media eligible for the
 configured scope is added to an in-memory message repair queue; the queue runs
 after the posting loop and re-edits the same payload up to the configured
-attempt cap. The default scope is video-only, and healthy media gets no edit.
+attempt cap. The default scope is video-only, and healthy media gets no edit:
+a card Discord reports as resolved — or reports nothing conclusive about — is
+posted immediately, with no revalidation request and no delay, and which
+provider supplied the media never triggers a repair on its own.
 This per-message Twitter repair queue is not persisted and is distinct from
 Reddit's `pending_reddit.json` operational candidate-recheck cache.
 
