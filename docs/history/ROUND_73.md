@@ -39,8 +39,10 @@ Two media-presentation defects in the X (Twitter) V3 card:
 tweet put it and every GIF/video keeps its chronological position relative to
 the other GIFs/videos. Details:
 
-* **Photo-only and video-only posts are byte-identical to before** — `all`
-  reproduces the subset order in both cases.
+* **Photo-only and video-only posts with valid media URLs preserve their
+  previous order and output** — `all` reproduces the subset order in both
+  cases. Entries without a usable URL are safely omitted instead of becoming
+  empty gallery tiles (the one deliberate difference for malformed payloads).
 * **Provider fallback keeps its documented behavior.** The vxtwitter and
   twitterez normalizers do not produce `media.all`, so they keep the
   videos-then-photos order.
@@ -53,10 +55,25 @@ the other GIFs/videos. Details:
 
 ### GIF fallback priority
 
-`resolve_gif_image(session, video_url, allow_avif=False)` probes the same
-four candidates as round 11 — `gif.fxtwitter` `.webp` → `gifconvert` `.webp`
-(Referer-gated) → `gifconvert` `.gif` → `fastgif` `.gif` — but now classes
-each answer by the **returned** `Content-Type`, never by the URL extension:
+The chain is `gif_converter_candidates(video_url)` — the same four candidates
+as round 11, unchanged URLs and unchanged order: `gif.fxtwitter` `.webp` →
+`gifconvert` `.webp` (Referer-gated) → `gifconvert` `.gif` → `fastgif` `.gif`.
+
+The pass is split so a caller never pays for it twice:
+
+* `probe_gif_candidates(session, video_url)` — **one** pass over those four
+  candidates (≤ 4 HEADs). It returns `(url, source, avif_url, avif_source)`:
+  the first *animated* answer and the first AVIF answer seen along the way.
+* `probe_gif_avif_routes(session, video_url)` — the AVIF-only routes
+  (`gif.fxtwitter` `.avif`, then `gifconvert` `/convert.avif`, ≤ 2 HEADs),
+  asked **only** when the caller already knows the mp4 is unusable and the
+  first pass remembered no AVIF.
+* `resolve_gif_image(session, video_url, allow_avif=False)` — the single-GIF
+  convenience wrapper over both; with `allow_avif=True` it reuses the AVIF
+  remembered by its own pass and only then asks the AVIF routes.
+
+Answers are classed by the **returned** `Content-Type`, never by the URL
+extension:
 
 | Returned type | Tier | Use |
 |---|---|---|
@@ -66,14 +83,15 @@ each answer by the **returned** `Content-Type`, never by the URL extension:
 | anything else / no answer | — | chain continues |
 
 `collect_media()` therefore keeps the **original mp4** whenever an animated
-rendition is unavailable — never an AVIF. The AVIF path is reached once, as a
-last resort, only for a GIF that has *no* playable gallery rendition: the mp4
-is oversized, no smaller `formats[]` variant fits, and no animated WebP/GIF
-answered. In that one case the tile is the AVIF URL that actually answered
-(`gifconvert` `/convert.avif`, or whichever candidate replied with an AVIF),
-logged with its source as `<source>-avif`, and the card no longer falls back
-to a static poster. If that route is down too, the round-11 terminal
-behaviour stands: thumbnail + "▶️ Watch it on X" note.
+rendition is unavailable — never an AVIF. The AVIF is used exactly once per
+GIF, as a last resort, only for a GIF that has *no* playable gallery
+rendition: the mp4 is oversized, no smaller `formats[]` variant fits, and no
+animated WebP/GIF answered. In that one case the chain is **not** re-probed —
+an AVIF already remembered by that GIF's single pass is reused, and only if
+that pass found none are the AVIF routes asked — and the tile is the AVIF URL
+that actually answered, logged with its source as `<source>-avif`; the card no
+longer falls back to a static poster. If no AVIF answers either, the round-11
+terminal behaviour stands: thumbnail + "▶️ Watch it on X" note.
 
 ## What deliberately did not change
 
@@ -100,7 +118,13 @@ behaviour stands: thumbnail + "▶️ Watch it on X" note.
 | Healthy GIF (`gif.fxtwitter` answers) | unchanged — one HEAD, short-circuit |
 | Video | unchanged — one size probe, no converter traffic |
 | Converter unavailable | one HEAD per remaining candidate (as in round 11) |
-| GIF with no animated rendition and no playable mp4 | +2 HEADs (the AVIF routes) — the only added round-trips in the whole round |
+| GIF with an animated rendition **or** a playable mp4 | ≤ 4 converter HEADs (one pass) + one mp4 size probe — **no AVIF route is ever asked** |
+| GIF with no animated rendition and no playable mp4 | the same ≤ 4 converter HEADs (never repeated) + ≤ 2 AVIF-route HEADs — the only added round-trips in the whole round |
+
+The last-resort path is bounded at **≤ 6 HEADs** (4 chain + 2 AVIF routes),
+and the chain is probed exactly once per GIF: an AVIF remembered during that
+single pass is reused rather than re-discovered, so the four candidates are
+never probed twice. Every other path costs at most what round 11 cost.
 
 Ordering itself is in-memory only. Healing work is unchanged: zero edits and
 zero wait when Discord reports healthy media.
@@ -123,6 +147,13 @@ content-type rules (including a `.gif` URL that answers `video/mp4` being
 rejected), mp4-over-AVIF priority, the AVIF last resort, the direct-mp4
 fallback, and the healthy-media / explicit-unresolved-evidence heal contract
 with its request counts.
+
+The performance contract is asserted, not just documented: the suite counts
+probes per URL and pins that (a) no converter candidate is ever probed twice
+on the last-resort path, (b) the animated chain contributes ≤ 4 HEADs and the
+AVIF routes ≤ 2, (c) an AVIF remembered by the first pass is reused with the
+AVIF routes never asked, and (d) a card whose mp4 plays probes the chain once
+plus the mp4 size and nothing else.
 
 The round-11 and round-47/56/70 smoke guards (`tests/test_smoke.py`) pass
 unchanged — including the `twitter_proxy` GIF-chain order assertions, which

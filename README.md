@@ -68,7 +68,7 @@ flowchart LR
 |---|---|
 | **Rich cards** | *Components V2* container — media gallery, stats line, `🕐` Discord-native timestamp, per-tweet accent color |
 | **Media** | photos, GIFs, videos in the tweet's **canonical source order** (a mixed post keeps the observed order `JPG → GIF 1 → GIF 2 → GIF 3`), with **real file-size probing** — oversized videos are swapped for the biggest playable mp4 variant, or thumbnail + "Watch on X" |
-| **GIF re-rendering** | animated `.webp`/`.gif` converter chain (`gif.fxtwitter.com` → gifconvert → fastgif), each answer classed by its **actual response content type**, never by the URL extension. An AVIF is a **last resort** only — it can preview as a static frame in Discord's gallery — and the original mp4 always outranks it (see [Round 73](docs/history/ROUND_73.md)) |
+| **GIF re-rendering** | animated `.webp`/`.gif` converter chain (`gif.fxtwitter.com` → gifconvert → fastgif), probed **once** per GIF and each answer classed by its **actual response content type**, never by the URL extension. An AVIF is a **last resort** only — it can preview as a static frame in Discord's gallery — and the original mp4 always outranks it (see [Round 73](docs/history/ROUND_73.md)) |
 | **Full Articles** | article tweets post cover image, title, full body text and every in-article image/GIF |
 | **Translation** | non-English tweets get a *Translated from X* block with the original preserved (via FxTwitter's `/en` endpoint); an identical "translation" (X language mis-detection) is dropped automatically |
 | **Links** | clickable `#hashtags` and `@mentions`, exactly like fxtwitter embeds |

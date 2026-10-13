@@ -157,6 +157,18 @@ def _tiles(gallery):
     return [item["media"]["url"] for item in gallery]
 
 
+def _quoted(url):
+    """The urlencoded form the gifconvert routes carry (url_quote(url, safe=""))."""
+    return url.replace(":", "%3A").replace("/", "%2F")
+
+
+def _probe_counts(session):
+    counts = {}
+    for _, url, _ in session.requests:
+        counts[url] = counts.get(url, 0) + 1
+    return counts
+
+
 # ---------------------------------------------------------------------------
 # Fixtures — the live FxEmbed/FxTwitter media shape.
 # ---------------------------------------------------------------------------
@@ -295,9 +307,9 @@ check("r73 order: photo-only post — identical URLs, identical order, zero prob
       _tiles(_items4) == [_JPG, "https://pbs.twimg.com/media/second.jpg"]
       and not _s4.requests, str(_tiles(_items4)) + str(_s4.requests))
 
-_quoted = _fxtwitter_media([_g1, _photo()])
+_quote_like = _fxtwitter_media([_g1, _photo()])
 _s5 = _Session().image("gif.fxtwitter.com/tweet_video/", "image/webp")
-_items5, _ = _collect(_quoted, _s5)
+_items5, _ = _collect(_quote_like, _s5)
 check("r73 order: quoted tweets use the same ordered pass (no separate code path)",
       _tiles(_items5)[0] == x3.GIF_WEBP_BASE + "GifOneAAA.webp"
       and _tiles(_items5)[1] == _JPG, str(_tiles(_items5)))
@@ -350,8 +362,8 @@ check("r73 gif: the probe order is unchanged — fxtwitter .webp -> convert.webp
       "convert.gif -> fastgif",
       [u for _, u, _ in _s.requests] == [
           "https://gif.fxtwitter.com/tweet_video/GifOneAAA.webp",
-          x3.GIFCONVERT_BASE + "webp?url=" + _GIF1.replace(":", "%3A").replace("/", "%2F"),
-          x3.GIFCONVERT_BASE + "gif?url=" + _GIF1.replace(":", "%3A").replace("/", "%2F"),
+          x3.GIFCONVERT_BASE + "webp?url=" + _quoted(_GIF1),
+          x3.GIFCONVERT_BASE + "gif?url=" + _quoted(_GIF1),
           "https://fastgif-production.up.railway.app/tweet_video/GifOneAAA.gif",
       ], str([u for _, u, _ in _s.requests]))
 
@@ -366,7 +378,7 @@ _s = _Session().image("gif.fxtwitter.com/tweet_video/", "image/avif") \
                .image("gifconvert", "image/webp")
 _url, _src = _gif_chain(_s)
 check("r73 gif: an image/avif answer is skipped in favour of a real animated answer",
-      _url == x3.GIFCONVERT_BASE + "webp?url=" + _GIF1.replace(":", "%3A").replace("/", "%2F")
+      _url == x3.GIFCONVERT_BASE + "webp?url=" + _quoted(_GIF1)
       and _src == "gifconvert", f"{_url} {_src}")
 
 # …and is not returned at all unless the caller opts in
@@ -385,7 +397,7 @@ _s = _Session().image(x3.GIFCONVERT_BASE + "avif?url=", "image/avif")
 _url, _src = _gif_chain(_s, allow_avif=True)
 check("r73 gif: the documented AVIF route is probed last when nothing else answers",
       _src == "gifconvert-avif" and "/convert.avif" in _url
-      and _s.heads()[-1].endswith("avif?url=" + _GIF1.replace(":", "%3A").replace("/", "%2F")),
+      and _s.heads()[-1].endswith("avif?url=" + _quoted(_GIF1)),
       f"{_url} {_src} {_s.heads()}")
 
 _s = _Session().image("gif.fxtwitter.com/tweet_video/", "image/webp")
@@ -411,17 +423,74 @@ check("r73 gif: a playable mp4 is preferred over an AVIF fallback",
       _tiles(_items) == [_GIF1] and _notes == [], str(_tiles(_items)) + str(_notes))
 check("r73 gif: …and the AVIF routes are never probed on that path",
       not any(".avif" in u for u in _s.urls()), str(_s.urls()))
+check("r73 cost: the playable-mp4 card probed the chain once and the mp4 size once "
+      "(5 URLs, no repeats)",
+      len(_probe_counts(_s)) == 5 and set(_probe_counts(_s).values()) == {1},
+      str(_probe_counts(_s)))
 
 _s = (_Session().image(x3.GIFCONVERT_BASE + "avif?url=", "image/avif")
       .body(_GIF1, 400 * _MB))
 _items, _notes = _collect(_fxtwitter_media([_g1]), _s)
 check("r73 gif: an unplayable mp4 uses the AVIF last resort instead of a static thumbnail",
       _tiles(_items) == [x3.GIFCONVERT_BASE + "avif?url="
-                         + _GIF1.replace(":", "%3A").replace("/", "%2F")]
+                         + _quoted(_GIF1)]
       and _notes == [], str(_tiles(_items)) + str(_notes))
 check("r73 gif: the last resort is reached only AFTER the animated candidates fail",
-      len(_s.requests) > 4 and _s.heads()[0].endswith("GifOneAAA.webp"),
-      str(_s.heads()))
+      _s.heads()[0].endswith("GifOneAAA.webp"), str(_s.heads()))
+
+# THE performance contract of the last-resort path: the four animated
+# candidates are probed ONCE, never twice — the AVIF routes are the only
+# added requests.
+_counts = _probe_counts(_s)
+_chain_urls = [u for u, _, _ in x3.gif_converter_candidates(_GIF1)]
+_avif_urls = [u for u, _ in x3.gif_avif_candidates(_GIF1)]
+check("r73 cost: the last-resort path re-probes NO converter candidate (single pass)",
+      all(_counts.get(u, 0) == 1 for u in _chain_urls) and len(_chain_urls) == 4,
+      str(_counts))
+check("r73 cost: at most 4 animated-candidate HEADs and at most 2 AVIF-route HEADs",
+      sum(_counts.get(u, 0) for u in _chain_urls) <= 4
+      and sum(_counts.get(u, 0) for u in _avif_urls) <= 2
+      and not any(u not in _chain_urls + _avif_urls and "?url=" in u for u in _counts),
+      str(_counts))
+
+# an AVIF learned during the animated pass is REUSED — no AVIF route is asked
+_s = _Session().image("gif.fxtwitter.com/tweet_video/GifOneAAA.webp", "image/avif") \
+               .body(_GIF1, 400 * _MB)
+_items, _notes = _collect(_fxtwitter_media([_g1]), _s)
+check("r73 cost: an AVIF remembered in the first pass is reused, not re-discovered",
+      _tiles(_items) == ["https://gif.fxtwitter.com/tweet_video/GifOneAAA.webp"]
+      and _probe_counts(_s)["https://gif.fxtwitter.com/tweet_video/GifOneAAA.webp"] == 1,
+      str(_tiles(_items)) + " " + str(_probe_counts(_s)))
+check("r73 cost: …and the AVIF ROUTES are never asked in that case",
+      not any("/convert.avif" in u or u.endswith("GifOneAAA.avif") for u in _s.urls()),
+      str(_s.urls()))
+
+# the standalone resolver keeps the same single-pass guarantee
+_s_avif = _Session().image(x3.GIFCONVERT_BASE + "avif?url=", "image/avif")
+_url, _src = _gif_chain(_s_avif, allow_avif=True)
+check("r73 cost: resolve_gif_image(allow_avif=True) also probes the chain exactly once",
+      _src == "gifconvert-avif" and all(n == 1 for n in _probe_counts(_s_avif).values()),
+      str(_probe_counts(_s_avif)))
+
+# …and the helper API exposes the two passes separately, so a caller can
+# reuse a remembered AVIF instead of paying for a second chain
+_url, _src, _avif, _avif_src = asyncio.run(x3.probe_gif_candidates(_Session(), _GIF1))
+check("r73 api: probe_gif_candidates returns (animated, avif) from ONE pass",
+      (_url, _src, _avif, _avif_src) == ("", "", "", ""))
+check("r73 api: the candidate/route lists are derived from the mp4 URL",
+      [u for u, _, _ in x3.gif_converter_candidates(_GIF1)] == [
+          "https://gif.fxtwitter.com/tweet_video/GifOneAAA.webp",
+          x3.GIFCONVERT_BASE + "webp?url=" + _quoted(_GIF1),
+          x3.GIFCONVERT_BASE + "gif?url=" + _quoted(_GIF1),
+          "https://fastgif-production.up.railway.app/tweet_video/GifOneAAA.gif",
+      ] and x3.gif_avif_candidates(_GIF1) == (
+          ("https://gif.fxtwitter.com/tweet_video/GifOneAAA.avif", "gif.fxtwitter-avif"),
+          (x3.GIFCONVERT_BASE + "avif?url=" + _quoted(_GIF1), "gifconvert-avif"),
+      ))
+check("r73 api: non-tweet_video URLs get no candidates at all",
+      x3.gif_converter_candidates("https://video.twimg.com/ext_tw_video/x.mp4") == ()
+      and x3.gif_avif_candidates("https://video.twimg.com/ext_tw_video/x.mp4") == ()
+      and x3.gif_converter_candidates(None) == () and x3.gif_avif_candidates("") == ())
 
 _s = _Session().body(_GIF1, 400 * _MB)
 _items, _notes = _collect(_fxtwitter_media([_g1]), _s)
