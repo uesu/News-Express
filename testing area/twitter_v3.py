@@ -86,12 +86,10 @@
 #     (b) GIF fallback selection now classes every converter answer by the
 #         ACTUAL response content type (never by the URL extension): an
 #         animated image/webp or image/gif wins, anything else is not
-#         preferred — a static PNG/JPEG answer never outranks the mp4, and
-#         an ordinary PNG/JPEG PHOTO is still emitted as a normal photo
-#         tile, untouched. When no animated image answers, the ORIGINAL MP4
-#         is preferred over an .avif fallback — an avif tile can look static
-#         in Discord's gallery preview while still animating once opened, so
-#         it is used ONLY as a last resort (a GIF that has no playable mp4
+#         preferred. When no animated image answers, the ORIGINAL MP4 is
+#         preferred over an .avif fallback — an avif tile can look static in
+#         Discord's gallery preview while still animating once opened, so it
+#         is used ONLY as a last resort (a GIF that has no playable mp4
 #         rendition at all). The chain is probed ONCE per GIF
 #         (probe_gif_candidates) and the remembered AVIF is reused, so the
 #         last-resort path adds at most the 2 AVIF-route HEADs. Healthy

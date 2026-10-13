@@ -79,19 +79,8 @@ extension:
 |---|---|---|
 | `image/webp`, `image/gif` | animated | wins immediately (first match short-circuits) |
 | `image/avif`, `image/heic`, `image/heif` | AVIF | remembered; returned only when `allow_avif=True` and no animated answer exists |
-| any other `image/*` (e.g. `image/png`, `image/jpeg`) | static | not preferred (the mp4 outranks a still picture) |
+| any other `image/*` | static | not preferred (the mp4 outranks a still picture) |
 | anything else / no answer | — | chain continues |
-
-X itself accepts JPG, PNG, GIF and WEBP uploads, so the two static photo
-formats this repo actually meets — PNG and JPEG — are deliberately left in the
-"other" tier rather than treated as animation:
-
-* an ordinary **PNG/JPEG photo** is still emitted as a normal photo tile,
-  verbatim (URL and query string untouched), with no converter request, no
-  size probe and no fallback path — X photos carry no `mp4` rendition;
-* a **converter answering PNG or JPEG** for a GIF is a still frame, so it is
-  ignored: the mp4 keeps the tile, exactly as for an AVIF (minus the AVIF
-  routes, which are not asked at all in this case).
 
 `collect_media()` therefore keeps the **original mp4** whenever an animated
 rendition is unavailable — never an AVIF. The AVIF is used exactly once per
@@ -155,10 +144,9 @@ this round: canonical source order for photo-only / video-only / mixed /
 legacy payloads, the observed live `JPG → GIF 1 → GIF 2 → GIF 3` shape
 end-to-end through `collect_media()`, the converter probe order, the
 content-type rules (including a `.gif` URL that answers `video/mp4` being
-rejected), PNG photos passing through verbatim and a PNG *answer* never
-counting as a GIF conversion, mp4-over-AVIF priority, the AVIF last resort,
-the direct-mp4 fallback, and the healthy-media / explicit-unresolved-evidence
-heal contract with its request counts.
+rejected), mp4-over-AVIF priority, the AVIF last resort, the direct-mp4
+fallback, and the healthy-media / explicit-unresolved-evidence heal contract
+with its request counts.
 
 The performance contract is asserted, not just documented: the suite counts
 probes per URL and pins that (a) no converter candidate is ever probed twice

@@ -30,9 +30,7 @@ rewritten when that happens, only relocated.
   and ordering costs no request and mutates no payload. (2) GIF fallback
   selection now classes every converter answer by its **actual returned
   content type** — an `image/webp`/`image/gif` animated answer wins, a `.gif`
-  URL that answers `video/mp4` is rejected, a converter answering a static
-  PNG/JPEG never counts as a conversion (while an ordinary PNG/JPEG **photo**
-  still posts verbatim as a photo tile), and the extension is never
+  URL that answers `video/mp4` is rejected, and the extension is never
   trusted. An AVIF answer is remembered but never preferred: the **original
   mp4 always outranks it** (an AVIF can preview as a static frame in Discord's
   gallery while still animating when opened), and the AVIF is used exactly
