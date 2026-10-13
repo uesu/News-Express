@@ -1,6 +1,6 @@
 # Round 73 — Twitter mixed-media order + GIF fallback quality
 
-**Status:** Shipped — merged in PR #63
+**Status:** Open — [PR #62](https://github.com/uesu/News-Express/pull/62)
 **Scope:** Active X/Twitter V3 delivery (`testing area/twitter_v3.py`) for all
 configured accounts, quoted tweets and in-article media
 **Date:** 2026-10-13
