@@ -14,7 +14,9 @@ This document tracks current monitor observability and selected workflow variabl
 `all` includes additional media types. Twitter V3 inspects Discord's returned
 message after its `wait=true` post; unresolved eligible media enters an
 in-memory message repair queue that runs after the posting loop. Healthy media
-is a no-op. This is distinct from Reddit's persisted candidate recheck state;
+is a no-op: it is posted immediately, with no revalidation request and no
+delay, and neither the tweet-data provider that answered nor the gallery's
+ordering adds a repair. This is distinct from Reddit's persisted candidate recheck state;
 Twitter's heal queue is not stored in `pending_reddit.json` or `posted_tweets.json`.
 The workflow-only run summary reports actual runtime, aggregate feed entries,
 terminal feed failures, empty accounts, post counters, and cache status.

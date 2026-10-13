@@ -40,6 +40,9 @@ leftovers. Never advise deleting the "other" platform's files.
   engines, switchable via one commented line in the workflows. NOT dead code.
 - `tests/test_smoke.py` — the main suite; every past bug is a named guard
   (`rNN: ...`). `tests/test_reddit_signals.py` — gate-logic suite.
+  `tests/test_twitter_media.py` — focused X media suite (canonical media
+  order, GIF converter chain + content types, mp4-vs-AVIF priority, the
+  media-heal contract).
 - `docs/` — current changelog + topic guides: `CHANGELOG.md` (current release
   notes, round 63 onward), `CI_SMOKE.md`, `DEPENDABOT.md`, `DISCOHOOK.md`,
   `PYTHON_RUNTIME.md`. For the live secrets-vs-Variables inventory read
@@ -55,6 +58,7 @@ leftovers. Never advise deleting the "other" platform's files.
 ```bash
 python3 tests/test_smoke.py           # expect: SMOKE TEST: ALL PASS
 python3 tests/test_reddit_signals.py  # expect: ALL PASS
+python3 tests/test_twitter_media.py   # expect: TWITTER MEDIA TEST: ALL PASS
 ```
 
 Counts differ slightly between this repo and prod checkouts (path-dependent

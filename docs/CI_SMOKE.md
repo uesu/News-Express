@@ -1,7 +1,8 @@
 # 🧪 CI + smoke test — full explanation (optional or required?)
 
-> **TL;DR:** `.github/workflows/ci.yml`, `tests/test_smoke.py`, and
-> `tests/test_reddit_signals.py` are **REQUIRED for this repo's setup** — not
+> **TL;DR:** `.github/workflows/ci.yml`, `tests/test_smoke.py`,
+> `tests/test_reddit_signals.py`, and `tests/test_twitter_media.py` are
+> **REQUIRED for this repo's setup** — not
 > optional. They are the offline safety gate that runs on **every pull request**
 > and on pushes to `main`, including Dependabot PRs. They prove that the
 > scripts still install, compile, import, and satisfy the offline behavior
@@ -15,9 +16,10 @@
 
 | Piece | What it is | What it runs |
 |---|---|---|
-| `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every pull request** and every push to `main` (public repo = free) | Sets up exact **CPython 3.14.8**, then runs `pip install -r requirements.txt` → `python -m compileall` over every script → `python tests/test_smoke.py` → `python tests/test_reddit_signals.py` |
+| `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every pull request** and every push to `main` (public repo = free) | Sets up exact **CPython 3.14.8**, then runs `pip install -r requirements.txt` → `python -m compileall` over every script → `python tests/test_smoke.py` → `python tests/test_reddit_signals.py` → `python tests/test_twitter_media.py` |
 | `tests/test_smoke.py` | An **offline** test (no network, no secrets, no Discord): every monitor script must **import cleanly**, the Reddit V3 card pipeline and safety gates must still behave (body cleaning, media extraction/dedup, i.redd.it swap, redlib scoping, OP comment, Components V2 layout, proxy parsers, archive/liveness gates, and — round 51 — `/user`, `/u`, and `/r/u_` profile-crosspost headers plus the media-less vxReddit shell fallback). The X V3 path is also pinned for GIF conversion, fallback parsing/order, and — round 51 — a visible but still deduplicated cached `TEST_TWEET_ID` skip. | `python tests/test_smoke.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
 | `tests/test_reddit_signals.py` | A pure offline Reddit gate/decision suite for removal-notice classification, tombstones/retraction decisions, listing confirmation, main-loop signal behavior, and the round-67 policy guards (no content-advisory subsystem; video-quality selection + rollback). | `python tests/test_reddit_signals.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
+| `tests/test_twitter_media.py` | A pure offline **X (Twitter) V3 media** suite (round 73): canonical source order (photo-only, video-only, mixed, legacy provider payloads), the GIF converter chain and its content-type rules, mp4-vs-AVIF priority, the direct-mp4 fallback, and the healthy-media / explicit-unresolved-evidence heal contract — with request counts proving the healthy path costs no extra round-trip. | `python tests/test_twitter_media.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
 
 ## 2. Optional or required? — **Required (for how this repo is set up)**
 
@@ -91,10 +93,12 @@ pip install -r requirements.txt
 python -m compileall -q "testing area" tests
 python tests/test_smoke.py
 python tests/test_reddit_signals.py
+python tests/test_twitter_media.py
 ```
 
-Expected: `PASS …` lines ending with `SMOKE TEST: ALL PASS` and a final
-`ALL PASS` from the Reddit signal suite. They need **no** `.env`, **no**
+Expected: `PASS …` lines ending with `SMOKE TEST: ALL PASS`, a final
+`ALL PASS` from the Reddit signal suite, and `TWITTER MEDIA TEST: ALL PASS`
+from the X media suite. They need **no** `.env`, **no**
 secrets, and work fully offline.
 
 ## 5. When the check is red — what to do
@@ -111,6 +115,7 @@ secrets, and work fully offline.
 ---
 
 *Files involved: `.github/workflows/ci.yml`, `tests/test_smoke.py`,
-`tests/test_reddit_signals.py`, `.github/workflows/dependabot_auto_merge.yml`
+`tests/test_reddit_signals.py`, `tests/test_twitter_media.py`,
+`.github/workflows/dependabot_auto_merge.yml`
 (the gate it waits on), `docs/DEPENDABOT.md` (why the gate exists), and
 `docs/PYTHON_RUNTIME.md` (runtime-bump-specific validation).*

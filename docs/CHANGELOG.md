@@ -16,6 +16,36 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-13 — Round 73: Twitter mixed-media order + GIF fallback quality.**
+  Two X (Twitter) V3 media-presentation fixes. (1) The gallery now follows the
+  tweet's **canonical order**: FxEmbed/FxTwitter's `media.all` (its own
+  `extended_entities` order — verified in the FxEmbed processor, not inferred)
+  is read instead of photos-after-videos, so a mixed post keeps the observed
+  live order `JPG → GIF 1 → GIF 2 → GIF 3` and GIFs/videos keep their
+  chronological order relative to each other. Photo-only and video-only posts
+  are byte-identical to before, providers without `media.all` (vxtwitter,
+  twitterez) keep the legacy videos-then-photos order, entries without a URL
+  are dropped instead of becoming empty tiles, and ordering costs no request
+  and mutates no payload. (2) GIF fallback selection now classes every
+  converter answer by its **actual returned content type** — an
+  `image/webp`/`image/gif` animated answer wins, a `.gif` URL that answers
+  `video/mp4` is rejected, and the extension is never trusted. An AVIF answer
+  is remembered but never preferred: the **original mp4 always outranks it**
+  (an AVIF can preview as a static frame in Discord's gallery while still
+  animating when opened), and the AVIF is used exactly once as a last resort —
+  a GIF whose mp4 is oversized, has no playable variant, and has no animated
+  WebP/GIF rendition — with its real source logged as `<source>-avif`;
+  if that is down too, the round-11 thumbnail + "Watch on X" fallback stands.
+  The evidence-based heal contract is unchanged: healthy media posts
+  immediately with no delay, no revalidation and no edit, only media Discord
+  explicitly reports as unresolved and in scope enters the in-memory queue
+  (one identical bounded PATCH after the posting loop), a provider fallback
+  alone never triggers a heal, and no new Variable is wired. New focused suite
+  `tests/test_twitter_media.py` (offline, wired into CI) covers canonical
+  ordering, the chain and its content-type rules, mp4-vs-AVIF priority, the
+  direct-mp4 fallback and the heal contract; the round-11/47/56/70 smoke
+  guards pass unchanged. See [`docs/history/ROUND_73.md`](history/ROUND_73.md).
+
 * **2026-10-12 — Round 72 follow-up: explicit-evidence + revalidated Reddit
   proxy-video heal.** The shipped round-72 pass inferred "unresolved" from
   missing metadata, so Discord's sparse-but-healthy create responses could
