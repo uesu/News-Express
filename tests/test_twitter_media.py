@@ -8,13 +8,16 @@ double, so this suite proves the media decisions alone:
 
   1. CANONICAL MEDIA ORDER — the gallery follows the tweet's own media order
      (the API's media.all), so a mixed post keeps its source order (the
-     observed live shape: JPG -> GIF 1 -> GIF 2 -> GIF 3) and a photo-only /
-     video-only post is byte-identical to before. Providers that do not
-     return media.all (vxtwitter, twitterez) keep the legacy
-     videos-then-photos order.
+     observed live shape: JPG -> GIF 1 -> GIF 2 -> GIF 3) and photo-only /
+     video-only posts with valid media URLs preserve their previous order and
+     output (entries whose URL is missing or empty are safely omitted).
+     Providers that do not return media.all (vxtwitter, twitterez) keep the
+     legacy videos-then-photos order.
   2. GIF FALLBACK QUALITY — a converter answer only wins when its ACTUAL
      response content type is an animated image/webp | image/gif (a URL
-     extension is never trusted). An AVIF answer is remembered but never
+     extension is never trusted). A static PNG/JPEG answer is never preferred
+     over the mp4, while an ordinary PNG/JPEG photo is still emitted as a
+     normal photo tile. An AVIF answer is remembered but never
      preferred: the original mp4 always outranks it, and it is used only as a
      last resort for a GIF whose mp4 cannot play in the gallery at all.
   3. HEALTHY-MEDIA COST — healthy media costs no extra probe, no delay and no
@@ -314,6 +317,25 @@ check("r73 order: quoted tweets use the same ordered pass (no separate code path
       _tiles(_items5)[0] == x3.GIF_WEBP_BASE + "GifOneAAA.webp"
       and _tiles(_items5)[1] == _JPG, str(_tiles(_items5)))
 
+# --- PNG photos: X supports PNG uploads — they are ordinary photo tiles ---
+_PNG = "https://pbs.twimg.com/media/GsourcePngFormat?format=png&name=orig"
+_png_photo = _photo(_PNG)
+_s6 = _Session()
+_items6, _notes6 = _collect(_fxtwitter_media([_png_photo]), _s6)
+check("r73 png: a PNG photo is emitted VERBATIM as a normal photo tile",
+      _tiles(_items6) == [_PNG] and _notes6 == [] and not _s6.requests,
+      str(_tiles(_items6)) + str(_s6.requests) + str(_notes6))
+check("r73 png: a PNG photo is never a GIF/video candidate (no converter, no size probe)",
+      x3.media_entry_is_video(_png_photo) is False
+      and x3.gif_converter_candidates(_PNG) == ()
+      and x3.gif_avif_candidates(_PNG) == ()
+      and x3.is_gif_video(_png_photo) is False)
+_s7 = _Session().image("gif.fxtwitter.com/tweet_video/", "image/webp")
+_items7, _ = _collect(_fxtwitter_media([_png_photo, _g1, _photo()]), _s7)
+check("r73 png: PNG keeps its place in a mixed gallery (source order, first)",
+      _tiles(_items7) == [_PNG, x3.GIF_WEBP_BASE + "GifOneAAA.webp", _JPG],
+      str(_tiles(_items7)))
+
 
 # ===========================================================================
 # 2. GIF FALLBACK QUALITY — content type beats the URL extension
@@ -336,8 +358,22 @@ check("r73 gif: the AVIF family is its own (last-resort) tier",
 check("r73 gif: static pictures and non-images are never 'animated'",
       x3.image_format_tier("image/png") == "other"
       and x3.image_format_tier("image/jpeg") == "other"
+      and x3.image_format_tier("image/jpg") == "other"
       and x3.image_format_tier("video/mp4") == ""
       and x3.image_format_tier("") == "" and x3.image_format_tier(None) == "")
+
+# X supports PNG uploads (JPG/PNG/GIF/WEBP) — PNG is a STATIC photo format,
+# so it must stay in the "other" tier: a converter answering PNG never wins
+# over the original mp4, and no extra probe/fallback path is added for it.
+_s = _Session().image("gif.fxtwitter.com/tweet_video/", "image/png")
+_url, _src = _gif_chain(_s)
+check("r73 png: a converter answering image/png is NOT accepted as a GIF conversion",
+      _url is None and _src == "", f"{_url} {_src}")
+_s = _Session().image("gif.fxtwitter.com/tweet_video/", "image/png").body(_GIF1, 4 * _MB)
+_items, _notes = _collect(_fxtwitter_media([_g1]), _s)
+check("r73 png: …so the mp4 outranks a returned PNG (and no AVIF route is asked)",
+      _tiles(_items) == [_GIF1] and _notes == []
+      and not any(".avif" in u for u in _s.urls()), str(_tiles(_items)) + str(_s.urls()))
 
 _s = _Session().image("gif.fxtwitter.com/tweet_video/", "image/webp")
 _url, _src = _gif_chain(_s)
