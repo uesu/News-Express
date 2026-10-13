@@ -1,7 +1,7 @@
 # Round 74 — Reddit cold Discord video-proxy healing
 
-**Status:** Implementation complete; submitted for review  
-**Scope:** Reddit V3 only (`testing area/reddit_main_v3.py`)  
+**Status:** Open — [PR #63](https://github.com/uesu/News-Express/pull/63)
+**Scope:** Reddit V3 only (`testing area/reddit_main_v3.py`)
 **Date:** 2026-10-13
 
 ## Incident evidence
