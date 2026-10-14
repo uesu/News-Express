@@ -16,6 +16,28 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-14 — Round 75: Twitter RSS fleet re-ranked + Redlib RSS audit record.**
+  The initial `nitter.meowing.monster` demotion was reversed the same day
+  after the host revived around 13:35 UTC (d420 healthy from 13:45; version
+  `2026.10.12-f97b733`; 5/6 handles served from IPv4 runners). The earlier
+  production precheck saw no meowing delivery, but the serial chain had
+  stopped at an earlier serving host and had not tested its recovery. The
+  operator directed `xcopy.uk` to seat 3 after an 8/8 full-coverage parity
+  test against `nitter.cf`; the probe round ranked meowing 4, `tw.eir-nya.gay`
+  5, `nitter.freedit.eu` 6, thepixora 7 (recent runner-403 watch), token
+  fallback miningtcup 8, `nitter.gravitywell.xyz` 9 and `nitter.kareem.one`
+  10. The fill-in sweep grows the fleet from ten to twelve: freedit.eu (5/5
+  current bodies, no runner history) and gravitywell.xyz (3/5, complementary
+  gaps to kareem.one) enter as trials; `nitter.pp.ua` is excluded as a
+  thepixora feed alias. The operator pair remains in seats 1–2; the two
+  challenge/interstitial hosts remain at the tail and nothing is deleted.
+  Reddit V3 remains comments-only: all six Redlib `.rss` candidates returned
+  the same upstream Reddit 400, the HTML `/new` listing remains usable, and
+  list membership/order plus native-first behavior and round-64 checks are
+  unchanged. The smoke guard pins the final 12-member Twitter order and
+  unchanged Reddit membership. No workflows, proxies, gates or media paths
+  changed. See [`docs/history/ROUND_75.md`](history/ROUND_75.md).
+
 * **2026-10-13 — Round 74: Reddit cold Discord video-proxy healing.** Reddit
   V3 now recognizes the observed cold-proxy response: a video tile has a
   Discord `proxy_url`, but does not yet have both positive dimensions and a
