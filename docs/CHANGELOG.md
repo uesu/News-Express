@@ -16,23 +16,27 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
-* **2026-10-14 — Round 75: Twitter RSS mirror rotation + Redlib RSS audit record.**
-  Twitter V3 now trials `xcopy.uk` in the former fifth slot of
-  `nitter.meowing.monster`, which failed every probe and moves to the final
-  fallback position rather than being deleted; the pre-apply production-log
-  check confirmed it had not delivered real entries. The round-40
-  `nitter.cf`/`xitter.cf` operator pair and `nitter.kareem.one` remain in
-  place. `tw.eir-nya.gay` keeps its seat after one fast HTTP 429, with a watch
-  note for the prior runner's 200-with-zero-entries result. The `/rss` body
-  for `xcopy.uk` was hand-verified with current entries, text, media and links;
-  `nitter.pp.ua` and `nitter.poast.org` were not promoted because they refused
-  the body probe. Reddit V3 receives only an audit comment: all six Redlib
-  `.rss` candidates returned the same upstream Reddit 400, while the HTML
-  `/new` listing remains usable. Its list membership and order are unchanged;
-  native-first behavior and the round-64 listing/retraction checks remain.
-  New `r75:` smoke guards pin the Twitter trial/demotion and Reddit membership.
-  No workflows, proxies, gates or media paths changed. See
-  [`docs/history/ROUND_75.md`](history/ROUND_75.md).
+* **2026-10-14 — Round 75: Twitter RSS fleet re-ranked + Redlib RSS audit record.**
+  The initial `nitter.meowing.monster` demotion was reversed the same day
+  after the host revived around 13:35 UTC (d420 healthy from 13:45; version
+  `2026.10.12-f97b733`; 5/6 handles served from IPv4 runners). The earlier
+  production precheck saw no meowing delivery, but the serial chain had
+  stopped at an earlier serving host and had not tested its recovery. The
+  operator directed `xcopy.uk` to seat 3 after an 8/8 full-coverage parity
+  test against `nitter.cf`; the probe round ranked meowing 4, `tw.eir-nya.gay`
+  5, `nitter.freedit.eu` 6, thepixora 7 (recent runner-403 watch), token
+  fallback miningtcup 8, `nitter.gravitywell.xyz` 9 and `nitter.kareem.one`
+  10. The fill-in sweep grows the fleet from ten to twelve: freedit.eu (5/5
+  current bodies, no runner history) and gravitywell.xyz (3/5, complementary
+  gaps to kareem.one) enter as trials; `nitter.pp.ua` is excluded as a
+  thepixora feed alias. The operator pair remains in seats 1–2; the two
+  challenge/interstitial hosts remain at the tail and nothing is deleted.
+  Reddit V3 remains comments-only: all six Redlib `.rss` candidates returned
+  the same upstream Reddit 400, the HTML `/new` listing remains usable, and
+  list membership/order plus native-first behavior and round-64 checks are
+  unchanged. The smoke guard pins the final 12-member Twitter order and
+  unchanged Reddit membership. No workflows, proxies, gates or media paths
+  changed. See [`docs/history/ROUND_75.md`](history/ROUND_75.md).
 
 * **2026-10-13 — Round 74: Reddit cold Discord video-proxy healing.** Reddit
   V3 now recognizes the observed cold-proxy response: a video tile has a

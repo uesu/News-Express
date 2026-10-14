@@ -2225,11 +2225,14 @@ _r39_x_expected = [
 _r59_x_walled_tail = ["https://nitter.netbub.com", "https://nitter.jaydenha.uk"]
 _r59_fleet = _literal_list_constant("testing area/twitter_v3.py", "RSS_INSTANCES")
 check("r59: operator pair remains in slots 1-2", _r59_fleet[:2] == ["https://nitter.cf", "https://xitter.cf"])
-check("r59: kareem mirror is ahead of token host", _r59_fleet.index("https://nitter.kareem.one") < _r59_fleet.index("https://nitter.miningtcup.me"))
-check("r59: kitter mirror is ahead of token host", _r59_fleet.index("https://tw.eir-nya.gay") < _r59_fleet.index("https://nitter.miningtcup.me"))
-check("r59/r75: walled hosts remain immediately before meowing's last-resort probe",
-      _r59_fleet[-3:-1] == _r59_x_walled_tail
-      and _r59_fleet[-1] == "https://nitter.meowing.monster")
+check("r75 v4: eir-nya keeps its retryable seat ahead of the token fallback",
+      _r59_fleet.index("https://tw.eir-nya.gay") < _r59_fleet.index("https://nitter.miningtcup.me"))
+check("r75 v4: token fallback precedes the complementary 3/5 mirrors",
+      _r59_fleet.index("https://nitter.miningtcup.me")
+      < _r59_fleet.index("https://nitter.gravitywell.xyz")
+      < _r59_fleet.index("https://nitter.kareem.one"))
+check("r75 v4: walled hosts remain the final two fallback probes",
+      _r59_fleet[-2:] == _r59_x_walled_tail)
 _r59_token_env = _literal_list_constant("testing area/twitter_v3.py", "RSS_TOKEN_ENV")
 check("r59: miningtcup token mapping unchanged", _r59_token_env == {"https://nitter.miningtcup.me": "NITTER_RSS_TOKEN"})
 with open(os.path.join(ROOT, "testing area", "twitter_v3.py"), encoding="utf-8") as _r59_f:
@@ -2243,28 +2246,38 @@ for _r39_rel, _r39_expected in (
     check(f"r39 source fleet: {_r39_rel} has the reviewed X RSS order",
           _literal_list_constant(_r39_rel, "RSS_INSTANCES") == _r39_expected)
 
-# Round 75 (2026-10-14): V3's trial and demotion are explicit, while V1/V2
-# retain their separately reviewed lists.
+# Round 75 addendum v4 (2026-10-14): the operator-directed seat 3, probe-ranked
+# remaining hosts and two fill-in sweep additions are pinned as the final 12-member
+# order. V1/V2 retain their separately reviewed lists.
 _r75_x_expected = [
     "https://nitter.cf",
     "https://xitter.cf",
-    "https://nitter.kareem.one",
-    "https://tw.eir-nya.gay",
     "https://xcopy.uk",
+    "https://nitter.meowing.monster",
+    "https://tw.eir-nya.gay",
+    "https://nitter.freedit.eu",
     "https://shitter.thepixora.com",
     "https://nitter.miningtcup.me",
+    "https://nitter.gravitywell.xyz",
+    "https://nitter.kareem.one",
     "https://nitter.netbub.com",
     "https://nitter.jaydenha.uk",
-    "https://nitter.meowing.monster",
 ]
-check("r75 source fleet: Twitter V3 has the reviewed exact RSS order",
+check("r75 v4 source fleet: Twitter V3 has the reviewed exact 12-member order",
       _literal_list_constant("testing area/twitter_v3.py", "RSS_INSTANCES") == _r75_x_expected)
-check("r75: xcopy.uk trials meowing.monster's seat; meowing is demoted, not deleted",
-      _r59_fleet.count("https://xcopy.uk") == 1
-      and _r59_fleet.index("https://xcopy.uk") == 4
+check("r75 v4: operator seat, probe ranking, fill-ins and retained membership are pinned",
+      _r59_fleet[:2] == ["https://nitter.cf", "https://xitter.cf"]
+      and _r59_fleet[2] == "https://xcopy.uk"
+      and _r59_fleet[3] == "https://nitter.meowing.monster"
+      and _r59_fleet[4] == "https://tw.eir-nya.gay"
+      and _r59_fleet[5] == "https://nitter.freedit.eu"
+      and _r59_fleet[6] == "https://shitter.thepixora.com"
+      and _r59_fleet[7] == "https://nitter.miningtcup.me"
+      and _r59_fleet[8] == "https://nitter.gravitywell.xyz"
+      and _r59_fleet[9] == "https://nitter.kareem.one"
+      and _r59_fleet[-2:] == ["https://nitter.netbub.com", "https://nitter.jaydenha.uk"]
       and _r59_fleet.count("https://nitter.meowing.monster") == 1
-      and _r59_fleet[-1] == "https://nitter.meowing.monster"
-      and _r59_fleet[:2] == ["https://nitter.cf", "https://xitter.cf"])
+      and len(_r59_fleet) == 12)
 
 _r39_reddit_expected = [
     "https://www.reddit.com",
