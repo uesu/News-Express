@@ -56,7 +56,7 @@ flowchart LR
   by `github-actions[bot]`, so normal runs deduplicate against committed state.
 * **Safety** — every PR must pass the offline
   [CI smoke gate](https://github.com/uesu/News-Express/actions/workflows/ci.yml)
-  (`pip install` + `compileall` + two test suites) before merge.
+  (`pip install` + `compileall` + three offline test suites) before merge.
 
 ---
 
@@ -73,7 +73,7 @@ flowchart LR
 | **Translation** | non-English tweets get a *Translated from X* block with the original preserved (via FxTwitter's `/en` endpoint); an identical "translation" (X language mis-detection) is dropped automatically |
 | **Links** | clickable `#hashtags` and `@mentions`, exactly like fxtwitter embeds |
 | **Self-heal** | Twitter V3 inspects Discord's returned message; **only explicitly unresolved** videos (video-only by default) queue up to 4 bounded same-payload edits after posting, so healthy media is posted immediately — no delay, no revalidation, no edit (`MEDIA_HEAL*` Variables) |
-| **Resilient feeds** | an 11-instance nitter fallback fleet, ordered by live evidence; optional `NITTER_RSS_TOKEN` unlocks the token-gated instance |
+| **Resilient feeds** | a 12-instance nitter fallback fleet (serial — first instance that answers wins), ranked by **runner evidence**: no instance that blocks GitHub Actions / Azure datacenter IPs sits above one that doesn't, and blocked instances are demoted, never deleted (see [Round 76](docs/history/ROUND_76.md)); optional `NITTER_RSS_TOKEN` unlocks the token-gated instance |
 | **Repost attribution** | reposted tweets credit the original author |
 
 ### 📰 Reddit monitor
@@ -98,7 +98,7 @@ flowchart LR
 * 🕐 **Exact timestamps** — every card's stats line ends with a Discord-native `<t:…:f>` timestamp.
 * 🔘 **Customizable buttons** — link-style buttons with Unicode or custom server emoji.
 * 🕙 **Reliable automation** — external cron trigger, cache auto-commits, per-run flood caps.
-* 🧪 **Two offline test suites** — smoke + signals, no network, no secrets; every past bug is a named guard (`rNN: ...`).
+* 🧪 **Three offline test suites** — smoke + Reddit signals + X media, no network, no secrets; every past bug is a named guard (`rNN: ...`).
 * 🤖 **Dependabot-ready** — weekly dependency/action checks, grouped PRs when requirements need updates, CI-gated, optional auto-merge.
 
 ---
@@ -369,7 +369,7 @@ STATIC_BUTTONS = [
 
 ## 📬 Reddit delivery pipeline
 
-Current behavior (rounds 63–72). For the full history of how this evolved,
+Current behavior (round 63 onward). For the full history of how this evolved,
 see [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) and the
 [changelog archive](docs/history/CHANGELOG_ARCHIVE.md).
 
@@ -491,7 +491,7 @@ path — the folder name contains a space).
 * **Runtime automation:** `.github/workflows/python_version_bump.yml` checks for
   final stable candidates in the `actions/python-versions` manifest, requires
   wheels-only dependency installation (`pip install --only-binary=:all:`), runs
-  compileall + both offline suites before and after the allowlisted rewrite, and
+  compileall + all three offline suites before and after the allowlisted rewrite, and
   opens a PR only after those gates pass.
 * **Auto-merge boundary:** `AUTO_MERGE_PYTHON_BUMP=yes` permits eligible patch
   auto-merges only. Python 3.15 remains a manual-review minor-series PR, and
@@ -514,7 +514,7 @@ See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
 | **Discohook** | after each Reddit post, a share-link preview of the exact card is logged (keyless public API, no webhook URL ever leaves the repo; disable with `DISCOHOOK_PREVIEW=0`) | [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) |
 | **Dependabot** | weekly dependency/action checks; grouped PRs when requirements need updates; optional opt-in auto-merge (`AUTO_MERGE_DEPENDABOT=yes`) | [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) |
 | **Python runtime** | CPython pinned to exact stable **3.14.8**; patch bumps may auto-merge only with `AUTO_MERGE_PYTHON_BUMP=yes`, new minor series require manual review, major versions require manual migration | [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) |
-| **CI** | every PR: `pip install` + `compileall` + smoke suite + Reddit signal suite | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) |
+| **CI** | every PR: `pip install` + `compileall` + smoke suite + Reddit signal suite + X media suite | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) |
 
 ---
 
@@ -524,11 +524,13 @@ See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
   (Discord silently drops components without it — already handled in all
   scripts). Rich cards also set the `IS_COMPONENTS_V2` flag (`1 << 15`).
 * **X run logs `NO working nitter instance this run` / `ALL FEEDS FAILED`** —
-  the whole nitter fleet was down/stale. Check
-  [status.d420.de](https://status.d420.de/) and refresh `RSS_INSTANCES` in
-  `testing area/twitter_v3.py`; set `NITTER_RSS_TOKEN` for the token-gated
-  instance. Rebuild one missed tweet meanwhile: *Run workflow* →
-  `test_tweet` = `screen_name/tweet_id`.
+  the whole nitter fleet was down/stale. Re-audit the fleet by **reading feed
+  bodies** ([status.d420.de](https://status.d420.de/) is a hint, not proof —
+  round 59) and re-rank `RSS_INSTANCES` in `testing area/twitter_v3.py` by the
+  round-76 rule (no instance that blocks GitHub Actions / datacenter IPs above
+  one that doesn't; demote, don't delete; update the smoke guard in the same
+  commit); set `NITTER_RSS_TOKEN` for the token-gated instance. Rebuild one
+  missed tweet meanwhile: *Run workflow* → `test_tweet` = `screen_name/tweet_id`.
 * **`Could not fetch valid RSS feed for @…` / `r/…`** — public mirrors
   rotate/die; the engines fall back automatically (read the per-source log
   lines). Historical incidents: [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md).
@@ -580,7 +582,7 @@ services — please support them:
 | Project / Service | What it's used for | Links |
 |---|---|---|
 | **News-Flash-Bot** by [@cold-logic5](https://github.com/cold-logic5) | The original repository this project is based on (RSS → Discord webhook architecture) | [GitHub repo](https://github.com/cold-logic5/News-Flash-Bot) · [Author](https://github.com/cold-logic5) |
-| **Nitter** by [@zedeus](https://github.com/zedeus) | Free & open-source, privacy-focused X/Twitter front-end providing the RSS feeds — active fallback order reviewed 2026-10-03 (round 59, feed-body audit): [nitter.cf](https://nitter.cf/), [xitter.cf](https://xitter.cf/), [nitter.kareem.one](https://nitter.kareem.one/) (runs [shaquille's fork](https://git.kareem.one/shaquille/nitter)), [tw.eir-nya.gay](https://tw.eir-nya.gay/) ("kitter", eir's fork based on [Cynosphere's fork](https://gitlab.com/Cynosphere/nitter)), [nitter.meowing.monster](https://nitter.meowing.monster/), [shitter.thepixora.com](https://shitter.thepixora.com/), [nitter.miningtcup.me](https://nitter.miningtcup.me/) (RSS token), then last-resort [nitter.netbub.com](https://nitter.netbub.com/) + [nitter.jaydenha.uk](https://nitter.jaydenha.uk/) | [GitHub](https://github.com/zedeus/nitter) · 💖 [Donations](https://github.com/zedeus/nitter#donations) |
+| **Nitter** by [@zedeus](https://github.com/zedeus) | Free & open-source, privacy-focused X/Twitter front-end providing the RSS feeds — active fallback order reviewed 2026-10-15 (round 76, runner evidence + feed-body audit): [nitter.cf](https://nitter.cf/), [xitter.cf](https://xitter.cf/), [nitter.meowing.monster](https://nitter.meowing.monster/), [nitter.miningtcup.me](https://nitter.miningtcup.me/) (RSS token), [nitter.freedit.eu](https://nitter.freedit.eu/), [nitter.gravitywell.xyz](https://nitter.gravitywell.xyz/), [tw.eir-nya.gay](https://tw.eir-nya.gay/) ("kitter", eir's fork based on [Cynosphere's fork](https://gitlab.com/Cynosphere/nitter)), [shitter.thepixora.com](https://shitter.thepixora.com/), [nitter.kareem.one](https://nitter.kareem.one/) (runs [shaquille's fork](https://git.kareem.one/shaquille/nitter)), [xcopy.uk](https://xcopy.uk/), then last-resort [nitter.netbub.com](https://nitter.netbub.com/) + [nitter.jaydenha.uk](https://nitter.jaydenha.uk/) | [GitHub](https://github.com/zedeus/nitter) · 💖 [Donations](https://github.com/zedeus/nitter#donations) |
 | **FxTwitter / FxEmbed** by [@dangered wolf](https://github.com/dangeredwolf) | Rich X/Twitter embeds + the free API — primary tweet-data source (round 11) used for media, stats, translation, GIF re-rendering and the video proxy | [fxtwitter.com](https://fxtwitter.com) · [docs.fxembed.com](https://docs.fxembed.com/) · 💖 [Sponsor](https://github.com/sponsors/dangeredwolf) |
 | **vxtwitter (BetterTwitFix / fixvx)** | Backup tweet-data API (round 11) + its **gifconvert** GIF converter | [vxtwitter.com](https://vxtwitter.com) · [API docs](https://vxtwitter.com/api.md) |
 | **EmbedEZ** | Rich Reddit embeds (redditez.com mirror) + the provider API used by Reddit V2 + last-resort tweet-data source (round 11) | [embedez.com](https://embedez.com/) · [API docs](https://embedez.com/docs) |
@@ -608,6 +610,7 @@ of FxTwitter/FxEmbed — [donations welcome](https://github.com/sponsors/dangere
 | [`docs/history/CHANGELOG_ARCHIVE.md`](docs/history/CHANGELOG_ARCHIVE.md) | Full dated history, rounds 1–62 |
 | [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) | Round-by-round engine notes moved out of this README (2026-10-05) |
 | [`docs/history/ROUND_*.md`](docs/history/) | Decision records per incident |
+| [`docs/REPOSITORY_TRACKING.md`](docs/REPOSITORY_TRACKING.md) | Current monitor observability + workflow-Variable inventory per monitor |
 | [`docs/history/REPOSITORY_TRACKING_2026-10-01.md`](docs/history/REPOSITORY_TRACKING_2026-10-01.md) | File/config/policy inventory and audit record (historical snapshot, 2026-10-01) |
 | [`docs/REDDIT_VIDEO_QUALITY.md`](docs/REDDIT_VIDEO_QUALITY.md) · [`docs/REDDIT_VIDEO_MEDIA_REPORT.md`](docs/REDDIT_VIDEO_MEDIA_REPORT.md) · [`docs/VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md`](docs/VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md) | Round-67 video-quality policy, evidence report, and the confirmed acceptance policy |
 | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) · [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) · [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) · [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) | Topic guides |

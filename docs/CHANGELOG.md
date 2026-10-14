@@ -41,6 +41,28 @@ rewritten when that happens, only relocated.
   updated in place into the round-76 rules. See
   [`docs/history/ROUND_76.md`](history/ROUND_76.md).
 
+* **2026-10-15 — Housekeeping (same PR as round 76): stale words and dead
+  constants.** No behavior change. `twitter_v3.py` drops three never-referenced
+  leftovers — the retired round-34 `MAX_CACHE_SIZE = 500`, an unused
+  `MAX_AGE_SECONDS` and the unused `_env_float` twin (the float reader lives
+  in `reddit_proxy.py`, where it is used) — rewrites the pre-round-59 fleet
+  header above `RSS_INSTANCES` into the current serial-chain / runner-evidence
+  / demote-not-delete rules, and fixes the `docs/ROUND_56.md` →
+  `docs/history/ROUND_56.md` pointer. Everything that still described two
+  offline suites now names all three: `python_version_bump.yml` runs
+  `tests/test_twitter_media.py` in both of its verify steps (it had claimed
+  parity with CI since round 73 without it), and `README.md`,
+  `docs/CI_SMOKE.md`, `docs/DEPENDABOT.md` and `docs/PYTHON_RUNTIME.md` say
+  so. The README's "11-instance" fleet line and its round-59 credits order are
+  replaced by the twelve-member round-76 order and ranking rule, the
+  troubleshooting entry no longer sends you to the retired tracker method, and
+  `docs/REPOSITORY_TRACKING.md` joins the docs index. `AGENTS.md` gains the
+  fleet invariant (operator pair, no-datacenter-block rule, demote-not-delete,
+  engine-before-guard deploy order) and lists every current topic guide;
+  `.env.example`'s round-63 note names the checks that actually remain. A
+  duplicate `import tempfile` leaves `tests/test_smoke.py`. Reddit engine
+  untouched.
+
 * **2026-10-14 — Round 75: Twitter RSS fleet re-ranked + Redlib RSS audit record.**
   The initial `nitter.meowing.monster` demotion was reversed the same day
   after the host revived around 13:35 UTC (d420 healthy from 13:45; version

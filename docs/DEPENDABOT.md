@@ -108,7 +108,8 @@ Three layers, in order:
    * `python -m compileall -q "testing area" tests` — syntax errors fail here;
    * `python tests/test_smoke.py` — offline monitor import and card-pipeline
      guards;
-   * `python tests/test_reddit_signals.py` — pure Reddit gate/decision guards.
+   * `python tests/test_reddit_signals.py` — pure Reddit gate/decision guards;
+   * `python tests/test_twitter_media.py` — pure X (Twitter) V3 media guards.
    Red check = don't merge. For a routine dependency PR, green checks plus a
    minimal dependency/action diff are the required merge gate; live external
    services remain outside CI.
@@ -205,7 +206,7 @@ still installs and compiles.
    and for actions it should be action references only. Anything bigger? Read
    the changelog link; for a **major** dependency version (e.g. 3.x → 4.0) skim
    the migration notes.
-3. Check the **CI** tab: green ✅ (install + compile + smoke + Reddit signals).
+3. Check the **CI** tab: green ✅ (install + compile + smoke + Reddit signals + X media).
 4. **Merge** (or enable auto-merge per §5). Done — the next scheduled
    monitor run uses the new version automatically.
 
@@ -250,7 +251,7 @@ description): treat as higher priority — review the advisory, then merge.
 *Files involved: `.github/dependabot.yml` (the switch),
 `.github/workflows/ci.yml` (the safety gate),
 `.github/workflows/dependabot_auto_merge.yml` (opt-in auto-merge after CI),
-`tests/test_smoke.py` and `tests/test_reddit_signals.py` (the offline suites
-the gate runs), `.github/workflows/python_version_bump.yml` (the separate
+`tests/test_smoke.py`, `tests/test_reddit_signals.py` and
+`tests/test_twitter_media.py` (the offline suites the gate runs), `.github/workflows/python_version_bump.yml` (the separate
 runtime automation), and `docs/PYTHON_RUNTIME.md` (the deliberately managed
 CPython runtime pin).*

@@ -128,8 +128,8 @@ ACCOUNTS = [acc.strip() for acc in ACCOUNTS_STR.split(",") if acc.strip()]
 DEFAULT_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
 CACHE_FILE = "posted_tweets.json"
-# Round 34 (2026-09-28): the old single global cap (MAX_CACHE_SIZE below) was
-# enforced as `sorted(posted_urls)[-MAX_CACHE_SIZE:]` — a LEXICOGRAPHIC
+# Round 34 (2026-09-28): the old single global cap (a 500-key MAX_CACHE_SIZE)
+# was enforced as `sorted(posted_urls)[-MAX_CACHE_SIZE:]` — a LEXICOGRAPHIC
 # eviction. The old comment claimed the keys are bare 19-digit tweet ids
 # (lexicographic == numeric) — WRONG: the keys are `{account}_{tweet_id}`,
 # so at the 500 cap the alphabetically-FIRST account's keys (Ananta_EN sorts
@@ -138,17 +138,20 @@ CACHE_FILE = "posted_tweets.json"
 # Reddit, latent here (the cache was at ~143/500 keys when round 34 landed).
 # Retention is now PER-ACCOUNT, newest-first (numeric tweet ids sort
 # chronologically within an account), with a generous global backstop.
-# Both are overridable via repo Variables.
+# Both are overridable via repo Variables. (The retired constant itself was
+# removed in the round-76 housekeeping pass — nothing referenced it.)
 # ---------------------------------------------------------------------------
-# ■ GHA-SAFE ENV READERS (round 49b, 2026-10-01)
+# ■ GHA-SAFE ENV READER (round 49b, 2026-10-01)
 # A repository Variable wired as `VAR: ${{ vars.VAR }}` arrives as an EMPTY
 # STRING when it is not set, so int("")/float("") raises at import. That is
 # exactly what killed the 20:10 UTC production runs:
 #   reddit_proxy  -> "reddit_proxy module unavailable - native media only:
 #                     could not convert string to float: ''"  (proxy chain OFF)
 #   twitter_v3    -> ValueError: invalid literal for int() with base 10: ''
-# Round 36 already learned this for reddit_main_v3 (_env_int); these are the
-# same guard for this module. Empty / blank / garbage -> the documented default.
+# Round 36 already learned this for reddit_main_v3 (_env_int); this is the
+# same guard for this module (every numeric Variable here is an int, so the
+# float twin lives only in reddit_proxy). Empty / blank / garbage -> the
+# documented default.
 # ---------------------------------------------------------------------------
 def _env_int(name: str, default: int) -> int:
     try:
@@ -157,27 +160,23 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _env_float(name: str, default: float) -> float:
-    try:
-        return float((os.getenv(name) or "").strip() or str(default))
-    except ValueError:
-        return default
-
 MAX_CACHE_SIZE_PER_ACCOUNT = _env_int("MAX_CACHE_SIZE_PER_ACCOUNT", 250)
 MAX_CACHE_SIZE_TOTAL = _env_int("MAX_CACHE_SIZE_TOTAL", 10000)
-# Round 34: retired pre-round-34 global cap (kept so old references still
-# resolve; the save no longer uses it).
-MAX_CACHE_SIZE = 500
-MAX_AGE_SECONDS = 3 * 3600
 
+# ■ X RSS SOURCE FLEET — a SERIAL fallback chain: the first instance that
+# answers HTTP 200 with entries wins, so every dead member above it costs a
+# full request timeout and nothing below the winner is ever probed.
 # Round 39 (2026-09-30): refresh from status.d420.de at 06:06 UTC.
 # Round 59 (2026-10-03): tracker method retired; audit RSS response bodies.
-# The first three hosts were healthy with RSS enabled and 87–96% all-time
-# availability; jaydenha was healthy/RSS-enabled but runs an older build, so it
-# remains a fallback. The previous unlisted, RSS-disabled, stale, or suspended
-# endpoints were retired: serial fallback means each one otherwise adds a full
-# request timeout on an outage. Keep this list short and ordered; revisit it
-# only after the tracker reports a current RSS-capable replacement.
+# A tracker row (or a clean body read off-runner) is a TRIAL ticket, never
+# proof — the production verdict comes from the GitHub Actions runners, and
+# Game-Express (the sister monitor on the same runners, probing every seat on
+# every run) is where it usually lands first.
+# Round 76 (2026-10-15) ranking rule: no member that blocks GitHub Actions /
+# Azure datacenter IPs (or datacenter IPs generally) sits above one that
+# doesn't. Members are demoted, not deleted — a blocked host moves back up the
+# day it answers the runners. tests/test_smoke.py pins the exact order; any
+# re-rank updates that guard in the same commit.
 RSS_INSTANCES = [
     # Round 40 (2026-09-30): operator decision — nitter.cf + xitter.cf restored as
     # the primary pair after live review (2026-09-30: both confirmed serving, plus
@@ -389,7 +388,7 @@ MEDIA_HEAL_ATTEMPTS = min(4, max(1, _env_int("MEDIA_HEAL_ATTEMPTS", 4)))
 # production, set the repo Variable MEDIA_HEAL_SCOPE=on (or all) to restore
 # the round-47 behaviour for every media type — no code change needed.
 # Accepted Variable values (56b): video (default) | on/all | off.
-# See docs/ROUND_56.md for the full decision record.
+# See docs/history/ROUND_56.md for the full decision record.
 # ---------------------------------------------------------------------------
 
 
@@ -1627,7 +1626,7 @@ async def main():
         logging.warning(f"dedup cache near cap: {len(posted_urls)} key(s) "
                         f"(per-account quota {MAX_CACHE_SIZE_PER_ACCOUNT}, "
                         f"backstop {MAX_CACHE_SIZE_TOTAL})"
-                        + (f"; hot: " + ", ".join(f"{a}={n}" for a, n in sorted(_hot.items()))
+                        + ("; hot: " + ", ".join(f"{a}={n}" for a, n in sorted(_hot.items()))
                            if _hot else ""))
 
     # Round 47: messages whose media Discord left unresolved; healed with an

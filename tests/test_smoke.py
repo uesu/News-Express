@@ -398,7 +398,6 @@ check("proxy: ALL-dead health still retries every service",
 proxy._fetch_redditez, proxy._fetch_vxreddit, proxy._fetch_embeddit = orig_rr, orig_vx, orig_ed
 
 # 7.7 health file round-trip
-import tempfile
 orig_health_file = proxy.PROXY_HEALTH_FILE
 with tempfile.TemporaryDirectory() as _td:
     proxy.PROXY_HEALTH_FILE = os.path.join(_td, "health.json")

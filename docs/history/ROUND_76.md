@@ -137,6 +137,27 @@ only. Nothing deleted. The operator pair untouched. Reddit untouched.
 - `test_r75_reddit_rss_instance_membership_unchanged` (the Reddit membership guard)
   is unchanged.
 
+## Housekeeping shipped in the same PR (no behavior change)
+
+A repository-wide pass for stale words and dead names rode along in a second
+commit. In `testing area/twitter_v3.py`: the retired round-34 `MAX_CACHE_SIZE = 500`,
+the unused `MAX_AGE_SECONDS` and the unused `_env_float` helper are removed (none
+was referenced anywhere — engine, tests or workflows); the pre-round-59 fleet
+header above `RSS_INSTANCES` is rewritten into the current rules (serial chain,
+runner evidence over tracker rows, the round-76 no-datacenter-block rule,
+demote-not-delete, guard-in-the-same-commit); the `docs/ROUND_56.md` pointer now
+reads `docs/history/ROUND_56.md`; one placeholder-less f-string prefix is dropped.
+Outside the engine: `python_version_bump.yml` now runs
+`tests/test_twitter_media.py` in both verify steps (it had claimed CI parity since
+round 73 without it); README, `docs/CI_SMOKE.md`, `docs/DEPENDABOT.md` and
+`docs/PYTHON_RUNTIME.md` name all three suites; the README's "11-instance" line and
+round-59 credits order become the round-76 order and rule; `AGENTS.md` gains the
+fleet invariant and the engine-before-guard deploy order; `.env.example`'s round-63
+note names the checks that actually remain; a duplicate `import tempfile` leaves
+`tests/test_smoke.py`. `reddit_main_v3.py` still carries its own retired
+`MAX_CACHE_SIZE = 500` (same round-34 note) — left alone on purpose because Reddit
+is out of scope this round; a future Reddit round can drop it.
+
 ## Validation
 
 ```text
