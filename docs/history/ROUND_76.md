@@ -154,9 +154,16 @@ round 73 without it); README, `docs/CI_SMOKE.md`, `docs/DEPENDABOT.md` and
 round-59 credits order become the round-76 order and rule; `AGENTS.md` gains the
 fleet invariant and the engine-before-guard deploy order; `.env.example`'s round-63
 note names the checks that actually remain; a duplicate `import tempfile` leaves
-`tests/test_smoke.py`. `reddit_main_v3.py` still carries its own retired
-`MAX_CACHE_SIZE = 500` (same round-34 note) — left alone on purpose because Reddit
-is out of scope this round; a future Reddit round can drop it.
+`tests/test_smoke.py`. On operator request the same pass also dropped the identical
+retired `MAX_CACHE_SIZE = 500` (and one placeholder-less f-string prefix) from
+`testing area/reddit_main_v3.py` — again verified unreferenced by any engine, test,
+workflow or README — and corrected the displayed text of six links inside
+`docs/history/` (`CHANGELOG_ARCHIVE.md` ×3, `ENGINE_HISTORY.md` ×2,
+`ROUND_61_DEPLOY.md` ×1) that still read `docs/ROUND_NN.md` after the 2026-10-05 move
+into `docs/history/`; the link targets were already correct and are unchanged. Dated
+inventories that describe the file layout *as it was* on their date
+(`REPOSITORY_TRACKING_2026-10-01.md`, `ROUND_51.md`, the `ROUND_61_DEPLOY.md` table)
+are records and were deliberately not rewritten.
 
 ## Validation
 
@@ -169,16 +176,19 @@ git status                            # no cache jsons staged
 
 ## Deployment (manual, after merge)
 
-Two files this round, to **both** `uesu/wvkhabh2s22` and `uesu/7jkxmy9nvbc`, in this
-order:
+To **both** `uesu/wvkhabh2s22` and `uesu/7jkxmy9nvbc`, in this order:
 
-1. `testing area/twitter_v3.py` **first** — it carries the new twelve-member order.
+1. `testing area/twitter_v3.py` **first** — it carries the new twelve-member order
+   (and the dead-constant cleanup).
 2. `tests/test_smoke.py` **second** — it carries the r76 guard.
+3. `testing area/reddit_main_v3.py` — **cosmetic only** (the retired `MAX_CACHE_SIZE`
+   constant and one f-string prefix removed; zero behavior change, no guard depends
+   on it). Upload it to keep prod byte-identical with this repo; skipping it breaks
+   nothing.
 
-`testing area/reddit_main_v3.py` is unchanged this round — nothing to upload. No
-`docs/`, no workflow files. Engine-before-test is the lesson from the round-75
-deploy: the smoke-only commits went red because the guard landed before the engine
-file.
+No `docs/`, no workflow files (the `python_version_bump.yml` fix is dev-repo-only).
+Engine-before-test is the lesson from the round-75 deploy: the smoke-only commits
+went red because the guard landed before the engine file.
 
 **Post-deploy check:** the next monitor runs stay green (`nitter.cf` serves first-hit
 as always); the runner verdict for seats 5/6 (freedit, gravitywell) arrives only if

@@ -210,7 +210,7 @@ below it (above the 2026-10-03 Instant-preset entry):
   datacenter-IP wall — so no credits were added and the fleet is
   unchanged; the native `.rss` + feed-token + Arctic Shift trio the
   engine already uses remains the only reliable class of sources.
-  Details: [`docs/ROUND_61.md`](ROUND_61.md).
+  Details: [`docs/history/ROUND_61.md`](ROUND_61.md).
 ```
 
 ## Part 4 — after merging (both repos)

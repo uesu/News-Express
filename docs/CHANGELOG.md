@@ -60,8 +60,12 @@ rewritten when that happens, only relocated.
   fleet invariant (operator pair, no-datacenter-block rule, demote-not-delete,
   engine-before-guard deploy order) and lists every current topic guide;
   `.env.example`'s round-63 note names the checks that actually remain. A
-  duplicate `import tempfile` leaves `tests/test_smoke.py`. Reddit engine
-  untouched.
+  duplicate `import tempfile` leaves `tests/test_smoke.py`. On operator
+  request the pass also dropped the identical retired `MAX_CACHE_SIZE = 500`
+  from `reddit_main_v3.py` (cosmetic; no behavior change, no guard depends on
+  it) and corrected the displayed text of six `docs/history/` links that
+  still read `docs/ROUND_NN.md` after the 2026-10-05 move (targets were
+  already correct).
 
 * **2026-10-14 — Round 75: Twitter RSS fleet re-ranked + Redlib RSS audit record.**
   The initial `nitter.meowing.monster` demotion was reversed the same day
