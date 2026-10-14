@@ -16,6 +16,31 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-15 — Round 76: the runner-clean head + the xcopy.uk verdict.**
+  `xcopy.uk`'s round-75 seat-3 trial ended with a measured runner refusal:
+  Game-Express's first four post-merge runs (#2662–#2665, 2026-10-14
+  17:19–17:30 UTC) got HTTP 403 on all six handles, every run, from four
+  Azure regions (westus, westus3, eastus2, centralus) — 24/24 fetches
+  refused — while an off-runner probe the same afternoon read a clean 8/8
+  body with `nitter.cf` parity: the `nitter.kareem.one` signature. The
+  operator set this round's ranking rule — **no member that blocks GitHub
+  Actions / Azure datacenter IPs (or datacenter IPs generally) sits above one
+  that doesn't** — and directed the head for both monitors: the operator pair,
+  then `nitter.meowing.monster` (4 → 3) and the token-gated
+  `nitter.miningtcup.me` (8 → 4), making the chain head entirely runner-proven
+  for the first time. The probe round ranked the rest on union coverage (all
+  eight handles both monitors watch): `nitter.freedit.eu` 5 (8/8, zero
+  refusals anywhere), `nitter.gravitywell.xyz` 6 (5/8; `GenshinImpact` gap
+  newly observed alongside Wuthering_Waves/HonkaiNA), `tw.eir-nya.gay` 7
+  (passes the rule but holds the only measured runner non-deliveries and
+  429-throttled every GE-handle probe), then the measured runner refusals:
+  thepixora 8 (flapping 403), kareem 9 (standing 403), **xcopy 10 — demoted,
+  not deleted**. The walled tail stays last. Membership stays twelve; the
+  operator pair untouched; Reddit untouched. The smoke suite pins the new
+  exact order; the r75 "eir-nya ahead of the token fallback" relative guard is
+  updated in place into the round-76 rules. See
+  [`docs/history/ROUND_76.md`](history/ROUND_76.md).
+
 * **2026-10-14 — Round 75: Twitter RSS fleet re-ranked + Redlib RSS audit record.**
   The initial `nitter.meowing.monster` demotion was reversed the same day
   after the host revived around 13:35 UTC (d420 healthy from 13:45; version
