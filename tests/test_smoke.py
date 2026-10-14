@@ -2265,19 +2265,42 @@ _r75_x_expected = [
 ]
 check("r75 v4 source fleet: Twitter V3 has the reviewed exact 12-member order",
       _literal_list_constant("testing area/twitter_v3.py", "RSS_INSTANCES") == _r75_x_expected)
-check("r75 v4: operator seat, probe ranking, fill-ins and retained membership are pinned",
-      _r59_fleet[:2] == ["https://nitter.cf", "https://xitter.cf"]
-      and _r59_fleet[2] == "https://xcopy.uk"
-      and _r59_fleet[3] == "https://nitter.meowing.monster"
-      and _r59_fleet[4] == "https://tw.eir-nya.gay"
-      and _r59_fleet[5] == "https://nitter.freedit.eu"
-      and _r59_fleet[6] == "https://shitter.thepixora.com"
-      and _r59_fleet[7] == "https://nitter.miningtcup.me"
-      and _r59_fleet[8] == "https://nitter.gravitywell.xyz"
-      and _r59_fleet[9] == "https://nitter.kareem.one"
-      and _r59_fleet[-2:] == ["https://nitter.netbub.com", "https://nitter.jaydenha.uk"]
-      and _r59_fleet.count("https://nitter.meowing.monster") == 1
-      and len(_r59_fleet) == 12)
+def test_r75_v4_xcopy_seat_3_fleet_ranked_and_filled_in():
+    """r75 addendum v4 (2026-10-14): the operator seated xcopy.uk at 3 after the
+    full-coverage test (8/8 accounts, nitter.cf parity); a probe round ranked the
+    remaining members (meowing 4 -- 5/5 body, the only non-token-gated member besides
+    the operator pair with positive runner deliveries; eir-nya 5 -- serving, retryable
+    429s; thepixora 7 -- clean body, GE runners 403'd all handles 2026-10-13;
+    miningtcup 8 -- token fallback; kareem.one 10 -- 3/5 accounts); and the fill-in
+    sweep added two new members: freedit.eu (6 -- 5/5 accounts body-verified, wiki
+    'rate limited' tag, zero runner evidence, TRIAL) and gravitywell.xyz (9 -- 3/5,
+    gaps complementary to kareem.one's, so together they span all five accounts).
+    Nothing deleted; the operator pair untouched; membership grows to twelve."""
+    RSS_INSTANCES = x3.RSS_INSTANCES
+    assert RSS_INSTANCES[2] == "https://xcopy.uk"                 # operator-directed seat 3
+    assert RSS_INSTANCES[3] == "https://nitter.meowing.monster"   # revived; runner-proven
+    assert RSS_INSTANCES[4] == "https://tw.eir-nya.gay"           # serving, retryable 429s
+    assert RSS_INSTANCES[5] == "https://nitter.freedit.eu"        # NEW: 5/5 body, trial
+    assert RSS_INSTANCES[6] == "https://shitter.thepixora.com"    # clean body, runner-403 watch
+    assert RSS_INSTANCES[7] == "https://nitter.miningtcup.me"     # token fallback
+    assert RSS_INSTANCES[8] == "https://nitter.gravitywell.xyz"   # NEW: 3/5, complementary
+    assert RSS_INSTANCES[9] == "https://nitter.kareem.one"        # 3/5, the mirror gaps
+    assert RSS_INSTANCES[-2] == "https://nitter.netbub.com"       # walled tier
+    assert RSS_INSTANCES[-1] == "https://nitter.jaydenha.uk"      # walled, stays last
+    assert "https://nitter.meowing.monster" in RSS_INSTANCES      # never deleted
+    assert RSS_INSTANCES[0] == "https://nitter.cf"                # operator pair untouched
+    assert RSS_INSTANCES[1] == "https://xitter.cf"
+    assert len(RSS_INSTANCES) == 12                               # ten members + two new
+
+
+# This suite runs as a linear script rather than through pytest's collector;
+# execute the named guard here and preserve the suite's PASS/FAIL summary.
+try:
+    test_r75_v4_xcopy_seat_3_fleet_ranked_and_filled_in()
+except AssertionError as _r75_v4_error:
+    check("r75 v4: xcopy seat 3, ranked fleet and fill-ins", False, str(_r75_v4_error))
+else:
+    check("r75 v4: xcopy seat 3, ranked fleet and fill-ins", True)
 
 _r39_reddit_expected = [
     "https://www.reddit.com",
