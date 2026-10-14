@@ -16,6 +16,24 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-14 — Round 75: Twitter RSS mirror rotation + Redlib RSS audit record.**
+  Twitter V3 now trials `xcopy.uk` in the former fifth slot of
+  `nitter.meowing.monster`, which failed every probe and moves to the final
+  fallback position rather than being deleted; the pre-apply production-log
+  check confirmed it had not delivered real entries. The round-40
+  `nitter.cf`/`xitter.cf` operator pair and `nitter.kareem.one` remain in
+  place. `tw.eir-nya.gay` keeps its seat after one fast HTTP 429, with a watch
+  note for the prior runner's 200-with-zero-entries result. The `/rss` body
+  for `xcopy.uk` was hand-verified with current entries, text, media and links;
+  `nitter.pp.ua` and `nitter.poast.org` were not promoted because they refused
+  the body probe. Reddit V3 receives only an audit comment: all six Redlib
+  `.rss` candidates returned the same upstream Reddit 400, while the HTML
+  `/new` listing remains usable. Its list membership and order are unchanged;
+  native-first behavior and the round-64 listing/retraction checks remain.
+  New `r75:` smoke guards pin the Twitter trial/demotion and Reddit membership.
+  No workflows, proxies, gates or media paths changed. See
+  [`docs/history/ROUND_75.md`](history/ROUND_75.md).
+
 * **2026-10-13 — Round 74: Reddit cold Discord video-proxy healing.** Reddit
   V3 now recognizes the observed cold-proxy response: a video tile has a
   Discord `proxy_url`, but does not yet have both positive dimensions and a

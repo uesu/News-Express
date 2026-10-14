@@ -2227,7 +2227,9 @@ _r59_fleet = _literal_list_constant("testing area/twitter_v3.py", "RSS_INSTANCES
 check("r59: operator pair remains in slots 1-2", _r59_fleet[:2] == ["https://nitter.cf", "https://xitter.cf"])
 check("r59: kareem mirror is ahead of token host", _r59_fleet.index("https://nitter.kareem.one") < _r59_fleet.index("https://nitter.miningtcup.me"))
 check("r59: kitter mirror is ahead of token host", _r59_fleet.index("https://tw.eir-nya.gay") < _r59_fleet.index("https://nitter.miningtcup.me"))
-check("r59: walled tail is retained at the end", _r59_fleet[-2:] == _r59_x_walled_tail)
+check("r59/r75: walled hosts remain immediately before meowing's last-resort probe",
+      _r59_fleet[-3:-1] == _r59_x_walled_tail
+      and _r59_fleet[-1] == "https://nitter.meowing.monster")
 _r59_token_env = _literal_list_constant("testing area/twitter_v3.py", "RSS_TOKEN_ENV")
 check("r59: miningtcup token mapping unchanged", _r59_token_env == {"https://nitter.miningtcup.me": "NITTER_RSS_TOKEN"})
 with open(os.path.join(ROOT, "testing area", "twitter_v3.py"), encoding="utf-8") as _r59_f:
@@ -2237,10 +2239,32 @@ check("r59: demoted-not-deleted rationale recorded", "demoted, not deleted" in _
 for _r39_rel, _r39_expected in (
     ("testing area/twitter_v1.py", _r39_x_expected + _r59_x_walled_tail),
     ("testing area/twitter_v2_button_outside.py", _r39_x_expected + ["https://nitter.miningtcup.me"] + _r59_x_walled_tail),
-    ("testing area/twitter_v3.py", _r39_x_expected + ["https://nitter.miningtcup.me"] + _r59_x_walled_tail),
 ):
     check(f"r39 source fleet: {_r39_rel} has the reviewed X RSS order",
           _literal_list_constant(_r39_rel, "RSS_INSTANCES") == _r39_expected)
+
+# Round 75 (2026-10-14): V3's trial and demotion are explicit, while V1/V2
+# retain their separately reviewed lists.
+_r75_x_expected = [
+    "https://nitter.cf",
+    "https://xitter.cf",
+    "https://nitter.kareem.one",
+    "https://tw.eir-nya.gay",
+    "https://xcopy.uk",
+    "https://shitter.thepixora.com",
+    "https://nitter.miningtcup.me",
+    "https://nitter.netbub.com",
+    "https://nitter.jaydenha.uk",
+    "https://nitter.meowing.monster",
+]
+check("r75 source fleet: Twitter V3 has the reviewed exact RSS order",
+      _literal_list_constant("testing area/twitter_v3.py", "RSS_INSTANCES") == _r75_x_expected)
+check("r75: xcopy.uk trials meowing.monster's seat; meowing is demoted, not deleted",
+      _r59_fleet.count("https://xcopy.uk") == 1
+      and _r59_fleet.index("https://xcopy.uk") == 4
+      and _r59_fleet.count("https://nitter.meowing.monster") == 1
+      and _r59_fleet[-1] == "https://nitter.meowing.monster"
+      and _r59_fleet[:2] == ["https://nitter.cf", "https://xitter.cf"])
 
 _r39_reddit_expected = [
     "https://www.reddit.com",
@@ -2260,6 +2284,19 @@ for _r39_rel, _r39_expected in (
 ):
     check(f"r39 source fleet: {_r39_rel} has the reviewed Reddit RSS order",
           _literal_list_constant(_r39_rel, "REDDIT_RSS_INSTANCES") == _r39_expected)
+
+_r75_reddit_expected = {
+    "https://www.reddit.com", "https://old.reddit.com",
+    "https://redlib.miningtcup.me", "https://redlib.catsarch.com",
+    "https://redlib.nadeko.net", "https://redlib.privadency.com",
+    "https://safereddit.com", "https://red.artemislena.eu",
+    "https://redlib.privacyredirect.com",
+}
+_r75_reddit_fleet = _literal_list_constant(
+    "testing area/reddit_main_v3.py", "REDDIT_RSS_INSTANCES")
+check("r75: Reddit RSS mirror membership unchanged",
+      set(_r75_reddit_fleet) == _r75_reddit_expected
+      and _r75_reddit_fleet[0] == "https://www.reddit.com")
 
 for _r39_wf in (".github/workflows/ci.yml", ".github/workflows/reddit_monitor.yml",
                 ".github/workflows/twitter_monitor.yml"):

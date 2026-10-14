@@ -189,14 +189,27 @@ RSS_INSTANCES = [
     # Round 59 (2026-10-03): body-audited serving mirrors first; known
     # interstitial-walled hosts are retained as last-resort probes.
     "https://nitter.kareem.one",
-    "https://tw.eir-nya.gay",
-    "https://nitter.meowing.monster",
+    "https://tw.eir-nya.gay",           # Round 75 note: 429 on the 2026-10-14 off-runner
+                                        # probe — a fast fail, seat kept; demote only if a
+                                        # prod log shows 200-with-0-entries (Game-Express's
+                                        # 2026-10-13 runner verdict against it).
+    # Round 75 (2026-10-14): TRIAL — /Wuthering_Waves/rss body hand-read the same day
+    # (current entries, no wall, no splash); on the shitter fork's working wiki. A clean
+    # off-runner body is a trial ticket, never proof — the prod run log delivers the
+    # runner verdict. Takes meowing.monster's seat.
+    "https://xcopy.uk",
     "https://shitter.thepixora.com",
     # Token-gated fallback; harmlessly skipped without NITTER_RSS_TOKEN.
     "https://nitter.miningtcup.me",
     # Round 59: demoted, not deleted; these currently serve challenge walls.
     "https://nitter.netbub.com",
     "https://nitter.jaydenha.uk",
+    # Round 75 (2026-10-14): demoted, not deleted — host DOWN (connection failure on
+    # every probe; d420 17/22 checks unhealthy, 0 points, connectivity blank). A
+    # round-59 body-audited server, so it stays in the chain as the last probe and
+    # moves back up the day it answers. Serial position costs a connect-timeout only
+    # when the whole fleet above has already failed.
+    "https://nitter.meowing.monster",
 ]
 
 # round 12 (2026-09-17): token-gated instances. nitter.miningtcup.me hides
