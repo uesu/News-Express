@@ -1,6 +1,6 @@
 # Repository tracking
 
-This document tracks current monitor observability and selected workflow variables. Historical round documents remain under `docs/` and should not be used as current configuration instructions.
+This document tracks current monitor observability and selected workflow variables. Historical round documents remain under `docs/history/` and should not be used as current configuration instructions.
 
 ## Twitter V3
 

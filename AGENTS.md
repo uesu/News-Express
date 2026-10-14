@@ -1,6 +1,6 @@
 # AGENTS.md — onboarding for AI coding agents
 
-Read this first. It encodes the hard-won operational knowledge of 66 rounds
+Read this first. It encodes the hard-won operational knowledge of 76 rounds
 of production fixes so you do not re-learn it the expensive way — or
 "fix" something that is deliberate.
 
@@ -21,9 +21,11 @@ by an external cron (cron-job.org) via `workflow_dispatch`.
 
 Deployment is **manual**: merge a PR here, then the maintainer uploads the
 production-relevant files to the prod repo(s) through the GitHub web UI. Agents
-usually cannot push anywhere — deliver work as local commits on the session
-branch; the maintainer opens the PR. Typical upload set per fix: the engine
-file + `tests/test_smoke.py` + the touched workflow yml. Do **not** copy this
+work on their session branch: open the PR from it when the platform lets you
+push, otherwise deliver local commits and the maintainer opens the PR. Typical
+upload set per fix: the engine file + `tests/test_smoke.py` + the touched
+workflow yml, **engine file first** (a guard that lands before its engine turns
+the prod smoke check red — the round-75 deploy lesson). Do **not** copy this
 repository's development documentation, historical audit records, or agent
 onboarding files into production unless a task explicitly asks for that.
 
@@ -45,8 +47,12 @@ leftovers. Never advise deleting the "other" platform's files.
   media-heal contract).
 - `docs/` — current changelog + topic guides: `CHANGELOG.md` (current release
   notes, round 63 onward), `CI_SMOKE.md`, `DEPENDABOT.md`, `DISCOHOOK.md`,
-  `PYTHON_RUNTIME.md`. For the live secrets-vs-Variables inventory read
-  `.env.example` and the workflow `env:` blocks.
+  `PYTHON_RUNTIME.md`, `REPOSITORY_TRACKING.md` (per-monitor Variable
+  inventory + run-summary notes), and the round-67 video-quality trio
+  (`REDDIT_VIDEO_QUALITY.md`, `REDDIT_VIDEO_MEDIA_REPORT.md`,
+  `VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md`). For the live
+  secrets-vs-Variables inventory read `.env.example` and the workflow `env:`
+  blocks.
 - `docs/history/` — the history archive: `ROUND_*.md` decision records per
   incident, `CHANGELOG_ARCHIVE.md` (full dated history, rounds 1–62),
   `ENGINE_HISTORY.md` (detailed round notes moved out of the README on
@@ -102,6 +108,19 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    `content_type` (it is empty exactly when unresolved — round 56).
    `heal_eligible_items` reads module-global `MEDIA_HEAL_SCOPE` at call
    time (tests monkeypatch it).
+9. **The X RSS fleet (`RSS_INSTANCES` in `twitter_v3.py`) is a serial chain
+   ranked by runner evidence.** Seats 1–2 are the operator pair (`nitter.cf`,
+   `xitter.cf`, round 40) — never move or remove them without operator
+   sign-off. Round-76 ranking rule: **no instance that blocks GitHub Actions /
+   Azure datacenter IPs (or datacenter IPs generally) may sit above one that
+   doesn't.** A clean feed body read off-runner is a trial ticket, never
+   proof — the verdict comes from the GitHub Actions runners (Game-Express,
+   the sister monitor on the same runners, usually measures it first).
+   Members are demoted, not deleted (a blocked host moves back up the day it
+   answers the runners). The smoke suite pins the exact order, so every
+   re-rank updates the guard in the same commit; V1/V2 keep their own,
+   separately pinned lists. Reddit's `REDDIT_RSS_INSTANCES` is audited by
+   body too and has been intentionally unchanged since round 39.
 
 ## Landmines — things that LOOK like bugs but are deliberate
 
@@ -122,6 +141,10 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   "fix" continuations into the card or move media between parts.
 - The engine versions v1/v2 are documented fallbacks, enrolled in the
   smoke suite. Not stale code.
+- Blocked or walled nitter hosts at the bottom of `RSS_INSTANCES` (kareem,
+  xcopy, netbub, jaydenha…) are deliberate: demoted, not deleted (invariant
+  9). A 403 is a fast fail in the serial chain; deleting a member loses the
+  revival path and the ledger that justifies the ranking.
 
 ## Key defaults (all overridable via repo Variables, no code change)
 

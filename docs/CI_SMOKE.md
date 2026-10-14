@@ -12,7 +12,7 @@
 
 ---
 
-## 1. What are the two pieces?
+## 1. What are the pieces?
 
 | Piece | What it is | What it runs |
 |---|---|---|

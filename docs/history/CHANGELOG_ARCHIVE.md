@@ -49,7 +49,7 @@ Full prior history of News-Express, moved out of the main README during Round 63
   datacenter-IP wall — so no credits were added and the fleet is
   unchanged; the native `.rss` + feed-token + Arctic Shift trio the
   engine already uses remains the only reliable class of sources.
-  Details: [`docs/ROUND_61.md`](ROUND_61.md).
+  Details: [`docs/history/ROUND_61.md`](ROUND_61.md).
 
 * **2026-10-03 — Docs: Instant preset (old-speed combo at the 5-minute cron).**
   No code change. The Speed presets table gains **Instant**: cron unchanged at
@@ -78,9 +78,9 @@ Full prior history of News-Express, moved out of the main README during Round 63
   are YouTube URLs, and extracted URLs are HTML-unescaped so literal `&amp;`
   never reaches Discord. Text posts retain their body-first behavior. Seven
   offline smoke guards replay the incident. Details:
-  [`docs/ROUND_60.md`](ROUND_60.md).
+  [`docs/history/ROUND_60.md`](ROUND_60.md).
 
-* **2026-10-03 — Round 59: nitter fleet body-audit and Reddit audit record.** The three Twitter engines now share a body-audited fallback order: serving mirrors `nitter.kareem.one` and `tw.eir-nya.gay` are ahead of the token-gated host, while known challenge-wall hosts remain retained at the tail. The Reddit fallback list is unchanged after the same response-body audit found no confirmed working additions. Fork credits and the full decision record are in [`docs/ROUND_59.md`](ROUND_59.md).
+* **2026-10-03 — Round 59: nitter fleet body-audit and Reddit audit record.** The three Twitter engines now share a body-audited fallback order: serving mirrors `nitter.kareem.one` and `tw.eir-nya.gay` are ahead of the token-gated host, while known challenge-wall hosts remain retained at the tail. The Reddit fallback list is unchanged after the same response-body audit found no confirmed working additions. Fork credits and the full decision record are in [`docs/history/ROUND_59.md`](ROUND_59.md).
 
 
 * **2026-10-03 — Round 58: AGENTS.md — agent onboarding.** New root-level

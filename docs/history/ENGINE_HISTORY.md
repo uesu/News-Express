@@ -972,7 +972,7 @@ wiring of both guards + both save sites.
 > **Rounds 36–55 (settle window, duplicate-media gate, mod-queue detection,
 > repost gate, page-identity check, listing health tuning) were removed in
 > round 63 — see [the round-63 section](#-reddit-v3--round-63-2026-10-05-the-great-simplification)
-> further down and [`docs/CHANGELOG_ARCHIVE.md`](CHANGELOG_ARCHIVE.md)
+> further down and [`docs/history/CHANGELOG_ARCHIVE.md`](CHANGELOG_ARCHIVE.md)
 > for their full implementation history.**
 
 ### 🆕 Reddit V3 — round 35 (2026-09-28): NSFW content gate
@@ -1445,7 +1445,7 @@ Reddit engine now ships exactly **three protections**:
 Every other removed gate's full implementation history, the live incidents
 that motivated each one, and the tuning tables that used to live here are
 preserved verbatim in
-[`docs/CHANGELOG_ARCHIVE.md`](CHANGELOG_ARCHIVE.md).
+[`docs/history/CHANGELOG_ARCHIVE.md`](CHANGELOG_ARCHIVE.md).
 
 **What this means for latency:** a new post now delivers on the **first
 cron tick after it's confirmed not-NSFW** — there is no longer a settle

@@ -77,7 +77,7 @@ This repository is designed for standard (GIL-enabled) CPython 3.14:
 
 Offline repository validation means the real requirements install under the
 pinned interpreter, all Python files in `testing area/` and `tests/` compile,
-and both offline suites pass. Third-party feeds, Discord delivery, external
+and all three offline suites pass. Third-party feeds, Discord delivery, external
 cron triggers, and future service outages remain outside offline validation and
 should be checked with the documented dry-run/test-post controls when needed.
 
@@ -136,7 +136,8 @@ interpreter:
 | `python -m compileall -q "testing area" tests` | syntax/importability gate for every Python file used by the monitors and tests |
 | `python tests/test_smoke.py` | offline card-pipeline and workflow invariant guards |
 | `python tests/test_reddit_signals.py` | pure Reddit gate/decision guards |
-| repeat compileall + both suites after the rewrite | the rewrite updates current runtime surfaces and the round-39 pin guard in `tests/test_smoke.py`, so the rewritten tree is revalidated |
+| `python tests/test_twitter_media.py` | pure X (Twitter) V3 media guards (canonical order, GIF chain, heal contract) |
+| repeat compileall + all three suites after the rewrite | the rewrite updates current runtime surfaces and the round-39 pin guard in `tests/test_smoke.py`, so the rewritten tree is revalidated |
 
 The rewrite scope is an explicit current-runtime allowlist: workflow pins,
 current runtime documentation, README runtime references, and the smoke-test
