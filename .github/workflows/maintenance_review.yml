@@ -64,7 +64,8 @@ jobs:
           python-version: ${{ matrix.python }}
 
       - name: Resolve current baseline dependencies (not a future lockfile)
-        run: python -m pip install --only-binary=:all: -r reviewed-source/requirements.txt PyYAML
+        run: |
+          python -m pip install --only-binary=:all: -r reviewed-source/requirements.txt PyYAML
 
       - name: Read every tracked file, reproduce findings, run offline baselines
         env:
