@@ -40,6 +40,17 @@ skipped/neutral/cancelled checks, pending checks, a changed head SHA, hold
 labels, `CHANGES_REQUESTED`, untrusted updaters, and anything other than the
 exact repository variable value `yes` all refuse the merge.
 
+Live evidence is fail-closed: review, status, check-run, workflow-run, and
+commit API failures refuse the merge (they do not become empty lists). Check
+runs are paginated; truncation is a failure. The expected CI workflow name
+must succeed on the same head. Dependabot allowed paths come from the trusted
+profile, never from the PR's own file list. Grouped lock updates classify
+**every** package; the highest-risk member wins, and hash-only or truncated
+patches are review-required. A Python bump PR must use the `chore/python-`
+prefix; `github-actions[bot]` as commit author alone is not enough (a PAT
+may open the PR). The live adapter refreshes the snapshot immediately before
+merge.
+
 `AUTO_MERGE_DEPENDABOT` and `AUTO_MERGE_PYTHON_BUMP` are exact `yes` switches.
 The allowed merge method is squash, with merge as a fallback.
 
@@ -48,26 +59,34 @@ The allowed merge method is squash, with merge as a fallback.
 `.github/workflows/python_version_bump.yml` never self-merges. `BUMP_PAT` is
 required for publish; missing it is a configuration error, not a
 `GITHUB_TOKEN` fallback. Publish runs only when candidate wheels installed
-(`wheels==yes`). The rewrite allowlist is `.python-version` only.
+(`wheels==yes`). The rewrite allowlist is `.python-version` only. Next-minor
+soak uses an upstream release date (manifest field or a bounded GitHub
+release lookup); missing dates defer. Pre- and post-rewrite validation runs
+the full CI registry, including `lock-consistency` and `workflow-security`.
+Pinned `actionlint` is required; download failure or `SKIP_ACTIONLINT=1` is
+not a green gate.
 
 ## Monitor summaries
 
 V3 engines write `RUN_REPORT_PATH` JSON with real numeric totals, the checked
-out SHA, the lock digest, and skip/hold reasons they already computed. The
-workflow persist step writes a persistence sidecar. `render_run_summary.py`
-prints that report; a missing file is **unavailable**, never a fake zero.
-Log-grep counters are not used. Persistence (local save / commit / push) is
-reported independently.
+out SHA, the lock digest, and skip/hold reasons they already computed. HTTP
+and host counters wrap the existing session (no extra requests). Early-exit
+and failed local-save paths still emit a report. The workflow persist step
+writes a persistence sidecar. `render_run_summary.py` prints that report; a
+missing file is **unavailable**, never a fake zero. Log-grep counters are not
+used. Persistence (local save / commit / push) is reported independently.
 
 ## Crosspost video
 
 Child-post identity, routing, and dedup stay on the child. Media may be
 fetched from one resolved original (structured parent metadata, labelled
-Original Post, or a crosspost-context permalink). Profile aliases
+Original Post, or a permalink **adjacent** to a crosspost notice). A
+`crosspost` keyword elsewhere in the body is not a parent. Profile aliases
 (`/user/…` ↔ `/r/u_…`) are retried when the first route returns stills for a
-video post. Audio-cover renderers are not motion video. EmbedEZ/RedditEZ 1080p
-quality remains an opportunity after a validated proxy video, not a guess
-from a thumbnail.
+video post. Audio-cover renderers are not motion video; og consumers skip a
+leading audio-cover `og:video` and keep a later motion URL. EmbedEZ/RedditEZ
+1080p quality remains an opportunity after a validated proxy video, not a
+guess from a thumbnail.
 
 ## Production copy exclude
 

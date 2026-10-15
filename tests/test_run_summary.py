@@ -87,6 +87,39 @@ class RenderTests(unittest.TestCase):
 
 
 class RunReportTests(unittest.TestCase):
+    def test_wrap_session_counts_existing_http_without_extra_calls(self):
+        class _Resp:
+            status = 200
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+        class _Inner:
+            def __init__(self):
+                self.calls = 0
+
+            def get(self, url, **_kwargs):
+                self.calls += 1
+                return _Resp()
+
+        inner = _Inner()
+        report = RunReport("reddit_monitor", "v3")
+        wrapped = report.wrap_session(inner)
+
+        async def _run():
+            async with wrapped.get("https://redlib.example/r/x/.rss"):
+                pass
+
+        import asyncio
+        asyncio.run(_run())
+        self.assertEqual(inner.calls, 1)
+        self.assertEqual(report.http_requests, 1)
+        self.assertEqual(report.hosts_attempted, ["redlib.example"])
+        self.assertEqual(report.hosts_selected, ["redlib.example"])
+
     def test_engine_counters_are_real_and_redacted(self):
         os.environ["MONITOR_CODE_SHA"] = "cafebabe"
         report = RunReport("twitter_monitor", "v3")

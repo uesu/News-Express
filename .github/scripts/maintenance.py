@@ -40,6 +40,20 @@ SECRET_ENV_HINTS = (
 )
 HOLD_LABELS_FALLBACK = ("review-required", "do-not-merge", "hold", "changes-requested")
 AUTO_YES = "yes"
+DEFAULT_DEPENDABOT_ALLOWED = (
+    "requirements.txt",
+    "requirements.in",
+    "requirements-dev.txt",
+    "requirements-dev.in",
+    ".github/dependabot.yml",
+)
+DEFAULT_DEPENDABOT_ACTIONS_ALLOWED = (
+    ".github/workflows/ci.yml",
+    ".github/workflows/maintenance_merge.yml",
+    ".github/workflows/python_version_bump.yml",
+    ".github/workflows/reddit_monitor.yml",
+    ".github/workflows/twitter_monitor.yml",
+)
 
 # Highest-risk member of a grouped update controls the whole PR.
 RISK_RANK = {
@@ -191,8 +205,14 @@ def select_python_candidate(
     now: datetime | None = None,
     ignore_soak: bool = False,
     force: str | None = None,
+    date_lookup=None,
 ) -> dict[str, Any]:
-    """Return a structured selection result. Never proposes a major or a skip-minor leap."""
+    """Return a structured selection result. Never proposes a major or a skip-minor leap.
+
+    ``date_lookup(version, entry)`` may supply an ISO timestamp when the
+    manifest omits ``release_date`` / ``published_at``. Fixture callers leave
+    it unset so selection stays side-effect free.
+    """
     now = now or datetime.now(timezone.utc)
     if force:
         try:
@@ -261,6 +281,11 @@ def select_python_candidate(
     published = parse_iso_date(
         str(minor[1].get("release_date") or minor[1].get("published_at") or "")
     )
+    if published is None and callable(date_lookup):
+        try:
+            published = parse_iso_date(date_lookup(minor[0], minor[1]))
+        except Exception:
+            published = None
     if published is None:
         return {
             "status": "deferred",
@@ -390,17 +415,44 @@ def classify_checks(
     head_sha: str,
     trusted_apps: Sequence[str] = ("github-actions", "github-actions[bot]"),
     legacy_statuses: Sequence[Mapping[str, Any]] | None = None,
+    expected_workflow: str | None = None,
+    workflow_runs: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Require the trusted expected successful set on the exact head.
 
     Skipped, neutral, cancelled, pending, missing, unrelated, or foreign
     checks cannot satisfy a mandatory name. Zero checks is never ready.
+    When ``expected_workflow`` is set, a successful workflow run of that
+    name on the same head is also required.
     """
     expected = [name for name in expected_names if name]
     if not expected:
         return {"state": "failed", "reason": "no-expected-checks"}
     if not SHA_RE.fullmatch((head_sha or "").lower()):
         return {"state": "failed", "reason": "missing-head-sha"}
+    if expected_workflow:
+        if workflow_runs is None:
+            return {"state": "failed", "reason": "missing-workflow-runs"}
+        matching: list[Mapping[str, Any]] = []
+        for run in workflow_runs:
+            if not isinstance(run, dict):
+                return {"state": "failed", "reason": "malformed-workflow-run"}
+            name = str(run.get("name") or "")
+            sha = str(run.get("head_sha") or run.get("sha") or "")
+            if name != expected_workflow:
+                continue
+            if sha and sha != head_sha:
+                continue
+            matching.append(run)
+        if not matching:
+            return {"state": "failed", "reason": "missing-expected-workflow"}
+        latest_wf = max(matching, key=lambda r: int(r.get("id") or 0))
+        wf_status = str(latest_wf.get("status") or "")
+        wf_conclusion = str(latest_wf.get("conclusion") or "")
+        if wf_status != "completed":
+            return {"state": "pending", "reason": "expected-workflow-pending"}
+        if wf_conclusion != "success":
+            return {"state": "failed", "reason": "expected-workflow-not-success"}
 
     latest: dict[str, Mapping[str, Any]] = {}
     for run in check_runs or []:
@@ -542,7 +594,34 @@ def review_blocks(pr: Mapping[str, Any], reviews: Sequence[Mapping[str, Any]], h
     return None
 
 
-def trusted_updater(pr: Mapping[str, Any], identities: Mapping[str, Any]) -> str | None:
+def _commit_logins(commits: Sequence[Mapping[str, Any]] | None) -> set[str] | None:
+    if commits is None:
+        return None
+    logins: set[str] = set()
+    for commit in commits:
+        if not isinstance(commit, dict):
+            continue
+        for role in ("author", "committer"):
+            node = commit.get(role) if isinstance(commit.get(role), dict) else {}
+            login = str(node.get("login") or "")
+            if login:
+                logins.add(login)
+        inner = commit.get("commit") if isinstance(commit.get("commit"), dict) else {}
+        for role in ("author", "committer"):
+            node = inner.get(role) if isinstance(inner.get(role), dict) else {}
+            name = str(node.get("name") or "")
+            if name == "github-actions[bot]":
+                logins.add("github-actions[bot]")
+    return logins
+
+
+def trusted_updater(
+    pr: Mapping[str, Any],
+    identities: Mapping[str, Any],
+    *,
+    commits: Sequence[Mapping[str, Any]] | None = None,
+) -> str | None:
+    """Identify a trusted updater. github-actions[bot] as commit author alone is not enough."""
     user = pr.get("user") if isinstance(pr.get("user"), dict) else {}
     login = str(user.get("login") or "")
     head_ref = str((pr.get("head") or {}).get("ref") or "")
@@ -550,7 +629,14 @@ def trusted_updater(pr: Mapping[str, Any], identities: Mapping[str, Any]) -> str
         return "dependabot"
     bump = identities.get("python_bump") or {}
     prefix = str(bump.get("branch_prefix") or "chore/python-")
-    if login == str(bump.get("login") or "github-actions[bot]") and head_ref.startswith(prefix):
+    bot = str(bump.get("login") or "github-actions[bot]")
+    allowed_pr = {str(item) for item in (bump.get("allowed_pr_logins") or []) if item}
+    if not head_ref.startswith(prefix):
+        return None
+    if login == bot or login in allowed_pr:
+        return "python_bump"
+    commit_logins = _commit_logins(commits)
+    if commit_logins is not None and commit_logins and commit_logins <= {bot}:
         return "python_bump"
     return None
 
@@ -578,7 +664,7 @@ def decide_merge(snapshot: Mapping[str, Any]) -> Decision:
         return Decision("fail", "unexpected-repository")
 
     identities = policy.get("updater_identities") or {}
-    kind = trusted_updater(pr, identities)
+    kind = trusted_updater(pr, identities, commits=snapshot.get("commits"))
     if kind is None:
         return Decision("defer", "untrusted-updater", risk="blocked")
 
@@ -594,12 +680,17 @@ def decide_merge(snapshot: Mapping[str, Any]) -> Decision:
     files = snapshot.get("files") or []
     allowed = list((identities.get(kind) or {}).get("allowed_files") or policy.get("allowed_files") or [])
     if kind == "dependabot":
-        allowed = list(snapshot.get("allowed_files") or policy.get("dependabot_allowed_files") or allowed)
+        allowed = list(policy.get("dependabot_allowed_files") or allowed or DEFAULT_DEPENDABOT_ALLOWED)
         if not allowed:
-            allowed = [str(item.get("filename") or "") for item in files if isinstance(item, dict)]
-            # Dependabot may touch lock/input files; still reject workflow policy.
-            if not allowed:
-                return Decision("fail", "empty-diff")
+            return Decision("fail", "empty-allowlist")
+        wf_allowed = list(
+            policy.get("dependabot_actions_allowed_files") or DEFAULT_DEPENDABOT_ACTIONS_ALLOWED
+        )
+        if wf_allowed and any(
+            str(item.get("filename") or "").startswith(".github/workflows/")
+            for item in files if isinstance(item, dict)
+        ):
+            allowed = list(dict.fromkeys([*allowed, *wf_allowed]))
     elif kind == "python_bump":
         allowed = list((identities.get("python_bump") or {}).get("allowed_files") or [".python-version"])
     diff_kind = "python-bump" if kind == "python_bump" else str(snapshot.get("diff_kind") or "dependabot")
@@ -613,11 +704,14 @@ def decide_merge(snapshot: Mapping[str, Any]) -> Decision:
         return Decision("review-required", str(diff.get("reason") or "diff"), risk="review-required")
 
     expected = list(policy.get("mandatory_check_names") or [])
+    expected_workflow = str(policy.get("ci_workflow_name") or "") or None
     classified = classify_checks(
         snapshot["checks"] if isinstance(snapshot["checks"], list) else [],
         expected_names=expected,
         head_sha=head_sha,
         legacy_statuses=snapshot.get("legacy_statuses") or [],
+        expected_workflow=expected_workflow,
+        workflow_runs=snapshot.get("workflow_runs") if expected_workflow else None,
     )
     if classified.get("state") != "ready":
         action = "defer" if classified.get("state") == "pending" else "fail"
@@ -671,7 +765,7 @@ def production_manifest(root: str | os.PathLike, files: Sequence[str]) -> dict[s
 
 
 def normalize_compile_header(text: str, python_series: str = "3.14") -> str:
-    return re.sub(r"with Python \d+\.\d+", f"with Python {python_series}", text)
+    return re.sub(r"with Python \d+\.\d+(?:\.\d+)?", f"with Python {python_series}", text)
 
 
 def file_is_optional_doc(rel: str, profile: Mapping[str, Any]) -> bool:
@@ -759,37 +853,46 @@ def cmd_classify_checks(args: argparse.Namespace) -> int:
         head_sha=str(fixture.get("head_sha") or ""),
         trusted_apps=fixture.get("trusted_apps") or ("github-actions", "github-actions[bot]"),
         legacy_statuses=fixture.get("legacy_statuses") or [],
+        expected_workflow=fixture.get("expected_workflow"),
+        workflow_runs=fixture.get("workflow_runs"),
     )
     json.dump(result, sys.stdout, indent=2)
     sys.stdout.write("\n")
     return 0 if result.get("state") == "ready" else 1
 
 
-def _api_pages(url: str, token: str) -> tuple[int, list[Any]]:
+def _with_page(url: str, page: int) -> str:
+    if re.search(r"[?&]page=", url):
+        return re.sub(r"([?&]page=)\d+", rf"\g<1>{page}", url)
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}page={page}"
+
+
+def _api_pages(url: str, token: str, *, max_pages: int = 10) -> tuple[int, Any]:
+    """Paginate list or nested GitHub collection endpoints. Truncation fails closed."""
     items: list[Any] = []
-    next_url: str | None = url
-    while next_url:
-        status, payload = _github_json(next_url, token)
+    total: int | None = None
+    for page in range(1, max_pages + 1):
+        status, payload = _github_json(_with_page(url, page), token)
         if status != 200:
-            return status, payload if isinstance(payload, list) else [payload]
-        if isinstance(payload, list):
-            items.extend(payload)
-        elif isinstance(payload, dict) and isinstance(payload.get("check_runs"), list):
-            items.extend(payload["check_runs"])
-            if len(items) >= int(payload.get("total_count") or 0):
-                break
-        else:
             return status, payload
-        # GitHub page increment; callers pass per_page.
-        if "page=" in next_url:
-            match = re.search(r"[?&]page=(\d+)", next_url)
-            page = int(match.group(1)) + 1 if match else 2
-            next_url = re.sub(r"([?&]page=)\d+", rf"\g<1>{page}", next_url)
-            if isinstance(payload, list) and len(payload) < 100:
-                break
+        batch: list[Any]
+        if isinstance(payload, list):
+            batch = payload
+        elif isinstance(payload, dict) and isinstance(payload.get("check_runs"), list):
+            batch = payload["check_runs"]
+            total = int(payload.get("total_count") or 0)
+        elif isinstance(payload, dict) and isinstance(payload.get("workflow_runs"), list):
+            batch = payload["workflow_runs"]
+            total = int(payload.get("total_count") or 0)
         else:
-            break
-    return 200, items
+            return 0, {"message": "unexpected-list-payload"}
+        items.extend(batch)
+        if total is not None and len(items) >= total:
+            return 200, items
+        if len(batch) < 100:
+            return 200, items
+    return 0, {"message": "pagination-truncated", "count": len(items), "total": total}
 
 
 def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[str, Any]) -> dict[str, Any] | Decision:
@@ -821,51 +924,62 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
     if status != 200 or not isinstance(pr, dict):
         return Decision("fail", f"pr-api:{status}")
     head_sha = str((pr.get("head") or {}).get("sha") or head_sha)
-    status, checks_payload = _github_json(
+    status, check_runs = _api_pages(
         f"https://api.github.com/repos/{owner}/{name}/commits/{head_sha}/check-runs?per_page=100&filter=latest",
         token,
     )
-    if status != 200:
+    if status != 200 or not isinstance(check_runs, list):
         return Decision("fail", f"checks-api:{status}")
-    check_runs = []
-    if isinstance(checks_payload, dict) and isinstance(checks_payload.get("check_runs"), list):
-        check_runs = checks_payload["check_runs"]
     status, files = _api_pages(
-        f"https://api.github.com/repos/{owner}/{name}/pulls/{pr_number}/files?per_page=100&page=1",
+        f"https://api.github.com/repos/{owner}/{name}/pulls/{pr_number}/files?per_page=100",
         token,
     )
-    if status != 200:
+    if status != 200 or not isinstance(files, list):
         return Decision("fail", f"files-api:{status}")
     status, reviews = _api_pages(
-        f"https://api.github.com/repos/{owner}/{name}/pulls/{pr_number}/reviews?per_page=100&page=1",
+        f"https://api.github.com/repos/{owner}/{name}/pulls/{pr_number}/reviews?per_page=100",
         token,
     )
-    if status != 200:
-        reviews = []
+    if status != 200 or not isinstance(reviews, list):
+        return Decision("fail", f"reviews-api:{status}")
     status, statuses = _github_json(
         f"https://api.github.com/repos/{owner}/{name}/commits/{head_sha}/status",
         token,
     )
-    legacy = []
-    if status == 200 and isinstance(statuses, dict):
-        legacy = statuses.get("statuses") or []
-        if any(str(s.get("state")) == "failure" for s in legacy if isinstance(s, dict)):
-            pass
-    risk = snapshot_risk_from_files(files if isinstance(files, list) else [], kind_hint=trusted_updater(pr, profile.get("updater_identities") or {}))
-    allowed = []
-    kind = trusted_updater(pr, profile.get("updater_identities") or {})
+    if status != 200 or not isinstance(statuses, dict):
+        return Decision("fail", f"statuses-api:{status}")
+    legacy = statuses.get("statuses") or []
+    if not isinstance(legacy, list):
+        return Decision("fail", "statuses-api:malformed")
+    status, workflow_runs = _api_pages(
+        f"https://api.github.com/repos/{owner}/{name}/actions/runs?head_sha={head_sha}&per_page=100",
+        token,
+    )
+    if status != 200 or not isinstance(workflow_runs, list):
+        return Decision("fail", f"workflow-runs-api:{status}")
+    status, commits = _api_pages(
+        f"https://api.github.com/repos/{owner}/{name}/pulls/{pr_number}/commits?per_page=100",
+        token,
+    )
+    if status != 200 or not isinstance(commits, list):
+        return Decision("fail", f"commits-api:{status}")
+    identities = profile.get("updater_identities") or {}
+    kind = trusted_updater(pr, identities, commits=commits)
+    risk = snapshot_risk_from_files(files, kind_hint=kind)
     if kind == "python_bump":
-        allowed = list((profile.get("updater_identities") or {}).get("python_bump", {}).get("allowed_files") or [".python-version"])
-    elif kind == "dependabot":
-        allowed = [str(item.get("filename") or "") for item in files if isinstance(item, dict)]
+        allowed = list((identities.get("python_bump") or {}).get("allowed_files") or [".python-version"])
+    else:
+        allowed = list(profile.get("dependabot_allowed_files") or DEFAULT_DEPENDABOT_ALLOWED)
     return {
         "repository": full_name,
         "head_sha": head_sha,
         "pull_request": pr,
         "checks": check_runs,
-        "files": files if isinstance(files, list) else [],
-        "reviews": reviews if isinstance(reviews, list) else [],
-        "legacy_statuses": legacy if isinstance(legacy, list) else [],
+        "files": files,
+        "reviews": reviews,
+        "legacy_statuses": legacy,
+        "workflow_runs": workflow_runs,
+        "commits": commits,
         "risk": risk,
         "allowed_files": allowed,
         "diff_kind": "python-bump" if kind == "python_bump" else "dependabot",
@@ -877,20 +991,95 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
             "repository": full_name,
             "default_branch": default_branch,
             "mandatory_check_names": profile.get("mandatory_check_names") or [],
+            "ci_workflow_name": profile.get("ci_workflow_name") or "",
             "human_review_labels": profile.get("human_review_labels") or list(HOLD_LABELS_FALLBACK),
-            "updater_identities": profile.get("updater_identities") or {},
+            "updater_identities": identities,
             "allowed_merge_method": profile.get("allowed_merge_method") or "squash",
-            "dependabot_allowed_files": allowed,
+            "dependabot_allowed_files": list(profile.get("dependabot_allowed_files") or DEFAULT_DEPENDABOT_ALLOWED),
+            "dependabot_actions_allowed_files": list(
+                profile.get("dependabot_actions_allowed_files") or DEFAULT_DEPENDABOT_ACTIONS_ALLOWED
+            ),
         },
     }
+
+
+_REQ_EQ = re.compile(r"^([A-Za-z0-9_.-]+)==([^\\\s#]+)")
+_REQ_FILES = {
+    "requirements.txt", "requirements.in", "requirements-dev.txt", "requirements-dev.in",
+}
+
+
+def _norm_pkg(name: str) -> str:
+    return name.replace("_", "-").lower()
+
+
+def parse_requirement_version_maps(patch: str) -> tuple[dict[str, str], dict[str, str], bool, bool]:
+    """Map every package old/new version in a unified diff. Last-pair overwrite is forbidden."""
+    old: dict[str, str] = {}
+    new: dict[str, str] = {}
+    saw_hash = False
+    saw_pkg = False
+    for raw in patch.splitlines():
+        if raw.startswith("---") or raw.startswith("+++"):
+            continue
+        if not (raw.startswith("-") or raw.startswith("+")):
+            continue
+        body = raw[1:].strip()
+        if not body or body.startswith("#"):
+            continue
+        if "--hash=" in body:
+            saw_hash = True
+            continue
+        match = _REQ_EQ.match(body)
+        if not match:
+            range_match = re.match(r"^([A-Za-z0-9_.-]+)[<>=!~]", body)
+            if range_match:
+                saw_pkg = True
+                name = _norm_pkg(range_match.group(1))
+                if raw.startswith("-"):
+                    old.setdefault(name, body)
+                else:
+                    new.setdefault(name, body)
+            continue
+        saw_pkg = True
+        name, ver = _norm_pkg(match.group(1)), match.group(2)
+        if raw.startswith("-"):
+            old[name] = ver
+        else:
+            new[name] = ver
+    return old, new, saw_hash, saw_pkg
+
+
+def parse_action_ref_maps(patch: str) -> tuple[dict[str, tuple[str, str]], dict[str, tuple[str, str]]]:
+    old: dict[str, tuple[str, str]] = {}
+    new: dict[str, tuple[str, str]] = {}
+    for raw in patch.splitlines():
+        if raw.startswith("---") or raw.startswith("+++"):
+            continue
+        if not (raw.startswith("-") or raw.startswith("+")):
+            continue
+        match = USES_RE.search(raw)
+        if not match:
+            continue
+        action = match.group("action")
+        ref = match.group("ref")
+        comment = raw.split("#", 1)[1] if "#" in raw else ""
+        if raw.startswith("-"):
+            old[action] = (ref, comment)
+        else:
+            new[action] = (ref, comment)
+    return old, new
 
 
 def snapshot_risk_from_files(files: Sequence[Mapping[str, Any]], kind_hint: str | None) -> dict[str, Any]:
     members: list[dict[str, Any]] = []
     for item in files:
+        if not isinstance(item, dict):
+            members.append({"risk": "review-required", "auto_eligible": False, "reason": "malformed-file-entry"})
+            continue
         name = str(item.get("filename") or "")
         patch = str(item.get("patch") or "")
-        if name in {".python-version"}:
+        if name == ".python-version":
             old = new = None
             for line in patch.splitlines():
                 if line.startswith("-") and not line.startswith("---"):
@@ -907,28 +1096,54 @@ def snapshot_risk_from_files(files: Sequence[Mapping[str, Any]], kind_hint: str 
                 members.append(classify_python_change(old, new))
             else:
                 members.append({"risk": "review-required", "auto_eligible": False, "reason": "pin-unparsed"})
-        elif name in {"requirements.txt", "requirements.in", "requirements-dev.txt", "requirements-dev.in"}:
-            old_ver = new_ver = None
-            pkg = Path(name).stem
-            for line in patch.splitlines():
-                match = re.match(r"^[-+]([A-Za-z0-9_.-]+)==([0-9A-Za-z.]+)", line)
-                if not match:
+        elif name in _REQ_FILES:
+            if not patch:
+                members.append({
+                    "risk": "review-required", "auto_eligible": False,
+                    "reason": "truncated-or-missing-patch", "name": name,
+                })
+                continue
+            old_map, new_map, saw_hash, saw_pkg = parse_requirement_version_maps(patch)
+            names = set(old_map) | set(new_map)
+            if not names:
+                reason = "hash-only" if saw_hash else (
+                    "unparsed-requirement-diff" if saw_pkg else "truncated-or-missing-patch"
+                )
+                members.append({"risk": "review-required", "auto_eligible": False, "reason": reason, "name": name})
+                continue
+            for pkg in sorted(names):
+                if pkg not in old_map or pkg not in new_map:
+                    members.append({
+                        "risk": "review-required", "auto_eligible": False,
+                        "reason": "package-added-or-removed", "name": pkg,
+                    })
                     continue
-                pkg, ver = match.group(1), match.group(2)
-                if line.startswith("-"):
-                    old_ver = ver
-                else:
-                    new_ver = ver
-            members.append(classify_package_update(old_ver, new_ver, name=pkg))
+                members.append(classify_package_update(old_map[pkg], new_map[pkg], name=pkg))
         elif name.endswith((".yml", ".yaml")):
             if diff_touches_workflow_policy(patch):
                 members.append({"risk": "review-required", "auto_eligible": False, "reason": "workflow-policy-change"})
-            else:
-                members.append({"risk": "routine", "auto_eligible": True, "reason": "action-pin"})
+                continue
+            old_refs, new_refs = parse_action_ref_maps(patch)
+            actions = set(old_refs) | set(new_refs)
+            if not actions:
+                reason = "truncated-or-missing-patch" if not patch else "workflow-unparsed"
+                members.append({"risk": "review-required", "auto_eligible": False, "reason": reason, "name": name})
+                continue
+            for action in sorted(actions):
+                if action not in old_refs or action not in new_refs:
+                    members.append({
+                        "risk": "review-required", "auto_eligible": False,
+                        "reason": "new-or-moved-action", "name": action,
+                    })
+                    continue
+                old_ref, old_c = old_refs[action]
+                new_ref, new_c = new_refs[action]
+                members.append(classify_action_update(
+                    old_ref, new_ref, old_action=action, new_action=action,
+                    comment_old=old_c, comment_new=new_c,
+                ))
         else:
             members.append({"risk": "review-required", "auto_eligible": False, "reason": f"path:{name}"})
-    if kind_hint == "python_bump" and members:
-        return highest_risk(members)
     if not members:
         return {"risk": "review-required", "auto_eligible": False, "reason": "empty-diff"}
     return highest_risk(members)
@@ -979,6 +1194,16 @@ def cmd_apply_live(args: argparse.Namespace) -> int:
         sys.stdout.write("\n")
         return 0 if built.action in {"defer", "review-required"} else 1
     decision = decide_merge(built)
+    if decision.action == "merge" and args.apply_live:
+        refreshed = build_live_snapshot(event, token, profile)
+        if isinstance(refreshed, Decision):
+            decision = refreshed
+        elif str(refreshed.get("head_sha") or "") != str(built.get("head_sha") or ""):
+            decision = Decision("fail", "head-changed", risk="blocked")
+        else:
+            decision = decide_merge(refreshed)
+            if decision.action == "merge":
+                built = refreshed
     if decision.action == "merge" and args.apply_live:
         repo = str(built["repository"])
         owner, name = repo.split("/", 1)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -156,6 +157,48 @@ class VersionAndSelectTests(unittest.TestCase):
         self.assertEqual(grouped["risk"], "review-required")
         self.assertFalse(grouped["auto_eligible"])
 
+    def test_grouped_lock_uses_highest_member_risk(self):
+        files = [{
+            "filename": "requirements.txt",
+            "patch": (
+                "-aiohttp==3.14.5\n+aiohttp==4.0.0\n"
+                "-idna==3.19\n+idna==3.20\n"
+            ),
+        }]
+        risk = maintenance.snapshot_risk_from_files(files, "dependabot")
+        self.assertEqual(risk["risk"], "review-required")
+        self.assertGreaterEqual(risk["members"], 2)
+        self.assertFalse(risk["auto_eligible"])
+
+    def test_hash_only_and_truncated_lock_are_review(self):
+        hashed = maintenance.snapshot_risk_from_files([{
+            "filename": "requirements.txt",
+            "patch": "-    --hash=sha256:aaa\n+    --hash=sha256:bbb\n",
+        }], "dependabot")
+        self.assertEqual(hashed["risk"], "review-required")
+        truncated = maintenance.snapshot_risk_from_files([{
+            "filename": "requirements.txt",
+            "patch": "",
+        }], "dependabot")
+        self.assertEqual(truncated["risk"], "review-required")
+
+    def test_minor_date_lookup_enriches_missing_manifest_dates(self):
+        current = maintenance.parse_version("3.14.8")
+        manifest = [{
+            "version": "3.15.0",
+            "stable": True,
+            "files": [{"platform": "linux", "arch": "x64"}],
+        }]
+        deferred = maintenance.select_python_candidate(current, manifest)
+        self.assertEqual(deferred["status"], "deferred")
+        soaked = maintenance.select_python_candidate(
+            current, manifest, soak_days=30,
+            now=maintenance.parse_iso_date("2026-03-01T00:00:00Z"),
+            date_lookup=lambda _version, _entry: "2026-01-01T00:00:00Z",
+        )
+        self.assertEqual(soaked["status"], "review-required")
+        self.assertEqual(soaked["kind"], "minor")
+
 
 class CheckClassificationTests(unittest.TestCase):
     def test_zero_checks_fail(self):
@@ -209,6 +252,31 @@ class CheckClassificationTests(unittest.TestCase):
             expected_names=["application"], head_sha=SHA)
         self.assertEqual(result["state"], "ready")
 
+    def test_expected_workflow_identity_is_required(self):
+        checks = [{
+            "id": 1, "name": "application", "head_sha": SHA, "status": "completed",
+            "conclusion": "success", "app": {"slug": "github-actions"},
+        }]
+        missing = maintenance.classify_checks(
+            checks, expected_names=["application"], head_sha=SHA,
+            expected_workflow="CI — syntax + offline smoke test")
+        self.assertEqual(missing["state"], "failed")
+        self.assertIn("workflow", missing["reason"])
+        wrong = maintenance.classify_checks(
+            checks, expected_names=["application"], head_sha=SHA,
+            expected_workflow="CI — syntax + offline smoke test",
+            workflow_runs=[{"id": 1, "name": "other", "head_sha": SHA,
+                            "status": "completed", "conclusion": "success"}],
+        )
+        self.assertEqual(wrong["state"], "failed")
+        ready = maintenance.classify_checks(
+            checks, expected_names=["application"], head_sha=SHA,
+            expected_workflow="CI — syntax + offline smoke test",
+            workflow_runs=[{"id": 2, "name": "CI — syntax + offline smoke test",
+                            "head_sha": SHA, "status": "completed", "conclusion": "success"}],
+        )
+        self.assertEqual(ready["state"], "ready")
+
 
 class MergeDecisionTests(unittest.TestCase):
     def test_happy_path_merges(self):
@@ -234,6 +302,35 @@ class MergeDecisionTests(unittest.TestCase):
         self.assertEqual(human.action, "defer")
         moved = maintenance.decide_merge(_snapshot(head_sha=SHA2))
         self.assertEqual(moved.action, "fail")
+
+    def test_python_bump_pat_proposer_is_not_commit_author_alone(self):
+        identities = _snapshot()["policy"]["updater_identities"]
+        # github-actions[bot] on a random branch is not a runtime bump.
+        stray = maintenance.trusted_updater(
+            _pr(login="github-actions[bot]", ref="feature/other"), identities)
+        self.assertIsNone(stray)
+        # PAT opened the PR; commits are the bot's; branch prefix required.
+        pat = maintenance.trusted_updater(
+            _pr(login="news-express-bump", ref="chore/python-3.14.9"),
+            identities,
+            commits=[{"author": {"login": "github-actions[bot]"},
+                      "committer": {"login": "github-actions[bot]"}}],
+        )
+        self.assertEqual(pat, "python_bump")
+        # Commit author alone, without the prefix, is still untrusted.
+        author_only = maintenance.trusted_updater(
+            _pr(login="news-express-bump", ref="feature/pin"),
+            identities,
+            commits=[{"author": {"login": "github-actions[bot]"}}],
+        )
+        self.assertIsNone(author_only)
+
+    def test_dependabot_allowlist_is_not_the_pr_file_list(self):
+        snap = _snapshot(files=[
+            {"filename": "testing area/reddit_main_v3.py", "patch": "+x\n"},
+        ])
+        decision = maintenance.decide_merge(snap)
+        self.assertNotEqual(decision.action, "merge")
 
     def test_auto_merge_flag_must_be_exact_yes(self):
         for value in ("Yes", "true", "1", "on", ""):
@@ -330,6 +427,29 @@ class CiRegistryTests(unittest.TestCase):
         import ci as ci_mod
         self.assertEqual(ci_mod.final_gate({"application": 0, "maintenance": 1}), 1)
         self.assertEqual(ci_mod.final_gate({"application": 0, "maintenance": 0}), 0)
+
+    def test_actionlint_skip_and_missing_pin_are_not_success(self):
+        import ci as ci_mod
+        self.assertEqual(ci_mod.maybe_run_actionlint(ROOT, {}), 1)
+        previous = os.environ.get("SKIP_ACTIONLINT")
+        os.environ["SKIP_ACTIONLINT"] = "1"
+        try:
+            self.assertEqual(
+                ci_mod.maybe_run_actionlint(ROOT, {"url": "https://example.test/x", "sha256": "abc"}),
+                1,
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("SKIP_ACTIONLINT", None)
+            else:
+                os.environ["SKIP_ACTIONLINT"] = previous
+
+    def test_compile_header_normalizes_patch_python(self):
+        text = "# This file is autogenerated by pip-compile with Python 3.14.8\n"
+        self.assertIn(
+            "with Python 3.14\n",
+            maintenance.normalize_compile_header(text),
+        )
 
 
 if __name__ == "__main__":

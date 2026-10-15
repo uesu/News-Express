@@ -86,6 +86,8 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("configuration error, not a GITHUB_TOKEN fallback", text)
         self.assertIn("wheels == 'yes'", text)
         self.assertNotIn("gh pr merge", text)
+        self.assertGreaterEqual(text.count("--group lock-consistency"), 2)
+        self.assertGreaterEqual(text.count("--group workflow-security"), 2)
 
     def test_action_pins_are_shas(self):
         for path in (ROOT / ".github" / "workflows").glob("*.yml"):

@@ -114,7 +114,9 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    There is no Actions workflow lockfile. The Python pin lives in
    `.python-version` and is installed with `--require-hashes --only-binary=:all:`.
    Dependabot does not self-merge; `maintenance_merge.yml` reads policy from
-   the trusted default branch only.
+   the trusted default branch only. Live evidence is fail-closed (no empty-list
+   fallback on API errors). Pinned `actionlint` must run. Grouped lock risk
+   classifies every package.
 8. Heal eligibility is classified by **URL**, never by response
    `content_type` (it is empty exactly when unresolved — round 56).
    `heal_eligible_items` reads module-global `MEDIA_HEAL_SCOPE` at call

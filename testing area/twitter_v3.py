@@ -133,6 +133,16 @@ def _report_target(name: str, *, usable: bool = False) -> None:
     if usable:
         _run_report.target_usable(name)
 
+
+def _close_report(*, result: str | None = None, save_status: str | None = None) -> None:
+    if _run_report is None:
+        return
+    if save_status is not None:
+        _run_report.mark_local_save(save_status)
+    if result:
+        _run_report.end_monitor(result)
+    _run_report.write()
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 load_dotenv()
 
@@ -1639,9 +1649,10 @@ async def main():
     if _run_report is not None:
         _run_report.set_configured(len(ACCOUNTS))
         _run_report.start_monitor()
+        import atexit
+        atexit.register(_close_report)
     if not ACCOUNTS:
-        if _run_report is not None:
-            _run_report.write()
+        _close_report(result="failed", save_status="not-run")
         return
     posted_urls = load_posted_urls()
     is_first_run = len(posted_urls) == 0
@@ -1670,6 +1681,8 @@ async def main():
     heal_queue: list = []
 
     async with aiohttp.ClientSession() as session:
+        if _run_report is not None:
+            session = _run_report.wrap_session(session)
         feeds_tasks = [fetch_working_feed(session, acc) for acc in ACCOUNTS]
         feeds = await asyncio.gather(*feeds_tasks)
 
@@ -1898,10 +1911,8 @@ async def main():
         await heal_unresolved_media(session, heal_queue)
 
     saved = save_posted_urls(posted_urls, frozenset(posted_urls - posted_urls_at_start))
-    if _run_report is not None:
-        _run_report.mark_local_save("saved")
-        _run_report.end_monitor("completed")
-        _run_report.write()
+    missing = (posted_urls - posted_urls_at_start) - saved
+    _close_report(result="completed", save_status="failed" if missing else "saved")
     missing = (posted_urls - posted_urls_at_start) - saved
     if missing:
         logging.error(f"DEDUP GUARD: {len(missing)} key(s) posted this run are "

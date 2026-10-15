@@ -6,6 +6,7 @@ numeric outcomes they already computed. Secrets are redacted on serialize.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -13,6 +14,7 @@ import re
 import time
 from collections import Counter
 from typing import Any
+from urllib.parse import urlparse
 
 SCHEMA_VERSION = 1
 TOKEN_RE = re.compile(
@@ -234,6 +236,10 @@ class RunReport:
             payload["python_version"] = actual_py
         return _redact(payload)
 
+    def wrap_session(self, session: Any) -> Any:
+        """Count existing session.get/post/head calls. Does not issue extra HTTP."""
+        return ReportingSession(session, self)
+
     def write(self, path: str | None = None) -> None:
         dest = path or os.environ.get("RUN_REPORT_PATH") or ""
         if not dest:
@@ -248,3 +254,67 @@ class RunReport:
         except OSError as exc:
             # Telemetry must never mask the original application failure.
             self.warnings.append(f"report-write-failed:{type(exc).__name__}")
+
+
+class ReportingSession:
+    """Thin proxy around an aiohttp session that records requests already made."""
+
+    def __init__(self, inner: Any, report: RunReport) -> None:
+        object.__setattr__(self, "_inner", inner)
+        object.__setattr__(self, "_report", report)
+
+    def get(self, url, *args, **kwargs):
+        return _ReportingRequest(self._inner.get(url, *args, **kwargs), self._report, url)
+
+    def post(self, url, *args, **kwargs):
+        return _ReportingRequest(self._inner.post(url, *args, **kwargs), self._report, url)
+
+    def head(self, url, *args, **kwargs):
+        return _ReportingRequest(self._inner.head(url, *args, **kwargs), self._report, url)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+class _ReportingRequest:
+    def __init__(self, inner: Any, report: RunReport, url: Any) -> None:
+        self._inner = inner
+        self._report = report
+        self._url = url
+
+    def _note_start(self) -> str:
+        host = urlparse(str(self._url)).hostname or ""
+        self._report.http(1)
+        if host:
+            self._report.host_attempt(host)
+        return host
+
+    def _note_response(self, resp: Any, host: str) -> None:
+        status = getattr(resp, "status", None)
+        if status == 429:
+            self._report.note_rate_limit()
+        elif isinstance(status, int) and 200 <= status < 400 and host:
+            self._report.host_select(host)
+
+    def _note_error(self, exc: BaseException) -> None:
+        name = type(exc).__name__
+        if name in {"TimeoutError", "ServerTimeoutError", "asyncio.TimeoutError"} or isinstance(exc, TimeoutError):
+            self._report.note_timeout()
+        elif isinstance(exc, asyncio.CancelledError) or name == "CancelledError":
+            self._report.note_cancelled()
+
+    async def __aenter__(self):
+        host = self._note_start()
+        try:
+            resp = await self._inner.__aenter__()
+        except BaseException as exc:
+            self._note_error(exc)
+            raise
+        self._note_response(resp, host)
+        return resp
+
+    async def __aexit__(self, *exc):
+        return await self._inner.__aexit__(*exc)
+
+    def __await__(self):
+        return self.__aenter__().__await__()

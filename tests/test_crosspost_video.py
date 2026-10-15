@@ -71,6 +71,16 @@ class OriginalDiscoveryTests(unittest.TestCase):
             "/r/Beta/comments/child005/",
         ))
 
+    def test_distant_crosspost_keyword_is_not_a_parent(self):
+        text = (
+            "I like to crosspost sometimes.\n"
+            + ("word " * 80)
+            + "\nRelated reading /r/Alpha/comments/parent99/title/"
+        )
+        self.assertIsNone(v3.find_crosspost_original_path(
+            text, "/r/Beta/comments/child099/",
+        ))
+
     def test_foreign_host_rejected(self):
         self.assertIsNone(v3.find_crosspost_original_path(
             "crosspost https://not-reddit.example/r/Alpha/comments/parent06/",
@@ -122,6 +132,19 @@ class VideoEligibilityTests(unittest.TestCase):
             "og:image": ["https://i.redd.it/still.jpg"],
         })
         self.assertTrue(all(item["kind"] != "video" for item in media))
+
+    def test_proxy_og_prefers_later_motion_video(self):
+        page = (
+            '<meta property="og:video" content="https://proxy.embedez.com/render/audio?cover=x"/>'
+            '<meta property="og:video" content="https://v.redd.it/motion123/DASH_1080.mp4"/>'
+            '<meta property="og:image" content="https://i.redd.it/still.jpg"/>'
+        )
+        meta = proxy._og_meta(page)
+        media = proxy._media_from_og(meta)
+        videos = [item for item in media if item.get("kind") == "video"]
+        self.assertEqual(len(videos), 1)
+        self.assertIn("motion123", videos[0]["url"])
+        self.assertFalse(any(proxy.is_audio_cover_url(item.get("url")) for item in media))
 
     def test_encoded_video_id_and_preview_negative(self):
         encoded = "https://x.test/?videoUrl=https%3A%2F%2Fv.redd.it%2Fvideoid09%2FDASH_1080.mp4"

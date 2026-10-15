@@ -135,12 +135,12 @@ interpreter:
 |---|---|
 | candidate exists in the `actions/python-versions` manifest with a linux-x64 build | that manifest is what `setup-python` resolves; a version absent from it breaks the workflows |
 | `pip install --only-binary=:all: -r requirements.txt` | compiled dependencies must have prebuilt wheels for the candidate ABI; if wheels are missing, the bump is deferred instead of compiling from source |
-| soak period for new minor series only (`PYTHON_BUMP_SOAK_DAYS`, default `30`) | an `x.y.0` minor release is deliberately reviewed after it has been available in the runner manifest for the configured period; patch releases skip the soak |
+| soak period for new minor series only (`PYTHON_BUMP_SOAK_DAYS`, default `30`) | an `x.y.0` minor release is deliberately reviewed after it has been available; the selector uses the manifest `release_date`/`published_at` or a bounded GitHub release lookup, and **defers** when no date is available; patch releases skip the soak |
 | `python -m compileall -q "testing area" tests` | syntax/importability gate for every Python file used by the monitors and tests |
 | `python tests/test_smoke.py` | offline card-pipeline and workflow invariant guards |
 | `python tests/test_reddit_signals.py` | pure Reddit gate/decision guards |
 | `python tests/test_twitter_media.py` | pure X (Twitter) V3 media guards (canonical order, GIF chain, heal contract) |
-| repeat compileall + all three suites after the rewrite | the rewrite updates current runtime surfaces and the round-39 pin guard in `tests/test_smoke.py`, so the rewritten tree is revalidated |
+| repeat the full `ci.py` registry after the rewrite (`application`, `maintenance`, `lock-consistency`, `workflow-security`) | the rewrite updates `.python-version`; the candidate tree is revalidated with the same groups PR CI uses |
 
 The rewrite scope is an explicit current-runtime allowlist: workflow pins,
 current runtime documentation, README runtime references, and the smoke-test

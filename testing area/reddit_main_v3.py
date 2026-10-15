@@ -266,6 +266,16 @@ def _report_target(name: str, *, usable: bool = False) -> None:
     if usable:
         _run_report.target_usable(name)
 
+
+def _close_report(*, result: str | None = None, save_status: str | None = None) -> None:
+    if _run_report is None:
+        return
+    if save_status is not None:
+        _run_report.mark_local_save(save_status)
+    if result:
+        _run_report.end_monitor(result)
+    _run_report.write()
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 load_dotenv()
 
@@ -1403,6 +1413,13 @@ def _normalized_foreign_safe_path(raw: str, text: str, start: int) -> str | None
     return path
 
 
+def _permalink_in_crosspost_context(text: str, start: int, end: int) -> bool:
+    """True only when 'crosspost' is adjacent to this permalink, not elsewhere."""
+    low = text.lower()
+    window = low[max(0, start - 180):min(len(low), end + 80)]
+    return "crosspost" in window
+
+
 def find_crosspost_original_path(text: str | None, own_path: str | None = None) -> str | None:
     """Identify the original post path for a crosspost.
 
@@ -1413,6 +1430,7 @@ def find_crosspost_original_path(text: str | None, own_path: str | None = None) 
 
     Comparisons use the canonical post id so a slugged child permalink cannot
     be mistaken for the original. Arbitrary body links are not parents.
+    The word 'crosspost' anywhere in the body is not enough.
     """
     if not text:
         return None
@@ -1426,9 +1444,9 @@ def find_crosspost_original_path(text: str | None, own_path: str | None = None) 
             if path and not (own_id and canonical_post_id(path) == own_id):
                 return path
 
-    if "crosspost" not in text.lower():
-        return None
     for m in CROSSPOST_PERMALINK_RE.finditer(text):
+        if not _permalink_in_crosspost_context(text, m.start(), m.end()):
+            continue
         path = _normalized_foreign_safe_path(m.group(0), text, m.start())
         if not path:
             continue
@@ -5303,10 +5321,11 @@ async def main():
     if _run_report is not None:
         _run_report.set_configured(len(SUBREDDITS))
         _run_report.start_monitor()
+        import atexit
+        atexit.register(_close_report)
     if not SUBREDDITS:
         logging.error("No subreddits configured in SUBREDDITS environment variable.")
-        if _run_report is not None:
-            _run_report.write()
+        _close_report(result="failed", save_status="not-run")
         return
     if not REDDIT_FEED_TOKEN:
         logging.warning("REDDIT_FEED_TOKEN not set — running anonymously. The combined feed "
@@ -5367,6 +5386,8 @@ async def main():
     use_oauth = bool(REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET)
 
     async with aiohttp.ClientSession() as session:
+        if _run_report is not None:
+            session = _run_report.wrap_session(session)
         # ---- round 13: proxy warm-up (writes proxy_health.json) ----------
         global _proxy_health
         if PROXY_MEDIA and reddit_proxy is not None:
@@ -5464,10 +5485,8 @@ async def main():
             _verify_dedup_save(posted_at_start, posted, saved)
             save_pending(pending)
             save_posted_messages(posted_messages)
-            if _run_report is not None:
-                _run_report.mark_local_save("saved")
-                _run_report.end_monitor("completed")
-                _run_report.write()
+            missing = (posted - posted_at_start) - saved
+            _close_report(result="completed", save_status="failed" if missing else "saved")
             return
 
         logging.info(f"Found {total_found} new Reddit posts. Building V3 cards...")
@@ -5909,18 +5928,14 @@ async def main():
 
     if DRY_RUN:
         logging.info("DRY RUN finished: cache NOT saved, Discord NOT touched.")
-        if _run_report is not None:
-            _run_report.end_monitor("completed")
-            _run_report.write()
+        _close_report(result="completed", save_status="not-run")
     else:
         saved = save_posted(posted, frozenset(posted - posted_at_start))
         _verify_dedup_save(posted_at_start, posted, saved)
         save_pending(pending)
         save_posted_messages(posted_messages)
-        if _run_report is not None:
-            _run_report.mark_local_save("saved")
-            _run_report.end_monitor("completed")
-            _run_report.write()
+        missing = (posted - posted_at_start) - saved
+        _close_report(result="completed", save_status="failed" if missing else "saved")
         logging.info("Reddit V3 Monitor execution finished.")
 
 

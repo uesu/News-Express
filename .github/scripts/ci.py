@@ -32,7 +32,10 @@ USES_LINE = re.compile(r"uses:\s*(\S+?)@(\S+)")
 
 def discover_tests(root: Path) -> list[str]:
     tests_dir = root / "tests"
-    found = sorted(p.name for p in tests_dir.glob("test_*.py") if p.is_file())
+    found = sorted(
+        p.name for p in tests_dir.iterdir()
+        if p.is_file() and TEST_FILE_RE.match(p.name)
+    )
     return found
 
 
@@ -180,13 +183,22 @@ def group_workflow_security(root: Path, profile: dict) -> int:
             errors.append(f"{path.name}: no jobs")
             continue
         on = doc.get("on") or doc.get(True)
-        name = str(doc.get("name") or path.name)
+        workflow_name = str(doc.get("name") or path.name)
         for job_name, job in jobs.items():
             if not isinstance(job, dict):
-                errors.append(f"{path.name}: job {job_name} malformed")
+                errors.append(f"{path.name} ({workflow_name}): job {job_name} malformed")
                 continue
             if "timeout-minutes" not in job:
-                errors.append(f"{path.name}: job {job_name} missing timeout-minutes")
+                errors.append(f"{path.name} ({workflow_name}): job {job_name} missing timeout-minutes")
+        for job_name, job, step in _iter_steps(doc):
+            uses = str(step.get("uses") or "")
+            if path.name == "maintenance_merge.yml" and uses.startswith("actions/checkout"):
+                with_ = step.get("with") if isinstance(step.get("with"), dict) else {}
+                if str(with_.get("persist-credentials") or "") != "false":
+                    errors.append("merge controller checkout must set persist-credentials: false")
+                ref = str(with_.get("ref") or "")
+                if "head" in ref and "default_branch" not in ref:
+                    errors.append("merge controller must not check out PR head")
         text = path.read_text(encoding="utf-8")
         for match in USES_LINE.finditer(text):
             action, ref = match.group(1), match.group(2).strip()
@@ -236,14 +248,15 @@ def group_workflow_security(root: Path, profile: dict) -> int:
 
 
 def maybe_run_actionlint(root: Path, spec: dict) -> int:
-    """Download pinned actionlint when network is available; otherwise rely on Python checks."""
+    """Run pinned actionlint. Download or skip failures are not a successful gate."""
     url = str(spec.get("url") or "")
     sha256 = str(spec.get("sha256") or "")
     if not url or not sha256:
-        return 0
+        print("actionlint pin missing from maintenance profile", file=sys.stderr)
+        return 1
     if os.environ.get("SKIP_ACTIONLINT") == "1":
-        print("actionlint skipped (SKIP_ACTIONLINT=1)")
-        return 0
+        print("SKIP_ACTIONLINT is not a successful bypass", file=sys.stderr)
+        return 1
     dest_dir = Path(tempfile.mkdtemp(prefix="actionlint-"))
     archive = dest_dir / "actionlint.tgz"
     try:
@@ -251,8 +264,11 @@ def maybe_run_actionlint(root: Path, spec: dict) -> int:
         with urllib.request.urlopen(req, timeout=30) as resp:
             archive.write_bytes(resp.read())
     except Exception as exc:
-        print(f"actionlint download failed ({exc}); Python workflow checks already ran")
-        return 0
+        print(
+            f"actionlint download failed ({exc}); required validator did not run",
+            file=sys.stderr,
+        )
+        return 1
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     if digest != sha256:
         print(f"actionlint checksum mismatch: {digest} != {sha256}", file=sys.stderr)

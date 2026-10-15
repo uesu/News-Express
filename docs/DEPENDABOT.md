@@ -5,7 +5,7 @@
 > pull requests when the configured ranges or action pins need an update. It
 > does **not** manage the CPython `python-version` runtime pin. Dependabot never
 > pushes directly to `main`; merges require either human review or the separate
-> opt-in, CI-gated auto-merge workflow. It is optional: the monitor can run
+> opt-in, CI-gated `maintenance_merge.yml` controller. It is optional: the monitor can run
 > without Dependabot, but dependency update review loses its automated PR path.
 
 ---
@@ -69,7 +69,7 @@ With the config in this repo (`.github/dependabot.yml`):
 
 **What it will NOT do:** run your monitor scripts, post to Discord, change
 application code, change the workflow `python-version` input, push directly to
-`main`, or merge anything unless you enable the separate opt-in auto-merge gate.
+`main`, or merge anything unless you enable the separate opt-in `maintenance_merge.yml` gate.
 It does not consume Actions minutes for creating the PR itself (public repos:
 free; private repos: the CI checks use normal Actions minutes).
 
@@ -149,24 +149,23 @@ credential):
 * Repo → **Settings → Secrets and variables → Actions → Variables**
   → *New repository variable* → name **`AUTO_MERGE_DEPENDABOT`** = **`yes`**
 
-The PR event can arrive before CI has created or finished its check run. To
-avoid that race, the workflow captures the event's head SHA and polls **only
-that immutable SHA** every 15 seconds for up to eight minutes. It never uses a
-mutable branch name. No checks, pending checks, unknown mergeability, an API
-error, a changed head SHA, an unexpected target, or a timeout all fail closed:
-the workflow logs the reason and does not merge. After checks are ready it
-refreshes the PR and checks once more immediately before calling the merge API;
-the merge request also includes that exact SHA, so GitHub rejects a late head
-change.
+The controller never polls a mutable branch name. Review/status/check/workflow
+API failures, truncated pagination, missing mandatory jobs, skipped/neutral/
+cancelled conclusions, pending checks, unknown mergeability, a changed head
+SHA, an unexpected target, or a hold label all fail closed. Allowed paths come
+from the trusted profile (not the PR file list). Grouped lock updates classify
+every package. After checks are ready it refreshes the snapshot immediately
+before calling the merge API; the merge request includes that exact SHA, so
+GitHub rejects a late head change.
 
 | Gate | Check |
 |---|---|
 | 0 | variable `AUTO_MERGE_DEPENDABOT` is exactly `yes` |
-| 1 | trusted PR event and API response agree on one PR, its default-branch target, and its exact event head SHA |
-| 2 | API reports author `dependabot[bot]`, state `open`, and `draft=false` — human, closed, and draft PRs are skipped |
-| 3 | **at least one** Check Run exists for that exact SHA; pending or absent checks are polled, and every completed Check Run must conclude `success`, `skipped`, or `neutral` |
-| 4 | the refreshed PR is cleanly mergeable; conflicts and unknown/non-clean mergeability are never merged |
-| 5 | checks are read again on the same SHA, then GitHub is asked to **squash-merge** with that SHA as a final race guard |
+| 1 | trusted default-branch checkout; PR targets `main`; head SHA matches |
+| 2 | author is `dependabot[bot]` (or a prefixed Python bump); draft/hold/changes-requested defer |
+| 3 | the named CI workflow succeeded on that SHA; mandatory jobs `application`, `maintenance`, `lock-consistency`, `workflow-security`, `maintenance-ci` are success — skipped/neutral/cancelled do not count |
+| 4 | diff stays inside the trusted allowlist; grouped risk is routine; workflow policy lines are not routine |
+| 5 | refreshed snapshot is still mergeable, then **squash-merge** with that SHA as a final race guard |
 
 The workflow has only `checks: read`, `contents: write`, and
 `pull-requests: write` permissions. It has no checkout step and every action
