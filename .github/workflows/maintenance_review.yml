@@ -1,0 +1,73 @@
+name: Maintenance baseline review (no posting or merging)
+
+# Isolated audit of fixed source commits. No PR, scheduler, secret, state push,
+# deployment, mirror probe, webhook call or maintenance merge is performed.
+on:
+  workflow_dispatch:
+  push:
+    branches: [arena/c45edf9b-news-express]
+    paths:
+      - .github/workflows/maintenance_review.yml
+      - .github/scripts/maintenance_review_audit.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maintenance-baseline-review-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: ${{ matrix.repository }} baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - repository: uesu/News-Express
+            ref: 83a701ab4c8644a9b1ae5e61472dafdf8175b99a
+            family: news
+            python: '3.14.8'
+          - repository: uesu/Game-Express
+            ref: e6bb42ab26fa0a8f7601b4200a1e1f784c7a431f
+            family: game
+            python: '3.14'
+          - repository: uesu/7jkxmy9nvbc
+            ref: 497c557b2cf19840976e462ed05a7ec65a57cd50
+            family: news
+            python: '3.14.8'
+          - repository: uesu/wvkhabh2s22
+            ref: 905e4c96f52be88bbe895d891fba1bead3024cb5
+            family: news
+            python: '3.14.8'
+    steps:
+      - name: Check out audit tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: audit-tooling
+          persist-credentials: false
+
+      - name: Check out fixed reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.ref }}
+          path: reviewed-source
+          persist-credentials: false
+
+      - name: Install the repository's configured Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Resolve current baseline dependencies (not a future lockfile)
+        run: python -m pip install --only-binary=:all: -r reviewed-source/requirements.txt PyYAML
+
+      - name: Read every tracked file, reproduce findings, run offline baselines
+        env:
+          AUDITED_REPOSITORY: ${{ matrix.repository }}
+          AUDIT_FAMILY: ${{ matrix.family }}
+        run: python audit-tooling/.github/scripts/maintenance_review_audit.py --root reviewed-source --family "$AUDIT_FAMILY" --output "$RUNNER_TEMP/maintenance-baseline.json"
