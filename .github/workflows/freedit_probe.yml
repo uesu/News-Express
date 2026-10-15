@@ -1,0 +1,37 @@
+name: Freedit endpoint probe (no posting)
+
+# Diagnostic only: no cron, monitor code, production caches or secrets.
+# Branch-only push bootstrap avoids merging a new workflow into main just to
+# run the user-requested live test. No production/default-branch push trigger.
+on:
+  workflow_dispatch:
+  push:
+    branches: [arena/c45edf9b-news-express]
+    paths:
+      - .github/workflows/freedit_probe.yml
+      - .github/scripts/probe_freedit.py
+      - tests/test_freedit_probe.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: freedit-endpoint-probe-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out diagnostic files
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7, same immutable pin as this repository
+        with:
+          persist-credentials: false
+
+      # The Ubuntu runner supplies Python 3; this diagnostic is stdlib-only.
+      - name: Offline diagnostic tests
+        run: python3 tests/test_freedit_probe.py
+
+      - name: Probe fixed public URLs once each (results are diagnostic, not an admission decision)
+        run: python3 .github/scripts/probe_freedit.py --annotations --output "$RUNNER_TEMP/freedit-probe-results.json"
