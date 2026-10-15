@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manual, public-endpoint diagnostic. No monitor imports, credentials or posting.
+"""Isolated public-endpoint diagnostic. No monitor imports, credentials or posting.
 
 Only fixed URLs below may be fetched. Each endpoint runs in a child process to
 bound DNS/connect/read time as a whole. No retries, WAF bypass, token forwarding,
@@ -44,6 +44,32 @@ ENDPOINTS = {
     "nitter_control_rss": (f"https://nitter.cf/{ACCOUNT}/rss", "twitter_feed", False),
     "redlib_control_html": (f"https://redlib.catsarch.com/r/{SUB}/new?limit=100", "listing", True),
 }
+
+
+# Fixed public names from the engine's documented defaults, not secret values.
+# Each suite fits in one Actions step's annotation budget. No arbitrary URLs.
+SUBREDDITS = {
+    "zzz": "Zenlesszonezeroleaks_",
+    "genshin": "Genshin_Impact_Leaks",
+    "hsr": "HonkaiStarRail_leaks",
+    "wuwa": "WutheringWavesLeaks",
+    "hna": "HonkaiNexusAnimaLeaks",
+    "ananta": "AnantaLeaks",
+}
+SUITES = {"freedit": tuple(ENDPOINTS)}  # Retain the first run's exact 8 URLs.
+for game, subreddit in SUBREDDITS.items():
+    endpoints = {
+        f"eddrit_{game}_html_new": (f"https://eddrit.com/r/{subreddit}/new", "listing", False),
+        f"eddrit_{game}_engine_rss": (f"https://eddrit.com/r/{subreddit}/.rss", "reddit_feed", False),
+        f"eddrit_{game}_new_rss": (f"https://eddrit.com/r/{subreddit}/new/.rss", "reddit_feed", False),
+        f"freedit_{game}_html_root": (f"https://redlib.freedit.eu/r/{subreddit}", "listing", False),
+    }
+    if game == "genshin":
+        # One anonymous Reddit control, not six requests against a tight quota.
+        endpoints["native_genshin_new_rss_control"] = (
+            f"https://www.reddit.com/r/{subreddit}/new/.rss?limit=100", "reddit_feed", False)
+    ENDPOINTS.update(endpoints)
+    SUITES[game] = tuple(endpoints)
 
 
 def utc_now():
@@ -95,25 +121,26 @@ def entry_date(entry):
     return None
 
 
-def matching_id(link, kind):
+def matching_id(link, kind, subreddit=SUB):
     path = urlsplit(link).path
     if kind == "twitter_feed":
         match = re.match(rf"^/{ACCOUNT}/status/(\d+)(?:/|$)", path, re.I)
     else:
-        match = re.match(rf"^/r/{SUB}/comments/([a-z0-9]+)(?:/|$)", path, re.I)
+        match = re.match(rf"^/r/{re.escape(subreddit)}/comments/([a-z0-9]+)(?:/|$)", path, re.I)
     return match.group(1).lower() if match else None
 
 
 class ListingLinks(HTMLParser):
-    def __init__(self):
+    def __init__(self, subreddit=SUB):
         super().__init__(convert_charrefs=True)
+        self.subreddit = subreddit
         self.ids = set()
 
     def handle_starttag(self, tag, attrs):
         if tag.lower() == "a":
             href = dict(attrs).get("href") or ""
             try:
-                post_id = matching_id(href, "reddit_feed")
+                post_id = matching_id(href, "reddit_feed", self.subreddit)
             except ValueError:
                 return
             if post_id:
@@ -127,7 +154,7 @@ class NoDTDTreeBuilder(ET.TreeBuilder):
         raise ValueError("DTD not allowed in diagnostic feed")
 
 
-def inspect_body(body, kind):
+def inspect_body(body, kind, subreddit=SUB):
     text = body.decode("utf-8", errors="replace")
     lower = text.lower()
     markers = [name for name, needle in (
@@ -155,7 +182,7 @@ def inspect_body(body, kind):
                     continue
                 link = child.get("href") or (child.text or "").strip()
                 try:
-                    post_id = matching_id(link, kind)
+                    post_id = matching_id(link, kind, subreddit)
                 except ValueError:
                     continue
                 if post_id:
@@ -165,7 +192,7 @@ def inspect_body(body, kind):
         return {**result, "body_class": "feed_with_matching_entries" if records else "feed_without_matching_entries",
                 "entries": len(entries), "matching_entries": len(records), "newest_matching": records[:5]}
     if kind == "listing":
-        parser = ListingLinks()
+        parser = ListingLinks(subreddit)
         parser.feed(text)
         ages = [int(n) * {"second": 1, "minute": 60, "hour": 3600, "day": 86400}[unit.lower()]
                 for n, unit in re.findall(r">\s*(\d+)\s+(second|minute|hour|day)s?\s+ago\s*<", text, re.I)]
@@ -180,6 +207,10 @@ def fetch_endpoint(name):
     _, kind, pristine = ENDPOINTS[name]
     result = {"endpoint": name, "requested_url": url, "started_utc": utc_now(),
               "pristine_request": pristine, "kind": kind}
+    parts = urlsplit(url).path.split("/")
+    subreddit = parts[2] if len(parts) > 2 and parts[1] == "r" else SUB
+    if kind in ("listing", "reddit_feed"):
+        result["subreddit"] = subreddit
     start = time.monotonic()
     # Explicitly disable ambient proxies and use no cookie or auth handlers.
     opener = build_opener(ProxyHandler({}), SameHostRedirects())
@@ -205,7 +236,7 @@ def fetch_endpoint(name):
             if len(body) > MAX_BYTES:
                 result["body_class"] = "oversize_not_parsed"
             else:
-                result.update(inspect_body(body, kind))
+                result.update(inspect_body(body, kind, subreddit))
             # Do not equate valid-looking body text on an error page with success.
             result["candidate_response"] = bool(
                 response.code == 200 and result.get("body_class") in
@@ -235,7 +266,7 @@ def probe_bounded(name):
 
 
 def summary(report):
-    lines = ["## Freedit public-endpoint probe", "",
+    lines = ["## Public mirror endpoint probe", "",
              "**Diagnostic only:** no tokens, Discord calls, monitor runs or cache writes.",
              "A success proves one request, not a permanent no-datacenter-block policy.", "",
              "| Endpoint | HTTP | Body classification | Matching items | Candidate |",
@@ -264,26 +295,27 @@ def annotation_commands(report):
     for record in records:
         data = json.dumps(record, ensure_ascii=True, separators=(",", ":"))
         data = data.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-        yield "::notice title=Freedit diagnostic result::" + data
+        yield "::notice title=Mirror diagnostic result::" + data
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--endpoint", choices=list(ENDPOINTS), help=argparse.SUPPRESS)
     parser.add_argument("--output", type=Path, default=Path("freedit-probe-results.json"))
+    parser.add_argument("--suite", choices=list(SUITES), default="freedit")
     parser.add_argument("--annotations", action="store_true", help="Emit escaped GitHub check notices")
     args = parser.parse_args()
     if args.endpoint:
         print(json.dumps(fetch_endpoint(args.endpoint), ensure_ascii=True))
         return
-    report = {"generated_utc": utc_now(), "github_actions": os.getenv("GITHUB_ACTIONS") == "true",
+    report = {"suite": args.suite, "generated_utc": utc_now(), "github_actions": os.getenv("GITHUB_ACTIONS") == "true",
               "runner_os": os.getenv("RUNNER_OS", "unknown"),
               "runner_arch": os.getenv("RUNNER_ARCH", "unknown"),
               "runner_environment": os.getenv("RUNNER_ENVIRONMENT", "unknown"),
               "run_id": os.getenv("GITHUB_RUN_ID", ""),
               "note": "Read region/cloud from Set up job logs; the runner label does not prove Azure region.",
               "results": []}
-    for i, name in enumerate(ENDPOINTS):
+    for i, name in enumerate(SUITES[args.suite]):
         if i:
             time.sleep(PAUSE_SECONDS)
         report["results"].append(probe_bounded(name))

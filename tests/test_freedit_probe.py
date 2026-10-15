@@ -1,4 +1,4 @@
-"""Offline tests only; never contacts Freedit or runs a monitor."""
+"""Offline tests only; never contacts public mirrors or runs a monitor."""
 import importlib.util
 import json
 import os
@@ -100,6 +100,65 @@ class RequestTests(unittest.TestCase):
                          'https://redlib.freedit.eu/r/Genshin_Impact_Leaks/new.rss?limit=100')
         self.assertEqual(probe.request_details('nitter_requested_rss')[0],
                          'https://nitter.freedit.eu/TYPEII_EN/rss')
+
+    def test_six_game_suites_cover_requested_and_runtime_routes(self):
+        self.assertEqual(len(probe.SUBREDDITS), 6)
+        urls = []
+        for game, sub in probe.SUBREDDITS.items():
+            self.assertIn(f'eddrit_{game}_html_new', probe.SUITES[game])
+            self.assertEqual(probe.request_details(f'eddrit_{game}_html_new')[0],
+                             f'https://eddrit.com/r/{sub}/new')
+            self.assertEqual(probe.request_details(f'eddrit_{game}_engine_rss')[0],
+                             f'https://eddrit.com/r/{sub}/.rss')
+            self.assertEqual(probe.request_details(f'eddrit_{game}_new_rss')[0],
+                             f'https://eddrit.com/r/{sub}/new/.rss')
+            self.assertEqual(probe.request_details(f'freedit_{game}_html_root')[0],
+                             f'https://redlib.freedit.eu/r/{sub}')
+            urls.extend(probe.request_details(name)[0] for name in probe.SUITES[game])
+        self.assertEqual(len(urls), 25)
+        self.assertEqual(len(set(urls)), 25)
+        self.assertIn('https://eddrit.com/r/Zenlesszonezeroleaks_/new', urls)
+        self.assertIn('https://redlib.freedit.eu/r/Genshin_Impact_Leaks', urls)
+        self.assertEqual(len(probe.SUITES['freedit']), 8)
+
+    def test_each_game_parser_scopes_html_and_rss_to_its_own_subreddit(self):
+        for sub in probe.SUBREDDITS.values():
+            with self.subTest(sub=sub):
+                link = f'/r/{sub.lower()}/comments/abc123/t/'
+                xml = f'<rss><channel><item><link>{link}</link></item></channel></rss>'.encode()
+                html = f'<a href="{link}">Post</a>'.encode()
+                self.assertEqual(probe.inspect_body(xml, 'reddit_feed', sub)['matching_entries'], 1)
+                self.assertEqual(probe.inspect_body(xml, 'reddit_feed', 'DifferentSub')['matching_entries'], 0)
+                self.assertEqual(probe.inspect_body(html, 'listing', sub)['post_ids_count'], 1)
+                self.assertEqual(probe.inspect_body(html, 'listing', 'DifferentSub')['post_ids_count'], 0)
+
+    def test_fetch_selects_expected_subreddit_from_fixed_url(self):
+        class Response:
+            code = 200
+            headers = {'Content-Type': 'text/html'}
+            def geturl(self): return 'https://eddrit.com/r/Zenlesszonezeroleaks_/new'
+            def read(self, n): return b'<a href="/r/Zenlesszonezeroleaks_/comments/abc123/t/">Post</a>'
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+        class Opener:
+            def open(self, *args, **kwargs): return Response()
+        with patch.object(probe, 'build_opener', return_value=Opener()):
+            r = probe.fetch_endpoint('eddrit_zzz_html_new')
+        self.assertEqual(r['subreddit'], 'Zenlesszonezeroleaks_')
+        self.assertTrue(r['candidate_response'])
+
+    def test_workflow_runs_six_suites_with_bounded_total_time(self):
+        workflow = (SCRIPT.parents[1] / 'workflows/freedit_probe.yml').read_text()
+        total_endpoints = 0
+        worst_seconds = 0
+        for game in probe.SUBREDDITS:
+            self.assertEqual(workflow.count(f'--suite {game} '), 1)
+            n = len(probe.SUITES[game])
+            self.assertLessEqual(n + 1, 10)  # Include the suite context notice.
+            total_endpoints += n
+            worst_seconds += n * probe.ENDPOINT_DEADLINE + (n - 1) * probe.PAUSE_SECONDS
+        self.assertEqual(total_endpoints, 25)
+        self.assertLess(worst_seconds + 30, 10 * 60)  # Checkout/test allowance.
 
     def test_no_credential_forwarding_even_if_environment_has_tokens(self):
         with patch.dict(os.environ, {'NITTER_RSS_TOKEN': 'DO_NOT_FORWARD', 'REDDIT_FEED_TOKEN': 'DO_NOT_FORWARD'}):
@@ -208,7 +267,7 @@ class RequestTests(unittest.TestCase):
                   'cache-control': 'hostile%0A::error::test\nsecond line'}]}
         commands = list(probe.annotation_commands(report))
         self.assertEqual(len(commands), 2)
-        self.assertTrue(all(c.startswith('::notice title=Freedit diagnostic result::') for c in commands))
+        self.assertTrue(all(c.startswith('::notice title=Mirror diagnostic result::') for c in commands))
         self.assertNotIn('\n', commands[1])
         self.assertIn('%250A', commands[1])
         self.assertNotIn('results', json.loads(commands[0].split('::', 2)[2]))
@@ -226,7 +285,7 @@ class RequestTests(unittest.TestCase):
         self.assertIn('paths:', workflow)
         self.assertIn('contents: read', workflow)
         self.assertIn('persist-credentials: false', workflow)
-        self.assertIn('timeout-minutes: 5', workflow)
+        self.assertIn('timeout-minutes: 10', workflow)
         self.assertNotIn('${{ secrets.', workflow)
         self.assertNotIn('schedule:', workflow)
         self.assertNotIn('git push', workflow)
