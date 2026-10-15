@@ -451,6 +451,14 @@ class CiRegistryTests(unittest.TestCase):
             maintenance.normalize_compile_header(text),
         )
 
+    def test_lock_identity_ignores_via_comments(self):
+        import ci as ci_mod
+        a = "pkg==1.0.0 \\\n    --hash=sha256:aaa\n    # via foo\n"
+        b = "pkg==1.0.0 \\\n    --hash=sha256:aaa\n    # via bar\n"
+        self.assertEqual(ci_mod._lock_identity(a), ci_mod._lock_identity(b))
+        c = "pkg==1.0.1 \\\n    --hash=sha256:aaa\n"
+        self.assertNotEqual(ci_mod._lock_identity(a), ci_mod._lock_identity(c))
+
 
 if __name__ == "__main__":
     unittest.main()

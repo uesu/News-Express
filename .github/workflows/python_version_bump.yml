@@ -248,13 +248,19 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Write job summary
+        env:
+          CURRENT: ${{ needs.select.outputs.current }}
+          CANDIDATE: ${{ needs.select.outputs.candidate }}
+          STATUS: ${{ needs.select.outputs.status }}
+          REASON: ${{ needs.select.outputs.reason }}
+          KIND: ${{ needs.select.outputs.kind }}
         run: |
           {
             echo "### Python version bump"
             echo ""
-            echo "* current pin: \`${{ needs.select.outputs.current }}\`"
-            echo "* candidate: \`${{ needs.select.outputs.candidate || 'none' }}\`"
-            echo "* status: \`${{ needs.select.outputs.status }}\`"
-            echo "* reason: \`${{ needs.select.outputs.reason }}\`"
-            echo "* kind: \`${{ needs.select.outputs.kind || 'n/a' }}\`"
+            echo "* current pin: \`${CURRENT:-}\`"
+            echo "* candidate: \`${CANDIDATE:-none}\`"
+            echo "* status: \`${STATUS:-}\`"
+            echo "* reason: \`${REASON:-}\`"
+            echo "* kind: \`${KIND:-n/a}\`"
           } >> "$GITHUB_STEP_SUMMARY"

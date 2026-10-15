@@ -99,6 +99,34 @@ def _normalize_lock(path: Path) -> str:
     return maintenance.normalize_compile_header(path.read_text(encoding="utf-8"))
 
 
+def _lock_identity(text: str) -> str:
+    """Package pins and hashes only — ignore header/via-comment churn."""
+    packages: list[tuple[str, tuple[str, ...]]] = []
+    current: str | None = None
+    hashes: list[str] = []
+
+    def flush() -> None:
+        nonlocal current, hashes
+        if current:
+            packages.append((current, tuple(sorted(hashes))))
+        current, hashes = None, []
+
+    for raw in text.splitlines():
+        stripped = raw.strip().rstrip("\\").strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("--hash="):
+            hashes.append(stripped)
+            continue
+        match = re.match(r"^([A-Za-z0-9_.-]+)==(\S+)", stripped)
+        if match:
+            flush()
+            current = f"{match.group(1).replace('_', '-').lower()}=={match.group(2)}"
+    flush()
+    packages.sort()
+    return "\n".join(f"{name} {' '.join(hashes)}" for name, hashes in packages) + "\n"
+
+
 def group_lock_consistency(root: Path, profile: dict) -> int:
     runtime = root / "requirements.txt"
     dev = root / "requirements-dev.txt"
@@ -120,9 +148,11 @@ def group_lock_consistency(root: Path, profile: dict) -> int:
     if code:
         return code
     after_runtime = _normalize_lock(runtime)
-    if after_runtime != before_runtime:
-        print("requirements.txt regeneration produced a diff", file=sys.stderr)
+    if _lock_identity(after_runtime) != _lock_identity(before_runtime):
+        print("requirements.txt regeneration produced a pin/hash diff", file=sys.stderr)
         return 1
+    if after_runtime != before_runtime:
+        print("requirements.txt header/comments changed; pins and hashes are stable")
     dev_cmd = list(profile.get("dev_compile_command") or [])
     if dev_cmd and (root / "requirements-dev.in").is_file():
         env["CUSTOM_COMPILE_COMMAND"] = "python -m piptools compile --generate-hashes --allow-unsafe --resolver=backtracking --strip-extras --output-file=requirements-dev.txt requirements-dev.in"
@@ -130,9 +160,11 @@ def group_lock_consistency(root: Path, profile: dict) -> int:
         if code:
             return code
         after_dev = _normalize_lock(dev)
-        if after_dev != before_dev:
-            print("requirements-dev.txt regeneration produced a diff", file=sys.stderr)
+        if _lock_identity(after_dev) != _lock_identity(before_dev):
+            print("requirements-dev.txt regeneration produced a pin/hash diff", file=sys.stderr)
             return 1
+        if after_dev != before_dev:
+            print("requirements-dev.txt header/comments changed; pins and hashes are stable")
     return 0
 
 
@@ -194,7 +226,8 @@ def group_workflow_security(root: Path, profile: dict) -> int:
             uses = str(step.get("uses") or "")
             if path.name == "maintenance_merge.yml" and uses.startswith("actions/checkout"):
                 with_ = step.get("with") if isinstance(step.get("with"), dict) else {}
-                if str(with_.get("persist-credentials") or "") != "false":
+                persist = with_.get("persist-credentials")
+                if persist is not False and str(persist).lower() != "false":
                     errors.append("merge controller checkout must set persist-credentials: false")
                 ref = str(with_.get("ref") or "")
                 if "head" in ref and "default_branch" not in ref:
