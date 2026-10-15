@@ -2356,13 +2356,19 @@ check("r75: Reddit RSS mirror membership unchanged",
       set(_r75_reddit_fleet) == _r75_reddit_expected
       and _r75_reddit_fleet[0] == "https://www.reddit.com")
 
+with open(os.path.join(ROOT, ".python-version"), encoding="utf-8") as _fh:
+    _pin = _fh.read().strip()
+check("r39 runtime: .python-version pins CPython 3.14.8",
+      _pin == "3.14.8")
 for _r39_wf in (".github/workflows/ci.yml", ".github/workflows/reddit_monitor.yml",
                 ".github/workflows/twitter_monitor.yml"):
     with open(os.path.join(ROOT, _r39_wf), encoding="utf-8") as _fh:
         _r39_source = _fh.read()
-    check(f"r39 runtime: {_r39_wf} pins CPython 3.14.8 exactly once",
-          _r39_source.count("python-version: '3.14.8'") == 1
-          and "python-version: '3.11'" not in _r39_source)
+    check(f"r39 runtime: {_r39_wf} uses python-version-file (not a hard-coded 3.11)",
+          "python-version-file: .python-version" in _r39_source
+          and "python-version: '3.11'" not in _r39_source
+          and "--require-hashes" in _r39_source
+          and "--only-binary=:all:" in _r39_source)
 
 for _r39_wf in (".github/workflows/reddit_monitor.yml", ".github/workflows/twitter_monitor.yml"):
     with open(os.path.join(ROOT, _r39_wf), encoding="utf-8") as _fh:
@@ -2382,27 +2388,20 @@ for _r39_wf in (".github/workflows/reddit_monitor.yml", ".github/workflows/twitt
           "::error::CACHE PUSH FAILED" in _r39_source
           and "::error::CACHE PUSH RECOVERY FAILED" in _r39_source)
 
-with open(os.path.join(ROOT, ".github/workflows/dependabot_auto_merge.yml"), encoding="utf-8") as _fh:
+_auto_merge_path = os.path.join(ROOT, ".github/workflows/dependabot_auto_merge.yml")
+check("Dependabot proposer self-merge workflow is gone",
+      not os.path.exists(_auto_merge_path))
+with open(os.path.join(ROOT, ".github/workflows/maintenance_merge.yml"), encoding="utf-8") as _fh:
     _r39_merge = _fh.read()
-# 2026-10-05 update — Dependabot auto-merge workflow repair: workflow_run
-# sometimes did not fire after CI, so this trusted pull_request_target flow
-# polls its immutable event SHA instead.
-check("Dependabot auto-merge uses trusted PR events and never checks out PR code",
-      "pull_request_target:" in _r39_merge
-      and "types: [opened, synchronize, reopened]" in _r39_merge
-      and "workflow_run:" not in _r39_merge
-      and "actions/checkout" not in _r39_merge
-      and "pull_request_target runs this trusted file" in _r39_merge)
-check("Dependabot auto-merge fails closed on the exact head SHA before squash merging",
-      "AUTO_MERGE_DEPENDABOT" in _r39_merge
-      and "pr.user?.login !== 'dependabot[bot]'" in _r39_merge
-      and "expectedHeadSha = eventPr.head.sha" in _r39_merge
-      and "data.check_runs" in _r39_merge
-      and "filter: 'latest'" in _r39_merge
-      and "maxAttempts = 32" in _r39_merge
-      and "sha: expectedHeadSha" in _r39_merge
-      and "merge_method: 'squash'" in _r39_merge
-      and "GitHub API error; failing closed" in _r39_merge)
+check("Merge controller checks out the trusted default branch only",
+      "ref: ${{ github.event.repository.default_branch }}" in _r39_merge
+      and "persist-credentials: false" in _r39_merge
+      and "apply-live --apply-live" in _r39_merge
+      and "AUTO_MERGE_DEPENDABOT" in _r39_merge
+      and "AUTO_MERGE_PYTHON_BUMP" in _r39_merge)
+check("Merge controller never installs or executes PR-head maintenance.py",
+      "pull_request" in _r39_merge
+      and "ref: ${{ github.event.pull_request.head" not in _r39_merge)
 
 # ---- R42/R45 smoke guards (round 67 guard update, annotated): the Redlib
 # badge reader, the fail-closed decision matrix, the allowlist and the
@@ -2434,7 +2433,10 @@ check("r44: tombstone prepends a notice", "no longer live" in _tomb["components"
 check("r44: tombstone greys the accent", _tomb["components"][0]["accent_color"] == 0x808080)
 with open(os.path.join(ROOT, ".github/workflows/ci.yml"), encoding="utf-8") as _fh:
     _r42_ci = _fh.read()
-check("r42: CI runs the pure signal suite", "python tests/test_reddit_signals.py" in _r42_ci)
+check("r42: CI runs the pure signal suite",
+      "python tests/test_reddit_signals.py" in _r42_ci
+      or "tests/test_reddit_signals.py" in open(
+          os.path.join(ROOT, ".github/maintenance.json"), encoding="utf-8").read())
 check("r42/r45 guard updated in round 67: the removed gate's repository "
       "Variables are unmapped",
       not any(_v in _r35_workflow for _v in _r35_removed_vars))
@@ -3003,9 +3005,82 @@ try:
     check("r47: an ordinary post makes exactly ONE proxy call (speed unchanged)",
           _r47_proxy2.paths == ["/r/AnantaLeaks/comments/1wuv547/"],
           str(_r47_proxy2.paths))
+
+    class _ImageThenVideoProxy:
+        def __init__(self):
+            self.paths = []
+
+        async def fetch_proxy_post(self, session, path, label="", health=None,
+                                   need_video=False):
+            self.paths.append(path)
+            if path.startswith("/r/u_"):
+                return {"service": "alias", "media": [
+                    {"kind": "video", "url": "https://v.redd.it/xyz789/DASH_720.mp4"}]}
+            return {"service": "poster", "media": [
+                {"kind": "image", "url": "https://external-preview.redd.it/poster.jpg"}]}
+
+    _img_proxy = _ImageThenVideoProxy()
+    v3.reddit_proxy = _img_proxy
+    v3._proxy_post_cache.clear()
+    _img_res = asyncio.run(v3.fetch_proxy_post_memo(
+        None, "/user/sampleuser/comments/abc1111/", label="abc1111",
+        need_video=True))
+    check("profile alias retries when the first route only returned a poster",
+          isinstance(_img_res, dict)
+          and _img_res["media"][0]["kind"] == "video"
+          and _img_proxy.paths[0].startswith("/user/")
+          and any(p.startswith("/r/u_") for p in _img_proxy.paths),
+          f"{_img_res} paths={_img_proxy.paths}")
 finally:
     v3.reddit_proxy = _r47_saved_proxy
     v3._proxy_post_cache.clear()
+
+
+check("Original Post label is enough without the English word crosspost",
+      v3.find_crosspost_original_path(
+          '[Original Post](/r/SourceSub/comments/zzparent1/title/)',
+          "/r/ChildSub/comments/zzchild01/")
+      == "/r/SourceSub/comments/zzparent1/")
+check("a slugged child permalink is not treated as the original",
+      v3.find_crosspost_original_path(
+          'u/x crossposted this from r/SourceSub — '
+          '<a href="/r/ChildSub/comments/zzchild01/child_slug/">own</a> '
+          '<a href="/r/SourceSub/comments/zzparent1/orig_slug/">orig</a>',
+          "/r/ChildSub/comments/zzchild01/child_slug/")
+      == "/r/SourceSub/comments/zzparent1/")
+check("foreign-host permalinks are rejected as originals",
+      v3.find_crosspost_original_path(
+          'crosspost https://evil.example/r/SourceSub/comments/zzparent1/',
+          "/r/ChildSub/comments/zzchild01/") is None)
+check("canonical post ids compare across slug and host forms",
+      v3.is_same_reddit_post(
+          "https://www.reddit.com/r/ChildSub/comments/zzchild01/slug/",
+          "/r/ChildSub/comments/zzchild01/") is True)
+check("audio-cover render URLs are not motion video",
+      v3._motion_video_url({"kind": "video",
+                            "url": "https://proxy.embedez.com/render/audio?cover=x"})
+      is None)
+check("encoded v.redd.it ids are recovered from proxy video URLs",
+      v3.extract_vreddit_id_from_media_url(
+          "https://example.test/render?videoUrl=https%3A%2F%2Fv.redd.it%2Fabcd1234%2FDASH_720.mp4")
+      == "abcd1234")
+check("external-preview thumbnails are not treated as video evidence",
+      v3.extract_vreddit_id_from_media_url(
+          "https://external-preview.redd.it/abcd1234.jpg") is None)
+check("structured parent list is preferred over a self permalink",
+      v3.resolve_crosspost_source(
+          own_path="/r/ChildSub/comments/zzchild01/",
+          base={},
+          post_json={
+              "crosspost_parent_list": [{
+                  "id": "zzparent1",
+                  "permalink": "/r/SourceSub/comments/zzparent1/orig/",
+                  "secure_media": {"reddit_video": {
+                      "fallback_url": "https://v.redd.it/vidparent/DASH_720.mp4",
+                  }},
+              }],
+          },
+      ).get("id") == "zzparent1")
 
 
 
@@ -5686,8 +5761,11 @@ with open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"),
     _r68_workflow = _r68_workflow_file.read()
 check("r68: workflow summary remains compatible with the retained-base log "
       "wording and uses only the local monitor log",
-      "count_matches 'retaining validated base'" in _r68_workflow
-      and "summary source: local monitor.log only; no additional requests" in _r68_workflow)
+      "render_run_summary.py" in _r68_workflow
+      and "summary source: structured report only; no additional requests"
+      in open(os.path.join(ROOT, ".github/scripts/render_run_summary.py"),
+              encoding="utf-8").read()
+      and "count_matches" not in _r68_workflow)
 
 
 # ---- round 69: Arctic Shift search failure reasons (offline) ---------------

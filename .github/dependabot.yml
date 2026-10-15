@@ -1,15 +1,8 @@
-# Dependabot — automatic dependency updates (repo Settings > Code security and
-# analysis > Dependabot alerts & security updates must be ON for security PRs;
-# version updates below work regardless).
+# Dependabot — frozen pip graph + GitHub Actions SHA pins.
+# Routine patch/minor package updates are grouped separately from majors.
+# There is no Actions lockfile integration.
 #
-# Weekly check for the pip dependencies (feedparser, aiohttp, python-dotenv)
-# and the GitHub Actions used in the workflows. Each update opens a PULL
-# REQUEST — nothing touches main until you review + merge it (or you enable
-# the opt-in auto-merge workflow — see docs/DEPENDABOT.md). The Actions job
-# reinstalls deps every run, so a merged PR changes behavior on the next
-# trigger.
-#
-# To DISABLE completely: delete this file. The monitor is unaffected.
+# Merges are decided by maintenance_merge.yml, not by this file.
 version: 2
 updates:
   - package-ecosystem: "pip"
@@ -17,11 +10,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    # requirements.txt uses ranges (aiohttp>=3.14.3,<4) and every workflow run already installs
-    # the newest allowed release, so a PR for an ordinary in-range release would be noise.
-    # Open a PR when the requirement itself must change (for example a security lower-bound
-    # update or a release outside the current major range).
-    versioning-strategy: increase-if-necessary
+    # Compiled hashed requirements.txt is the lock Dependabot regenerates.
+    versioning-strategy: lockfile-only
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -29,8 +19,10 @@ updates:
     commit-message:
       prefix: "deps(python)"
     groups:
-      python-deps:              # one PR for Python dependency bumps instead of one per package
+      python-routine:
         patterns: ["*"]
+        update-types: ["patch", "minor"]
+    # Major upgrades stay ungrouped so they cannot hide inside the routine PR.
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -44,5 +36,6 @@ updates:
     commit-message:
       prefix: "deps(actions)"
     groups:
-      actions:
+      actions-routine:
         patterns: ["*"]
+        update-types: ["patch", "minor"]

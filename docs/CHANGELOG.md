@@ -16,6 +16,18 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-15 — Maintenance: unify safe updates and summaries; fix crosspost
+  video fallback.** Exact CPython pin `3.14.8` via `.python-version` plus hashed
+  frozen graphs. Shared helpers (`.github/scripts/maintenance.py`, `ci.py`,
+  `python_version_bump.py`, `render_run_summary.py`) plus a fail-closed merge
+  controller replace Dependabot auto-merge / proposer self-merge. Monitor
+  summaries use structured numeric reports (SHA, lock digest, persistence
+  footer) instead of log-grep counters. Crosspost cards keep child identity
+  and now resolve the original (including labelled Original Post and profile
+  aliases) so video is eligible; audio-cover stills are not treated as motion
+  video. EmbedEZ/RedditEZ 1080p remains a quality opportunity. Production
+  copies stay documentation-free; caches are not overwritten.
+
 * **2026-10-15 — Round 76: the runner-clean head + the xcopy.uk verdict.**
   `xcopy.uk`'s round-75 seat-3 trial ended with a measured runner refusal:
   Game-Express's first four post-merge runs (#2662–#2665, 2026-10-14

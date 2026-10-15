@@ -1,0 +1,46 @@
+# Trusted, review-aware final merge controller for Dependabot and the
+# runtime-proposer. Reads policy from the default branch only. Never checks
+# out or executes PR-head code.
+name: Maintenance merge
+
+on:
+  workflow_run:
+    workflows: ["CI — syntax + offline smoke test"]
+    types: [completed]
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, converted_to_draft, edited]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  check_suite:
+    types: [completed]
+
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  pull-requests: write
+  statuses: read
+
+jobs:
+  decide:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out trusted default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 — SHA-pinned
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7 — SHA-pinned
+        with:
+          python-version-file: .python-version
+
+      - name: Decide (and merge only when every gate passes)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUTO_MERGE_DEPENDABOT: ${{ vars.AUTO_MERGE_DEPENDABOT }}
+          AUTO_MERGE_PYTHON_BUMP: ${{ vars.AUTO_MERGE_PYTHON_BUMP }}
+        run: |
+          python .github/scripts/maintenance.py apply-live --apply-live

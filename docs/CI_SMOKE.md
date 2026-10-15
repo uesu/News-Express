@@ -1,14 +1,13 @@
 # 🧪 CI + smoke test — full explanation (optional or required?)
 
-> **TL;DR:** `.github/workflows/ci.yml`, `tests/test_smoke.py`,
-> `tests/test_reddit_signals.py`, and `tests/test_twitter_media.py` are
-> **REQUIRED for this repo's setup** — not
-> optional. They are the offline safety gate that runs on **every pull request**
-> and on pushes to `main`, including Dependabot PRs. They prove that the
-> scripts still install, compile, import, and satisfy the offline behavior
+> **TL;DR:** `.github/workflows/ci.yml` plus every registered `tests/test_*.py`
+> file are **REQUIRED for this repo's setup** — not optional. They are the
+> offline safety gate that runs on **every pull request** and on pushes to
+> `main`, including Dependabot PRs. They prove that the scripts still install
+> from the hashed lock, compile, import, and satisfy the offline behavior
 > guards before a change can be merged. Deleting them does not stop an already
-> scheduled monitor immediately, but it removes the protection that makes
-> Dependabot auto-merge and runtime bump review safe to use.
+> scheduled monitor immediately, but it removes the protection that makes the
+> maintenance merge controller and runtime bump review safe to use.
 
 ---
 
@@ -16,7 +15,7 @@
 
 | Piece | What it is | What it runs |
 |---|---|---|
-| `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every pull request** and every push to `main` (public repo = free) | Sets up exact **CPython 3.14.8**, then runs `pip install -r requirements.txt` → `python -m compileall` over every script → `python tests/test_smoke.py` → `python tests/test_reddit_signals.py` → `python tests/test_twitter_media.py` |
+| `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every pull request** and every push to `main` (public repo = free) | Reads `.python-version` (**3.14.8**), installs with `pip install --require-hashes --only-binary=:all:`, then runs `.github/scripts/ci.py` groups (application, maintenance, lock-consistency, workflow-security) and fail-closed `maintenance-ci` |
 | `tests/test_smoke.py` | An **offline** test (no network, no secrets, no Discord): every monitor script must **import cleanly**, the Reddit V3 card pipeline and safety gates must still behave (body cleaning, media extraction/dedup, i.redd.it swap, redlib scoping, OP comment, Components V2 layout, proxy parsers, archive/liveness gates, and — round 51 — `/user`, `/u`, and `/r/u_` profile-crosspost headers plus the media-less vxReddit shell fallback). The X V3 path is also pinned for GIF conversion, fallback parsing/order, and — round 51 — a visible but still deduplicated cached `TEST_TWEET_ID` skip. | `python tests/test_smoke.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
 | `tests/test_reddit_signals.py` | A pure offline Reddit gate/decision suite for removal-notice classification, tombstones/retraction decisions, listing confirmation, main-loop signal behavior, and the round-67 policy guards (no content-advisory subsystem; video-quality selection + rollback). | `python tests/test_reddit_signals.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
 | `tests/test_twitter_media.py` | A pure offline **X (Twitter) V3 media** suite (round 73): canonical source order (photo-only, video-only, mixed, legacy provider payloads), the GIF converter chain and its content-type rules, mp4-vs-AVIF priority, the direct-mp4 fallback, and the healthy-media / explicit-unresolved-evidence heal contract — with per-URL probe counts proving the healthy path costs no extra round-trip and that the AVIF last resort never re-probes the converter chain. | `python tests/test_twitter_media.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
@@ -89,11 +88,9 @@ performance, automation, and rollback policy: [Python runtime policy](PYTHON_RUN
 ## 4. Running it yourself (local)
 
 ```bash
-pip install -r requirements.txt
-python -m compileall -q "testing area" tests
-python tests/test_smoke.py
-python tests/test_reddit_signals.py
-python tests/test_twitter_media.py
+pip install --require-hashes --only-binary=:all: -r requirements.txt
+python .github/scripts/ci.py --profile development --group application
+python .github/scripts/ci.py --profile development --group maintenance
 ```
 
 Expected: `PASS …` lines ending with `SMOKE TEST: ALL PASS`, a final
@@ -114,8 +111,7 @@ secrets, and work fully offline.
 
 ---
 
-*Files involved: `.github/workflows/ci.yml`, `tests/test_smoke.py`,
-`tests/test_reddit_signals.py`, `tests/test_twitter_media.py`,
-`.github/workflows/dependabot_auto_merge.yml`
-(the gate it waits on), `docs/DEPENDABOT.md` (why the gate exists), and
-`docs/PYTHON_RUNTIME.md` (runtime-bump-specific validation).*
+*Files involved: `.github/workflows/ci.yml`, the registered `tests/test_*.py`
+suites, `.github/workflows/maintenance_merge.yml` (the merge controller that
+waits on CI), `docs/DEPENDABOT.md` (why the gate exists), `docs/MAINTENANCE.md`,
+and `docs/PYTHON_RUNTIME.md` (runtime-bump-specific validation).*

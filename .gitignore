@@ -17,8 +17,14 @@ __pycache__/
 *$py.class
 *.so
 
-# Local logs
+# Local logs and generated scratch reports
 *.log
+.reports/
+run-report*.json
+*-run-report.json
+
+# Tool caches (ruff, pip-tools)
+.ruff_cache/
 
 # Virtual environments
 venv/

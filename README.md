@@ -56,7 +56,8 @@ flowchart LR
   by `github-actions[bot]`, so normal runs deduplicate against committed state.
 * **Safety** — every PR must pass the offline
   [CI smoke gate](https://github.com/uesu/News-Express/actions/workflows/ci.yml)
-  (`pip install` + `compileall` + three offline test suites) before merge.
+   (hashed `pip install --require-hashes --only-binary=:all:` + `compileall` +
+   the registered offline test suites) before merge.
 
 ---
 
@@ -148,9 +149,9 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 │   └── workflows/
 │       ├── twitter_monitor.yml    # X/Twitter — runs testing area/twitter_v3.py
 │       ├── reddit_monitor.yml     # Reddit — runs testing area/reddit_main_v3.py
-│       ├── ci.yml                 # PR gate: install + compile + offline smoke suites
-│       ├── dependabot_auto_merge.yml  # opt-in auto-merge for Dependabot PRs
-│       └── python_version_bump.yml    # verified CPython patch/minor PR workflow
+│       ├── ci.yml                 # PR gate: hashed install + compile + offline suites
+│       ├── maintenance_merge.yml  # trusted merge controller (Dependabot + runtime bump)
+│       └── python_version_bump.yml    # verified CPython patch/minor PR workflow (no self-merge)
 ├── docs/                          # decision records + guides (see Docs index below)
 ├── testing area/                  # the engines (see Testing)
 │   ├── twitter_v1.py · twitter_v2_button_outside.py · twitter_v3.py
@@ -163,6 +164,8 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 │   ├── test_smoke.py              # offline smoke suite (run by CI)
 │   ├── test_reddit_signals.py     # pure gate/unit suite
 │   ├── test_twitter_media.py      # focused X media suite (run by CI)
+│   ├── test_maintenance.py · test_run_summary.py · test_configuration_contract.py
+│   ├── test_crosspost_video.py    # original-post / video-fallback guards
 │   └── fixtures/posted_cards.py   # production-card replay fixtures
 ├── AGENTS.md                      # onboarding for AI coding agents
 ├── posted_tweets.json · posted_reddit.json · pending_reddit.json · proxy_health.json
@@ -423,10 +426,14 @@ proven fine post-round-64).
 python3 tests/test_smoke.py           # expect: SMOKE TEST: ALL PASS
 python3 tests/test_reddit_signals.py  # expect: ALL PASS
 python3 tests/test_twitter_media.py   # expect: TWITTER MEDIA TEST: ALL PASS
+python3 tests/test_crosspost_video.py
+python3 tests/test_maintenance.py
+python3 tests/test_run_summary.py
+python3 tests/test_configuration_contract.py
 ```
 
-No network, no secrets — the suites stub `aiohttp`/`feedparser`/`dotenv`.
-CI runs all three on every PR (see [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md)).
+No network, no secrets — the application suites stub `aiohttp`/`feedparser`/`dotenv`.
+CI runs every registered suite on every PR (see [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md)).
 
 `tests/test_twitter_media.py` is the focused X media suite: canonical source
 order (photo-only, video-only, mixed, legacy providers), the GIF converter
@@ -469,7 +476,7 @@ Every new or changed script is proven **before** it touches production:
 ### Local testing
 
 ```bash
-pip install -r requirements.txt
+pip install --require-hashes --only-binary=:all: -r requirements.txt
 cp .env.example .env   # then fill in your values
 ```
 
@@ -490,9 +497,10 @@ path — the folder name contains a space).
   **major** update.
 * **Runtime automation:** `.github/workflows/python_version_bump.yml` checks for
   final stable candidates in the `actions/python-versions` manifest, requires
-  wheels-only dependency installation (`pip install --only-binary=:all:`), runs
-  compileall + all three offline suites before and after the allowlisted rewrite, and
-  opens a PR only after those gates pass.
+  hashed wheels-only installation (`pip install --require-hashes --only-binary=:all:`),
+  runs the CI adapter (`ci.py --profile production`) before and after the
+  allowlisted `.python-version` rewrite, and opens a PR only after those gates
+  pass. It never self-merges.
 * **Auto-merge boundary:** `AUTO_MERGE_PYTHON_BUMP=yes` permits eligible patch
   auto-merges only. Python 3.15 remains a manual-review minor-series PR, and
   Python 4 or any other major update requires deliberate migration. There is no
@@ -512,9 +520,10 @@ See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
 | Integration | What it does | Docs |
 |---|---|---|
 | **Discohook** | after each Reddit post, a share-link preview of the exact card is logged (keyless public API, no webhook URL ever leaves the repo; disable with `DISCOHOOK_PREVIEW=0`) | [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) |
-| **Dependabot** | weekly dependency/action checks; grouped PRs when requirements need updates; optional opt-in auto-merge (`AUTO_MERGE_DEPENDABOT=yes`) | [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) |
-| **Python runtime** | CPython pinned to exact stable **3.14.8**; patch bumps may auto-merge only with `AUTO_MERGE_PYTHON_BUMP=yes`, new minor series require manual review, major versions require manual migration | [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) |
-| **CI** | every PR: `pip install` + `compileall` + smoke suite + Reddit signal suite + X media suite | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) |
+| **Dependabot** | weekly dependency/action checks; grouped PRs; merges go through `maintenance_merge.yml` (`AUTO_MERGE_DEPENDABOT=yes`) | [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) |
+| **Python runtime** | CPython pinned to exact stable **3.14.8** in `.python-version`; patch bumps may auto-merge only with `AUTO_MERGE_PYTHON_BUMP=yes`; the proposer never self-merges | [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) |
+| **CI** | every PR: hashed install + `ci.py` groups + fail-closed `maintenance-ci` | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) |
+| **Maintenance** | shared policy helpers, merge controller, structured run summaries | [`docs/MAINTENANCE.md`](docs/MAINTENANCE.md) |
 
 ---
 
@@ -613,15 +622,18 @@ of FxTwitter/FxEmbed — [donations welcome](https://github.com/sponsors/dangere
 | [`docs/REPOSITORY_TRACKING.md`](docs/REPOSITORY_TRACKING.md) | Current monitor observability + workflow-Variable inventory per monitor |
 | [`docs/history/REPOSITORY_TRACKING_2026-10-01.md`](docs/history/REPOSITORY_TRACKING_2026-10-01.md) | File/config/policy inventory and audit record (historical snapshot, 2026-10-01) |
 | [`docs/REDDIT_VIDEO_QUALITY.md`](docs/REDDIT_VIDEO_QUALITY.md) · [`docs/REDDIT_VIDEO_MEDIA_REPORT.md`](docs/REDDIT_VIDEO_MEDIA_REPORT.md) · [`docs/VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md`](docs/VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md) | Round-67 video-quality policy, evidence report, and the confirmed acceptance policy |
-| [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) · [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) · [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) · [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) | Topic guides |
+| [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) · [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) · [`docs/MAINTENANCE.md`](docs/MAINTENANCE.md) · [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) · [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) | Topic guides |
 | [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md) · [`TERMS_OF_SERVICE.md`](TERMS_OF_SERVICE.md) | Policies |
 
 ---
 
 ## Workflow observability
 
-The Reddit and Twitter monitor workflows capture each monitor's local output
-and write a GitHub Actions Step Summary after cache persistence.
+The Reddit and Twitter V3 monitors write a structured run report (numeric
+totals, code SHA, lock digest). After cache persistence, `render_run_summary.py`
+appends that report plus an independent persistence footer to the GitHub
+Actions Step Summary. A missing report is shown as unavailable, never as
+fake zeros.
 
 The summaries report runtime, feed and post counters, provider and video
 diagnostics where applicable, delivery results, and cache status. The Reddit

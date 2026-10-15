@@ -76,7 +76,7 @@ free; private repos: the CI checks use normal Actions minutes).
 ## 3a. Does Dependabot auto-bump Python itself?
 
 **No.** Dependabot manages pip package manifests and `uses:` Action versions;
-`python-version: '3.14.8'` is a workflow setting, not a Dependabot ecosystem.
+`.python-version` (`3.14.8`) is a runtime pin, not a Dependabot ecosystem.
 That is intentional: floating `3.14` would silently take a newly released patch
 into a live posting run without a dedicated PR or a pre-merge runtime test.
 
@@ -103,13 +103,10 @@ Three layers, in order:
    (or auto-merge is enabled and green — see §5).
 2. **CI gate (shipped in this repo — `.github/workflows/ci.yml`).** Every PR,
    including Dependabot's, runs:
-   * `pip install -r requirements.txt` — a broken/renamed package fails
-     **here**, before it can reach your production workflow;
-   * `python -m compileall -q "testing area" tests` — syntax errors fail here;
-   * `python tests/test_smoke.py` — offline monitor import and card-pipeline
-     guards;
-   * `python tests/test_reddit_signals.py` — pure Reddit gate/decision guards;
-   * `python tests/test_twitter_media.py` — pure X (Twitter) V3 media guards.
+   * hashed `pip install --require-hashes --only-binary=:all: -r requirements.txt`
+     — a broken/renamed package fails **here**, before it can reach production;
+   * `python .github/scripts/ci.py` application + maintenance groups — compile,
+     every registered `tests/test_*.py` file, lock/workflow/docs checks.
    Red check = don't merge. For a routine dependency PR, green checks plus a
    minimal dependency/action diff are the required merge gate; live external
    services remain outside CI.
@@ -140,11 +137,11 @@ want **automatic merge to main once checks are green**, pick ONE of:
 
 ### Option B — the bundled auto-merge workflow (already in the repo)
 
-`.github/workflows/dependabot_auto_merge.yml` is included but **disabled**
-until the repository variable below is set. It uses the trusted
-`pull_request_target` trigger for `opened`, `synchronize`, and `reopened` PR
-events. GitHub reads that workflow file from the default branch; the job does
-**not** check out the PR and does **not** execute any PR-supplied code.
+`.github/workflows/maintenance_merge.yml` is the single merge controller for
+Dependabot and runtime-proposer PRs. It is **disabled** for auto-merge until
+the repository variable below is set. The job checks out the **trusted default
+branch only** (`persist-credentials: false`) and never executes PR-head
+maintenance helpers. Decision policy lives in `.github/scripts/maintenance.py`.
 
 To turn it on, create this one repository variable (it is a switch, not a
 credential):
@@ -250,8 +247,7 @@ description): treat as higher priority — review the advisory, then merge.
 
 *Files involved: `.github/dependabot.yml` (the switch),
 `.github/workflows/ci.yml` (the safety gate),
-`.github/workflows/dependabot_auto_merge.yml` (opt-in auto-merge after CI),
-`tests/test_smoke.py`, `tests/test_reddit_signals.py` and
-`tests/test_twitter_media.py` (the offline suites the gate runs), `.github/workflows/python_version_bump.yml` (the separate
+`.github/workflows/maintenance_merge.yml` (opt-in merge controller after CI),
+the registered `tests/test_*.py` suites, `.github/workflows/python_version_bump.yml` (the separate
 runtime automation), and `docs/PYTHON_RUNTIME.md` (the deliberately managed
 CPython runtime pin).*

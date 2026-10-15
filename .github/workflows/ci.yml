@@ -1,8 +1,9 @@
 name: CI — syntax + offline smoke test
 
-# Safety gate for Dependabot PRs (and any PR): proves the monitor scripts
-# still install and compile after a dependency or runtime bump BEFORE anything
-# can be merged to main. Runs on every PR + push to main.
+# Safety gate for Dependabot, runtime-proposer, and human PRs. Proves the
+# monitors still install from the frozen graph, compile, and pass every
+# registered tests/test_*.py runner before merge. Never posts, never uses
+# production secrets, never checks out with persisted credentials.
 
 on:
   pull_request:
@@ -13,34 +14,128 @@ permissions:
   contents: read
 
 jobs:
-  smoke:
+  application:
     runs-on: ubuntu-latest
-    # Round 57: hard cap — suites finish in ~2 min; 15 is a generous ceiling.
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 — SHA-pinned (round 57, immutable supply chain)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 — SHA-pinned
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7 — SHA-pinned (round 57)
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7 — SHA-pinned
         with:
-          # Exact stable CPython pin; update deliberately after CI validates it.
-          python-version: '3.14.8'
+          python-version-file: .python-version
           cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
-      - name: Install dependencies (a broken requirements.txt fails HERE, not in production)
+      - name: Install frozen runtime
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
 
-      - name: Compile every .py file (syntax errors fail here)
-        run: python -m compileall -q "testing area" tests
+      - name: Application tests
+        run: python .github/scripts/ci.py --profile development --group application
 
-      - name: Offline smoke test (no network, no secrets needed)
-        run: python tests/test_smoke.py
+  maintenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 — SHA-pinned
+        with:
+          persist-credentials: false
 
-      - name: Reddit signal unit tests (pure, no network)
-        run: python tests/test_reddit_signals.py
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7 — SHA-pinned
+        with:
+          python-version-file: .python-version
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
-      - name: Twitter media unit tests (pure, no network)
-        run: python tests/test_twitter_media.py
+      - name: Install runtime plus dev tools
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
+
+      - name: Maintenance, reporting, and configuration tests
+        run: python .github/scripts/ci.py --profile development --group maintenance
+
+  lock-consistency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 — SHA-pinned
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7 — SHA-pinned
+        with:
+          python-version-file: .python-version
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install compiler toolchain from the dev lock
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
+
+      - name: Recompile hashed locks and require a byte-stable result
+        run: python .github/scripts/ci.py --profile development --group lock-consistency
+
+  workflow-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 — SHA-pinned
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7 — SHA-pinned
+        with:
+          python-version-file: .python-version
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install runtime plus YAML/ruff toolchain
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
+
+      - name: Workflow YAML, pinning, and actionlint
+        run: python .github/scripts/ci.py --profile development --group workflow-security
+
+  maintenance-ci:
+    name: maintenance-ci
+    if: always()
+    needs: [application, maintenance, lock-consistency, workflow-security]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every mandatory dependency to have succeeded
+        run: |
+          python - <<'PY'
+          import sys
+          results = {
+              "application": "${{ needs.application.result }}",
+              "maintenance": "${{ needs.maintenance.result }}",
+              "lock-consistency": "${{ needs.lock-consistency.result }}",
+              "workflow-security": "${{ needs.workflow-security.result }}",
+          }
+          failed = [name for name, value in results.items() if value != "success"]
+          if failed:
+              print("maintenance-ci blocked:", failed, "->", results)
+              sys.exit(1)
+          print("maintenance-ci: all mandatory checks succeeded")
+          PY

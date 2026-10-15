@@ -108,6 +108,31 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import quote as url_quote
 from dotenv import load_dotenv
 
+try:
+    from run_report import RunReport
+except Exception:
+    RunReport = None  # type: ignore
+
+_run_report = None
+
+
+def _report_outcome(kind: str, reason: str | None = None) -> None:
+    if _run_report is not None:
+        _run_report.outcome(kind, reason)
+
+
+def _report_feed(entries: int = 0, *, usable: bool = True, challenge: bool = False) -> None:
+    if _run_report is not None:
+        _run_report.feed_parsed(entries, usable=usable, challenge=challenge)
+
+
+def _report_target(name: str, *, usable: bool = False) -> None:
+    if _run_report is None or not name:
+        return
+    _run_report.target_attempted(name)
+    if usable:
+        _run_report.target_usable(name)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 load_dotenv()
 
@@ -1443,6 +1468,8 @@ async def fetch_working_feed(session: aiohttp.ClientSession, account: str):
                     if feed.entries:
                         logging.info(f"[{account}] feed OK via {instance} — "
                                      f"{len(feed.entries)} entries.")
+                        _report_feed(len(feed.entries), usable=True)
+                        _report_target(account, usable=True)
                         return feed
                     logging.info(f"[{account}] {instance}: HTTP 200 but 0 entries "
                                  f"(bot check / stale instance?) — trying next.")
@@ -1454,6 +1481,8 @@ async def fetch_working_feed(session: aiohttp.ClientSession, account: str):
                          f"trying next.")
     logging.warning(f"[{account}] NO working nitter instance this run — "
                     f"account skipped (see TEST_TWEET_ID to rebuild one tweet).")
+    _report_target(account, usable=False)
+    _report_feed(0, usable=False)
     return None
 
 
@@ -1605,7 +1634,14 @@ def build_v3_payload(account: str, tweet: dict, read_post_url: str,
 
 
 async def main():
+    global _run_report
+    _run_report = RunReport("twitter_monitor", "v3") if RunReport else None
+    if _run_report is not None:
+        _run_report.set_configured(len(ACCOUNTS))
+        _run_report.start_monitor()
     if not ACCOUNTS:
+        if _run_report is not None:
+            _run_report.write()
         return
     posted_urls = load_posted_urls()
     is_first_run = len(posted_urls) == 0
@@ -1669,6 +1705,7 @@ async def main():
         for account, feed in feed_pairs:
             if not feed or not feed.entries:
                 logging.info(f"[{account}] skipping — no feed / 0 entries.")
+                _report_outcome("skipped", "empty-feed")
                 continue
             webhook_url = get_webhook_for_account(account)
             if not webhook_url:
@@ -1832,6 +1869,7 @@ async def main():
                 async with session.post(target_url, json=payload) as resp:
                     if resp.status in (200, 204):
                         posted_urls.add(unique_key)
+                        _report_outcome("posted")
                         logging.info(f"V3 Posted: {unique_key} (lang={lang or 'en'}{' | article' if is_article else ''} | source={tweet_source})")
                         created = None
                         if resp.status == 200:
@@ -1860,6 +1898,10 @@ async def main():
         await heal_unresolved_media(session, heal_queue)
 
     saved = save_posted_urls(posted_urls, frozenset(posted_urls - posted_urls_at_start))
+    if _run_report is not None:
+        _run_report.mark_local_save("saved")
+        _run_report.end_monitor("completed")
+        _run_report.write()
     missing = (posted_urls - posted_urls_at_start) - saved
     if missing:
         logging.error(f"DEDUP GUARD: {len(missing)} key(s) posted this run are "

@@ -1,0 +1,7 @@
+# Test/tool dependencies. Constrained against the runtime lock so they cannot
+# replace a production package. Not installed by monitor workflows.
+-c requirements.txt
+pip==26.1.1
+pip-tools==7.5.3
+ruff==0.13.2
+PyYAML==6.0.3

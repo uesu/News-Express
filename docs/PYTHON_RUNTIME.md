@@ -9,9 +9,12 @@ version through SHA-pinned `actions/setup-python@v7`:
 
 ```yaml
 with:
-  python-version: '3.14.8'
+  python-version-file: .python-version
   cache: 'pip'
 ```
+
+The pin file `.python-version` currently contains `3.14.8`. Workflows install
+the frozen hashed graph with `pip install --require-hashes --only-binary=:all:`.
 
 This file is the current operational policy for the exact runtime pin, the
 validation gates around it, and what the automation is allowed to change.
@@ -77,7 +80,7 @@ This repository is designed for standard (GIL-enabled) CPython 3.14:
 
 Offline repository validation means the real requirements install under the
 pinned interpreter, all Python files in `testing area/` and `tests/` compile,
-and all three offline suites pass. Third-party feeds, Discord delivery, external
+and every registered offline suite passes. Third-party feeds, Discord delivery, external
 cron triggers, and future service outages remain outside offline validation and
 should be checked with the documented dry-run/test-post controls when needed.
 

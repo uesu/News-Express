@@ -44,7 +44,10 @@ leftovers. Never advise deleting the "other" platform's files.
   (`rNN: ...`). `tests/test_reddit_signals.py` — gate-logic suite.
   `tests/test_twitter_media.py` — focused X media suite (canonical media
   order, GIF converter chain + content types, mp4-vs-AVIF priority, the
-  media-heal contract).
+  media-heal contract). `tests/test_crosspost_video.py` — original-post
+  discovery and video-fallback eligibility. Maintenance/reporting:
+  `tests/test_maintenance.py`, `tests/test_run_summary.py`,
+  `tests/test_configuration_contract.py`.
 - `docs/` — current changelog + topic guides: `CHANGELOG.md` (current release
   notes, round 63 onward), `CI_SMOKE.md`, `DEPENDABOT.md`, `DISCOHOOK.md`,
   `PYTHON_RUNTIME.md`, `REPOSITORY_TRACKING.md` (per-monitor Variable
@@ -65,6 +68,10 @@ leftovers. Never advise deleting the "other" platform's files.
 python3 tests/test_smoke.py           # expect: SMOKE TEST: ALL PASS
 python3 tests/test_reddit_signals.py  # expect: ALL PASS
 python3 tests/test_twitter_media.py   # expect: TWITTER MEDIA TEST: ALL PASS
+python3 tests/test_crosspost_video.py
+python3 tests/test_maintenance.py
+python3 tests/test_run_summary.py
+python3 tests/test_configuration_contract.py
 ```
 
 Counts differ slightly between this repo and prod checkouts (path-dependent
@@ -104,6 +111,10 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 6. **cron-job.org is the single scheduler.** GitHub's native `schedule:` is
    disabled on purpose (it raced the external cron → double posts).
 7. **Actions stay SHA-pinned** (round 57); jobs keep `timeout-minutes`.
+   There is no Actions workflow lockfile. The Python pin lives in
+   `.python-version` and is installed with `--require-hashes --only-binary=:all:`.
+   Dependabot does not self-merge; `maintenance_merge.yml` reads policy from
+   the trusted default branch only.
 8. Heal eligibility is classified by **URL**, never by response
    `content_type` (it is empty exactly when unresolved — round 56).
    `heal_eligible_items` reads module-global `MEDIA_HEAL_SCOPE` at call
