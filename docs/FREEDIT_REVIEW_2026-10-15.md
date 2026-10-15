@@ -1,5 +1,11 @@
 # Freedit review — 2026-10-15
 
+**Subsequent live test:** the exact Freedit subreddit-root URL and Eddrit across
+all six game communities were tested in a second run. See
+[EDDRIT_LIVE_REVIEW_2026-10-15.md](EDDRIT_LIVE_REVIEW_2026-10-15.md) for those
+results and the expanded diagnostic's current workflow/suite configuration.
+The first-run results and configuration below are retained as that run's record.
+
 ## Live-test result — completed
 
 **Freedit did not supply usable RSS or listing HTML in the live GitHub-hosted

@@ -1,0 +1,665 @@
+{
+  "run_url": "https://github.com/uesu/News-Express/actions/runs/38723188256",
+  "run_id": "38723188256",
+  "head_sha": "db586f5444205c4efa0901dd823c22cb4322c576",
+  "evidence_source": "https://api.github.com/repos/uesu/News-Express/check-runs/116382547103/annotations",
+  "job": {
+    "id": 116382547103,
+    "status": "completed",
+    "conclusion": "success",
+    "started_at": "2026-10-15T10:51:17Z",
+    "completed_at": "2026-10-15T10:52:29Z",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_name": "GitHub Actions 1000020318",
+    "runner_group_name": "GitHub Actions"
+  },
+  "cloud_region": "not obtained; do not infer Azure region from ubuntu-latest",
+  "suite_contexts": [
+    {
+      "suite": "zzz",
+      "generated_utc": "2026-10-15T10:51:19.885053+00:00",
+      "github_actions": true,
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "runner_environment": "github-hosted",
+      "run_id": "38723188256",
+      "note": "Read region/cloud from Set up job logs; the runner label does not prove Azure region."
+    },
+    {
+      "suite": "genshin",
+      "generated_utc": "2026-10-15T10:51:29.618032+00:00",
+      "github_actions": true,
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "runner_environment": "github-hosted",
+      "run_id": "38723188256",
+      "note": "Read region/cloud from Set up job logs; the runner label does not prove Azure region."
+    },
+    {
+      "suite": "hsr",
+      "generated_utc": "2026-10-15T10:51:42.902911+00:00",
+      "github_actions": true,
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "runner_environment": "github-hosted",
+      "run_id": "38723188256",
+      "note": "Read region/cloud from Set up job logs; the runner label does not prove Azure region."
+    },
+    {
+      "suite": "wuwa",
+      "generated_utc": "2026-10-15T10:51:53.708941+00:00",
+      "github_actions": true,
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "runner_environment": "github-hosted",
+      "run_id": "38723188256",
+      "note": "Read region/cloud from Set up job logs; the runner label does not prove Azure region."
+    },
+    {
+      "suite": "hna",
+      "generated_utc": "2026-10-15T10:52:04.247986+00:00",
+      "github_actions": true,
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "runner_environment": "github-hosted",
+      "run_id": "38723188256",
+      "note": "Read region/cloud from Set up job logs; the runner label does not prove Azure region."
+    },
+    {
+      "suite": "ananta",
+      "generated_utc": "2026-10-15T10:52:15.311895+00:00",
+      "github_actions": true,
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "runner_environment": "github-hosted",
+      "run_id": "38723188256",
+      "note": "Read region/cloud from Set up job logs; the runner label does not prove Azure region."
+    }
+  ],
+  "results": [
+    {
+      "endpoint": "eddrit_zzz_html_new",
+      "requested_url": "https://eddrit.com/r/Zenlesszonezeroleaks_/new",
+      "started_utc": "2026-10-15T10:51:19.944569+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "Zenlesszonezeroleaks_",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/Zenlesszonezeroleaks_/new",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4468,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 0.536
+    },
+    {
+      "endpoint": "eddrit_zzz_engine_rss",
+      "requested_url": "https://eddrit.com/r/Zenlesszonezeroleaks_/.rss",
+      "started_utc": "2026-10-15T10:51:22.548905+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "Zenlesszonezeroleaks_",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/Zenlesszonezeroleaks_/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4467,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.298
+    },
+    {
+      "endpoint": "eddrit_zzz_new_rss",
+      "requested_url": "https://eddrit.com/r/Zenlesszonezeroleaks_/new/.rss",
+      "started_utc": "2026-10-15T10:51:25.915009+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "Zenlesszonezeroleaks_",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/Zenlesszonezeroleaks_/new/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4468,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.314
+    },
+    {
+      "endpoint": "freedit_zzz_html_root",
+      "requested_url": "https://redlib.freedit.eu/r/Zenlesszonezeroleaks_",
+      "started_utc": "2026-10-15T10:51:29.297161+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "Zenlesszonezeroleaks_",
+      "http_status": 403,
+      "final_url": "https://redlib.freedit.eu/r/Zenlesszonezeroleaks_",
+      "content_type": "text/html; charset=UTF-8",
+      "content_encoding": "identity",
+      "bytes_read": 5700,
+      "markers": [
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 0.221
+    },
+    {
+      "endpoint": "eddrit_genshin_html_new",
+      "requested_url": "https://eddrit.com/r/Genshin_Impact_Leaks/new",
+      "started_utc": "2026-10-15T10:51:29.675279+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "Genshin_Impact_Leaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/Genshin_Impact_Leaks/new",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4956,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 1.354
+    },
+    {
+      "endpoint": "eddrit_genshin_engine_rss",
+      "requested_url": "https://eddrit.com/r/Genshin_Impact_Leaks/.rss",
+      "started_utc": "2026-10-15T10:51:33.097782+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "Genshin_Impact_Leaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/Genshin_Impact_Leaks/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4468,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.351
+    },
+    {
+      "endpoint": "eddrit_genshin_new_rss",
+      "requested_url": "https://eddrit.com/r/Genshin_Impact_Leaks/new/.rss",
+      "started_utc": "2026-10-15T10:51:36.515844+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "Genshin_Impact_Leaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/Genshin_Impact_Leaks/new/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4468,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.06
+    },
+    {
+      "endpoint": "freedit_genshin_html_root",
+      "requested_url": "https://redlib.freedit.eu/r/Genshin_Impact_Leaks",
+      "started_utc": "2026-10-15T10:51:39.643521+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "Genshin_Impact_Leaks",
+      "http_status": 403,
+      "final_url": "https://redlib.freedit.eu/r/Genshin_Impact_Leaks",
+      "content_type": "text/html; charset=UTF-8",
+      "content_encoding": "identity",
+      "bytes_read": 5676,
+      "markers": [
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 0.061
+    },
+    {
+      "endpoint": "native_genshin_new_rss_control",
+      "requested_url": "https://www.reddit.com/r/Genshin_Impact_Leaks/new/.rss?limit=100",
+      "started_utc": "2026-10-15T10:51:41.773698+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "Genshin_Impact_Leaks",
+      "http_status": 200,
+      "final_url": "https://www.reddit.com/r/Genshin_Impact_Leaks/new/.rss?limit=100",
+      "content_type": "application/atom+xml; charset=UTF-8",
+      "content_encoding": "identity",
+      "cache-control": "private, max-age=3600",
+      "bytes_read": 141772,
+      "markers": [],
+      "body_class": "feed_with_matching_entries",
+      "entries": 100,
+      "matching_entries": 100,
+      "newest_matching": [
+        {
+          "id": "1x6hqxy",
+          "date_utc": "2026-10-15T10:08:01+00:00"
+        },
+        {
+          "id": "1x68x1d",
+          "date_utc": "2026-10-15T01:31:00+00:00"
+        },
+        {
+          "id": "1x57lzq",
+          "date_utc": "2026-10-13T20:20:22+00:00"
+        },
+        {
+          "id": "1x4w2b5",
+          "date_utc": "2026-10-13T13:03:33+00:00"
+        },
+        {
+          "id": "1x4w1f3",
+          "date_utc": "2026-10-13T13:02:30+00:00"
+        }
+      ],
+      "candidate_response": true,
+      "elapsed_seconds": 1.03
+    },
+    {
+      "endpoint": "eddrit_hsr_html_new",
+      "requested_url": "https://eddrit.com/r/HonkaiStarRail_leaks/new",
+      "started_utc": "2026-10-15T10:51:42.960366+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "HonkaiStarRail_leaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/HonkaiStarRail_leaks/new",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 5049,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 1.43
+    },
+    {
+      "endpoint": "eddrit_hsr_engine_rss",
+      "requested_url": "https://eddrit.com/r/HonkaiStarRail_leaks/.rss",
+      "started_utc": "2026-10-15T10:51:46.457406+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "HonkaiStarRail_leaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/HonkaiStarRail_leaks/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4467,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.531
+    },
+    {
+      "endpoint": "eddrit_hsr_new_rss",
+      "requested_url": "https://eddrit.com/r/HonkaiStarRail_leaks/new/.rss",
+      "started_utc": "2026-10-15T10:51:50.056656+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "HonkaiStarRail_leaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/HonkaiStarRail_leaks/new/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4468,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.432
+    },
+    {
+      "endpoint": "freedit_hsr_html_root",
+      "requested_url": "https://redlib.freedit.eu/r/HonkaiStarRail_leaks",
+      "started_utc": "2026-10-15T10:51:53.557832+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "HonkaiStarRail_leaks",
+      "http_status": 403,
+      "final_url": "https://redlib.freedit.eu/r/HonkaiStarRail_leaks",
+      "content_type": "text/html; charset=UTF-8",
+      "content_encoding": "identity",
+      "bytes_read": 5676,
+      "markers": [
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 0.05
+    },
+    {
+      "endpoint": "eddrit_wuwa_html_new",
+      "requested_url": "https://eddrit.com/r/WutheringWavesLeaks/new",
+      "started_utc": "2026-10-15T10:51:53.766849+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "WutheringWavesLeaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/WutheringWavesLeaks/new",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 5027,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 1.506
+    },
+    {
+      "endpoint": "eddrit_wuwa_engine_rss",
+      "requested_url": "https://eddrit.com/r/WutheringWavesLeaks/.rss",
+      "started_utc": "2026-10-15T10:51:57.340592+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "WutheringWavesLeaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/WutheringWavesLeaks/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4467,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.345
+    },
+    {
+      "endpoint": "eddrit_wuwa_new_rss",
+      "requested_url": "https://eddrit.com/r/WutheringWavesLeaks/new/.rss",
+      "started_utc": "2026-10-15T10:52:00.753735+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "WutheringWavesLeaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/WutheringWavesLeaks/new/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4468,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.266
+    },
+    {
+      "endpoint": "freedit_wuwa_html_root",
+      "requested_url": "https://redlib.freedit.eu/r/WutheringWavesLeaks",
+      "started_utc": "2026-10-15T10:52:04.088606+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "WutheringWavesLeaks",
+      "http_status": 403,
+      "final_url": "https://redlib.freedit.eu/r/WutheringWavesLeaks",
+      "content_type": "text/html; charset=UTF-8",
+      "content_encoding": "identity",
+      "bytes_read": 5673,
+      "markers": [
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 0.065
+    },
+    {
+      "endpoint": "eddrit_hna_html_new",
+      "requested_url": "https://eddrit.com/r/HonkaiNexusAnimaLeaks/new",
+      "started_utc": "2026-10-15T10:52:04.306144+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "HonkaiNexusAnimaLeaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/HonkaiNexusAnimaLeaks/new",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 5036,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 1.784
+    },
+    {
+      "endpoint": "eddrit_hna_engine_rss",
+      "requested_url": "https://eddrit.com/r/HonkaiNexusAnimaLeaks/.rss",
+      "started_utc": "2026-10-15T10:52:08.158858+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "HonkaiNexusAnimaLeaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/HonkaiNexusAnimaLeaks/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4467,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.588
+    },
+    {
+      "endpoint": "eddrit_hna_new_rss",
+      "requested_url": "https://eddrit.com/r/HonkaiNexusAnimaLeaks/new/.rss",
+      "started_utc": "2026-10-15T10:52:11.817240+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "HonkaiNexusAnimaLeaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/HonkaiNexusAnimaLeaks/new/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4468,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.277
+    },
+    {
+      "endpoint": "freedit_hna_html_root",
+      "requested_url": "https://redlib.freedit.eu/r/HonkaiNexusAnimaLeaks",
+      "started_utc": "2026-10-15T10:52:15.163563+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "HonkaiNexusAnimaLeaks",
+      "http_status": 403,
+      "final_url": "https://redlib.freedit.eu/r/HonkaiNexusAnimaLeaks",
+      "content_type": "text/html; charset=UTF-8",
+      "content_encoding": "identity",
+      "bytes_read": 5700,
+      "markers": [
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 0.051
+    },
+    {
+      "endpoint": "eddrit_ananta_html_new",
+      "requested_url": "https://eddrit.com/r/AnantaLeaks/new",
+      "started_utc": "2026-10-15T10:52:15.372369+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "AnantaLeaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/AnantaLeaks/new",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 5025,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 1.52
+    },
+    {
+      "endpoint": "eddrit_ananta_engine_rss",
+      "requested_url": "https://eddrit.com/r/AnantaLeaks/.rss",
+      "started_utc": "2026-10-15T10:52:18.960890+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "AnantaLeaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/AnantaLeaks/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4468,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.739
+    },
+    {
+      "endpoint": "eddrit_ananta_new_rss",
+      "requested_url": "https://eddrit.com/r/AnantaLeaks/new/.rss",
+      "started_utc": "2026-10-15T10:52:22.768697+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "subreddit": "AnantaLeaks",
+      "http_status": 200,
+      "final_url": "https://eddrit.com/r/AnantaLeaks/new/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 4467,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 1.381
+    },
+    {
+      "endpoint": "freedit_ananta_html_root",
+      "requested_url": "https://redlib.freedit.eu/r/AnantaLeaks",
+      "started_utc": "2026-10-15T10:52:26.217663+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "subreddit": "AnantaLeaks",
+      "http_status": 403,
+      "final_url": "https://redlib.freedit.eu/r/AnantaLeaks",
+      "content_type": "text/html; charset=UTF-8",
+      "content_encoding": "identity",
+      "bytes_read": 5649,
+      "markers": [
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 0.036
+    }
+  ]
+}

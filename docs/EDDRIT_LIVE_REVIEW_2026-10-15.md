@@ -60,16 +60,87 @@ stricter than the monitors' feedparser; a parser rejection alone must not be
 misreported as an HTTP failure. A syntactically valid feed is not an automatic
 freshness certificate. No browser challenge execution or WAF bypass is used.
 
-## Results
+## Results — completed
 
-Pending the live branch-triggered run at this revision. Results will be saved
-with the run ID, exact requested URLs, runner details available through the API,
-and response metadata. No production monitor is being dispatched. No PR or
-main/production branch edit is required.
+**Neither Eddrit's tested routes nor Freedit's subreddit-root pages supplied
+usable content in this GitHub-hosted runner test.** Native Reddit's control did.
 
-## Offline validation
+- Run: [38723188256](https://github.com/uesu/News-Express/actions/runs/38723188256).
+- Commit: `db586f5444205c4efa0901dd823c22cb4322c576` on
+  `arena/c45edf9b-news-express`, triggered by a diagnostic-only branch push.
+- Requests: **2026-10-15 10:51:19–10:52:26 UTC**, or **18:51–18:52 Manila time**.
+- Job: `116382547103`, completed successfully in 72 seconds. Green means the
+  diagnostic completed, **not that the mirrors passed**.
+- Runner: GitHub-hosted Linux/X64, `ubuntu-latest`,
+  `GitHub Actions 1000020318`. Exact cloud/region was not obtained; this is not
+  evidence of a particular Azure region or a permanent universal block policy.
+- Evidence: all 25 endpoint records and six suite-context records retrieved from
+  the GitHub check-run annotations API. No signed log downloads were needed.
+  The CLI still displayed the workflow's earlier name, but the job's six steps
+  and tested commit confirm that the expanded diagnostic executed.
 
-The diagnostic suite now includes per-community URL coverage, parser scoping,
-request-to-subject propagation, original-suite preservation and total-time/
-workflow coverage checks, in addition to the prior transport/security tests.
-The existing monitor regression suites are run before publishing the diagnostic.
+In the table, **200 challenge** means `Content-Type: text/html`, Anubis and
+JavaScript-required markers, and zero matching entries/post IDs. It does not
+mean usable RSS or a real post listing. **403** means HTML with a
+JavaScript-required marker and zero post IDs.
+
+| Game / subreddit | Eddrit `/new` HTML | Eddrit `/.rss` (engine) | Eddrit `/new/.rss` | Freedit `/r/<sub>` root |
+|---|---|---|---|---|
+| ZZZ / `Zenlesszonezeroleaks_` | 200 challenge | 200 challenge | 200 challenge | 403 |
+| Genshin / `Genshin_Impact_Leaks` | 200 challenge | 200 challenge | 200 challenge | 403 |
+| HSR / `HonkaiStarRail_leaks` | 200 challenge | 200 challenge | 200 challenge | 403 |
+| Wuwa / `WutheringWavesLeaks` | 200 challenge | 200 challenge | 200 challenge | 403 |
+| HNA / `HonkaiNexusAnimaLeaks` | 200 challenge | 200 challenge | 200 challenge | 403 |
+| Ananta / `AnantaLeaks` | 200 challenge | 200 challenge | 200 challenge | 403 |
+
+### The two exact user URLs
+
+- `https://eddrit.com/r/Zenlesszonezeroleaks_/new` — HTTP **200**,
+  `text/html; charset=utf-8`, 4,468 bytes, Anubis + JavaScript-required markers,
+  **zero post IDs**, `candidate_response: false`.
+- `https://redlib.freedit.eu/r/Genshin_Impact_Leaks` — HTTP **403**,
+  `text/html; charset=UTF-8`, 5,676 bytes, JavaScript-required marker,
+  **zero post IDs**, `candidate_response: false`. This exact root URL is now
+  tested independently of the earlier `/new` and RSS requests.
+
+### Working control
+
+`https://www.reddit.com/r/Genshin_Impact_Leaks/new/.rss?limit=100` returned
+HTTP **200**, `application/atom+xml`, **100 entries / 100 matching post links**,
+with no detected challenge markers. The newest matching post was `1x6hqxy`,
+published `2026-10-15T10:08:01+00:00`; it is also the Genshin post identified in
+the earlier user-supplied production log. The control's cache header was
+`private, max-age=3600`; this result is not a general freshness guarantee.
+
+The successful control shows that the runner could retrieve and parse a real
+Reddit feed during this test. It does not turn the mirror challenges into usable
+responses, establish all-six-sub native health, or prove any browser behavior.
+
+Full observations, including request times, exact URLs, headers, sizes and
+control IDs/dates, are preserved in
+[`diagnostics/eddrit-freedit-six-games-2026-10-15-run-38723188256.json`](diagnostics/eddrit-freedit-six-games-2026-10-15-run-38723188256.json).
+
+## Recommendation and unchanged production behavior
+
+- **Eddrit is already present as an RSS fallback.** Do not duplicate it or add it
+  to the pristine HTML listing fleet on these results. Treat this as a failed
+  current runner sample rather than relying on the older source comment saying
+  it passed on 2026-09-20. The earlier historical success was not reproduced.
+- **Do not add Freedit root pages as a workaround for `/new`.** All six root
+  requests failed, including the exact Genshin URL supplied by the user.
+- No automatic removal, fleet-order change, retry change or route substitution
+  was made. A separate request would be needed to change production behavior.
+- No browser/WAF challenge bypass, tokens, cookies, Discord calls, posting
+  workflows, PRs, main changes or production-repository changes were used.
+  Only the isolated diagnostic and reports were committed/pushed to the session
+  branch. Kite files remain untouched. Report-only pushes do not trigger probes.
+
+## Validation
+
+- `python3 tests/test_freedit_probe.py` — **31 tests passed locally and on the
+  hosted runner**. Covers per-community URL coverage, parser scoping,
+  request-to-subject propagation, original-suite preservation and total-time/
+  workflow coverage, plus the prior transport/security checks.
+- `python3 tests/test_smoke.py` — **SMOKE TEST: ALL PASS** locally.
+- `python3 tests/test_reddit_signals.py` — **REDDIT SIGNAL TEST: ALL PASS (96 pass)** locally.
+- `python3 tests/test_twitter_media.py` — **TWITTER MEDIA TEST: ALL PASS** locally.
