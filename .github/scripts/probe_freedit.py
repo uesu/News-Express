@@ -121,10 +121,10 @@ def entry_date(entry):
     return None
 
 
-def matching_id(link, kind, subreddit=SUB):
+def matching_id(link, kind, subreddit=SUB, account=ACCOUNT):
     path = urlsplit(link).path
     if kind == "twitter_feed":
-        match = re.match(rf"^/{ACCOUNT}/status/(\d+)(?:/|$)", path, re.I)
+        match = re.match(rf"^/{re.escape(account)}/status/(\d+)(?:/|$)", path, re.I)
     else:
         match = re.match(rf"^/r/{re.escape(subreddit)}/comments/([a-z0-9]+)(?:/|$)", path, re.I)
     return match.group(1).lower() if match else None
@@ -154,7 +154,7 @@ class NoDTDTreeBuilder(ET.TreeBuilder):
         raise ValueError("DTD not allowed in diagnostic feed")
 
 
-def inspect_body(body, kind, subreddit=SUB):
+def inspect_body(body, kind, subreddit=SUB, account=ACCOUNT):
     text = body.decode("utf-8", errors="replace")
     lower = text.lower()
     markers = [name for name, needle in (
@@ -182,7 +182,7 @@ def inspect_body(body, kind, subreddit=SUB):
                     continue
                 link = child.get("href") or (child.text or "").strip()
                 try:
-                    post_id = matching_id(link, kind, subreddit)
+                    post_id = matching_id(link, kind, subreddit, account)
                 except ValueError:
                     continue
                 if post_id:
@@ -209,6 +209,9 @@ def fetch_endpoint(name):
               "pristine_request": pristine, "kind": kind}
     parts = urlsplit(url).path.split("/")
     subreddit = parts[2] if len(parts) > 2 and parts[1] == "r" else SUB
+    account = parts[1] if kind == "twitter_feed" and len(parts) > 1 else ACCOUNT
+    if kind == "twitter_feed":
+        result["account"] = account
     if kind in ("listing", "reddit_feed"):
         result["subreddit"] = subreddit
     start = time.monotonic()
@@ -236,7 +239,7 @@ def fetch_endpoint(name):
             if len(body) > MAX_BYTES:
                 result["body_class"] = "oversize_not_parsed"
             else:
-                result.update(inspect_body(body, kind, subreddit))
+                result.update(inspect_body(body, kind, subreddit, account))
             # Do not equate valid-looking body text on an error page with success.
             result["candidate_response"] = bool(
                 response.code == 200 and result.get("body_class") in

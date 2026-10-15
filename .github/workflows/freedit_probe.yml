@@ -1,8 +1,7 @@
-name: Reddit mirror probe (Eddrit + Freedit, no posting)
+name: Other public mirror probes (no posting)
 
-# Diagnostic only: no cron, monitor code, production caches or secrets.
-# Branch-only push bootstrap avoids merging a new workflow into main just to
-# run the user-requested live test. No production/default-branch push trigger.
+# Isolated live diagnostic. No cron, tokens, production code or posting.
+# The previous Freedit/Eddrit suites are NOT invoked by this workflow.
 on:
   workflow_dispatch:
   push:
@@ -10,43 +9,97 @@ on:
     paths:
       - .github/workflows/freedit_probe.yml
       - .github/scripts/probe_freedit.py
+      - .github/scripts/probe_other_instances.py
       - tests/test_freedit_probe.py
+      - tests/test_other_instances_probe.py
 
 permissions:
   contents: read
 
 concurrency:
-  group: freedit-endpoint-probe-${{ github.repository }}
+  group: public-mirror-probe-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
   probe:
+    name: ${{ matrix.host }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - host: nitter.meowing.monster
+            kind: nitter
+          - host: nitter.gravitywell.xyz
+            kind: nitter
+          - host: tw.eir-nya.gay
+            kind: nitter
+          - host: shitter.thepixora.com
+            kind: nitter
+          - host: nitter.kareem.one
+            kind: nitter
+          - host: xcopy.uk
+            kind: nitter
+          - host: nitter.netbub.com
+            kind: nitter
+          - host: nitter.jaydenha.uk
+            kind: nitter
+          - host: nitter.click
+            kind: nitter
+          - host: nitter.tiekoetter.com
+            kind: nitter
+          - host: nitter.xitter.cc
+            kind: nitter
+          - host: nitter.perennialte.ch
+            kind: nitter
+          - host: nitter.privacydev.net
+            kind: nitter
+          - host: nitter.net
+            kind: nitter
+          - host: xcancel.com
+            kind: nitter
+          - host: x.yuuki.sh
+            kind: nitter
+          - host: x.n0g.xyz
+            kind: nitter
+          - host: redlib.catsarch.com
+            kind: reddit
+          - host: redlib.nadeko.net
+            kind: reddit
+          - host: redlib.privadency.com
+            kind: reddit
+          - host: safereddit.com
+            kind: reddit
+          - host: red.artemislena.eu
+            kind: reddit
+          - host: redlib.privacyredirect.com
+            kind: reddit
     steps:
       - name: Check out diagnostic files
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7, same immutable pin as this repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
-      # The Ubuntu runner supplies Python 3; this diagnostic is stdlib-only.
       - name: Offline diagnostic tests
-        run: python3 tests/test_freedit_probe.py
+        run: |
+          python3 tests/test_freedit_probe.py
+          python3 tests/test_other_instances_probe.py
 
-      - name: Zenless Zone Zero — Eddrit HTML + RSS and Freedit subreddit root
-        run: python3 .github/scripts/probe_freedit.py --suite zzz --annotations --output "$RUNNER_TEMP/mirror-zzz.json"
+      - name: RSS across configured accounts or game communities
+        env:
+          MIRROR_HOST: ${{ matrix.host }}
+        run: python3 .github/scripts/probe_other_instances.py --host "$MIRROR_HOST" --route rss --annotations --cooldown-file "$RUNNER_TEMP/mirror-cooldown.json" --output "$RUNNER_TEMP/mirror-rss.json"
 
-      - name: Genshin Impact — Eddrit HTML + RSS and Freedit subreddit root
-        run: python3 .github/scripts/probe_freedit.py --suite genshin --annotations --output "$RUNNER_TEMP/mirror-genshin.json"
+      - name: Subreddit-root HTML across six games
+        if: matrix.kind == 'reddit'
+        env:
+          MIRROR_HOST: ${{ matrix.host }}
+        run: python3 .github/scripts/probe_other_instances.py --host "$MIRROR_HOST" --route root --annotations --cooldown-file "$RUNNER_TEMP/mirror-cooldown.json" --output "$RUNNER_TEMP/mirror-root.json"
 
-      - name: Honkai Star Rail — Eddrit HTML + RSS and Freedit subreddit root
-        run: python3 .github/scripts/probe_freedit.py --suite hsr --annotations --output "$RUNNER_TEMP/mirror-hsr.json"
-
-      - name: Wuthering Waves — Eddrit HTML + RSS and Freedit subreddit root
-        run: python3 .github/scripts/probe_freedit.py --suite wuwa --annotations --output "$RUNNER_TEMP/mirror-wuwa.json"
-
-      - name: Honkai Nexus Anima — Eddrit HTML + RSS and Freedit subreddit root
-        run: python3 .github/scripts/probe_freedit.py --suite hna --annotations --output "$RUNNER_TEMP/mirror-hna.json"
-
-      - name: Ananta — Eddrit HTML + RSS and Freedit subreddit root
-        run: python3 .github/scripts/probe_freedit.py --suite ananta --annotations --output "$RUNNER_TEMP/mirror-ananta.json"
+      - name: Pristine new-listing HTML across six games
+        if: matrix.kind == 'reddit'
+        env:
+          MIRROR_HOST: ${{ matrix.host }}
+        run: python3 .github/scripts/probe_other_instances.py --host "$MIRROR_HOST" --route pristine --annotations --cooldown-file "$RUNNER_TEMP/mirror-cooldown.json" --output "$RUNNER_TEMP/mirror-pristine.json"

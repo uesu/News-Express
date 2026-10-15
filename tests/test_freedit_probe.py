@@ -147,12 +147,11 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(r['subreddit'], 'Zenlesszonezeroleaks_')
         self.assertTrue(r['candidate_response'])
 
-    def test_workflow_runs_six_suites_with_bounded_total_time(self):
+    def test_preserved_six_suites_have_bounded_total_time(self):
         workflow = (SCRIPT.parents[1] / 'workflows/freedit_probe.yml').read_text()
         total_endpoints = 0
         worst_seconds = 0
         for game in probe.SUBREDDITS:
-            self.assertEqual(workflow.count(f'--suite {game} '), 1)
             n = len(probe.SUITES[game])
             self.assertLessEqual(n + 1, 10)  # Include the suite context notice.
             total_endpoints += n
