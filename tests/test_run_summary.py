@@ -122,6 +122,88 @@ class RunReportTests(unittest.TestCase):
         report.host_select("redlib.example")
         self.assertEqual(report.hosts_selected, ["redlib.example"])
 
+    def test_timeout_rate_limit_and_cancel_do_not_select_host(self):
+        import asyncio
+
+        class _Timeout:
+            async def __aenter__(self):
+                raise TimeoutError()
+
+            async def __aexit__(self, *exc):
+                return False
+
+        class _Inner:
+            def get(self, url, **_kwargs):
+                return _Timeout()
+
+        report = RunReport("reddit_monitor", "v3")
+        wrapped = report.wrap_session(_Inner())
+
+        async def _run_timeout():
+            with self.assertRaises(TimeoutError):
+                async with wrapped.get("https://redlib.example/r/x/.rss"):
+                    pass
+
+        asyncio.run(_run_timeout())
+        self.assertEqual(report.hosts_attempted, ["redlib.example"])
+        self.assertEqual(report.hosts_selected, [])
+        self.assertEqual(report.host_timeout, 1)
+
+        class _Limited:
+            status = 429
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+        class _Inner429:
+            def get(self, url, **_kwargs):
+                return _Limited()
+
+        limited = RunReport("reddit_monitor", "v3")
+        wrapped429 = limited.wrap_session(_Inner429())
+
+        async def _run_429():
+            async with wrapped429.get("https://nitter.example/x/rss"):
+                pass
+
+        asyncio.run(_run_429())
+        self.assertEqual(limited.hosts_selected, [])
+        self.assertEqual(limited.host_rate_limit, 1)
+
+        class _Cancel:
+            async def __aenter__(self):
+                raise asyncio.CancelledError()
+
+            async def __aexit__(self, *exc):
+                return False
+
+        class _InnerCancel:
+            def get(self, url, **_kwargs):
+                return _Cancel()
+
+        cancelled = RunReport("reddit_monitor", "v3")
+        wrapped_c = cancelled.wrap_session(_InnerCancel())
+
+        async def _run_cancel():
+            with self.assertRaises(asyncio.CancelledError):
+                async with wrapped_c.get("https://redlib.example/r/y/.rss"):
+                    pass
+
+        asyncio.run(_run_cancel())
+        self.assertEqual(cancelled.hosts_selected, [])
+        self.assertEqual(cancelled.host_cancelled, 1)
+
+    def test_challenge_feed_is_not_usable_selection(self):
+        report = RunReport("reddit_monitor", "v3")
+        report.feed_parsed(3, usable=False, challenge=True)
+        self.assertEqual(report.feeds_challenge, 1)
+        self.assertEqual(report.feeds_http_ok, 0)
+        self.assertEqual(report.entries, 0)
+        self.assertEqual(report.hosts_selected, [])
+
     def test_start_monitor_is_not_a_successful_outcome(self):
         report = RunReport("reddit_monitor", "v3")
         report.start_monitor()

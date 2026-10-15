@@ -94,14 +94,16 @@
   "compile_command": [
     "python", "-m", "piptools", "compile",
     "--generate-hashes", "--allow-unsafe", "--resolver=backtracking",
-    "--strip-extras", "--output-file=requirements.txt", "requirements.in"
+    "--strip-extras", "--reuse-hashes", "--newline=lf", "--no-emit-index-url",
+    "--quiet", "--output-file=requirements.txt", "requirements.in"
   ],
   "dev_compile_command": [
     "python", "-m", "piptools", "compile",
     "--generate-hashes", "--allow-unsafe", "--resolver=backtracking",
-    "--strip-extras", "--output-file=requirements-dev.txt", "requirements-dev.in"
+    "--strip-extras", "--reuse-hashes", "--newline=lf", "--no-emit-index-url",
+    "--quiet", "--output-file=requirements-dev.txt", "requirements-dev.in"
   ],
-  "custom_compile_command": "python -m piptools compile --generate-hashes --allow-unsafe --resolver=backtracking --strip-extras --output-file=requirements.txt requirements.in",
+  "custom_compile_command": "python -m piptools compile --generate-hashes --allow-unsafe --resolver=backtracking --strip-extras --reuse-hashes --newline=lf --no-emit-index-url --quiet --output-file=requirements.txt requirements.in",
   "install_command": [
     "python", "-m", "pip", "install", "--require-hashes", "--only-binary=:all:",
     "-r", "requirements.txt"

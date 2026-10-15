@@ -1407,7 +1407,7 @@ def is_same_reddit_post(left: str | None, right: str | None) -> bool:
 
 def _permalink_host_allowed(text: str, match_start: int) -> bool:
     prefix = text[max(0, match_start - 96):match_start]
-    host_m = re.search(r"https?://([^/\s]+)$", prefix)
+    host_m = re.search(r"(?:https?:)?//([^/\s]+)$", prefix)
     if not host_m:
         return True
     host = host_m.group(1).split("@")[-1].split(":")[0].lower()
@@ -1418,7 +1418,13 @@ def _normalized_foreign_safe_path(raw: str, text: str, start: int) -> str | None
     if not _permalink_host_allowed(text, start):
         return None
     blob = raw.strip()
-    if blob.startswith("http"):
+    if blob.startswith("//"):
+        parsed = urlparse("https:" + blob)
+        host = (parsed.netloc or "").split("@")[-1].split(":")[0].lower()
+        if host not in REDDIT_HOSTS:
+            return None
+        blob = parsed.path or ""
+    elif blob.startswith("http"):
         parsed = urlparse(blob)
         host = (parsed.netloc or "").split("@")[-1].split(":")[0].lower()
         if host not in REDDIT_HOSTS:
@@ -1557,7 +1563,13 @@ def resolve_crosspost_source(*, own_path: str | None, base: dict | None,
         ordered.append((found, "explicit-parent-link", None))
 
     for path, provenance, parent in ordered:
-        pid = extract_post_id(path or "") or (parent.get("id") if parent else None)
+        rec_id = None
+        if parent:
+            rec_id = parent_fullname_id(str(parent.get("id") or parent.get("name") or ""))
+        path_id = extract_post_id(path or "")
+        if rec_id and path_id and rec_id.lower() != path_id.lower():
+            continue
+        pid = path_id or rec_id
         if pid and own_id and str(pid).lower() == str(own_id).lower():
             continue
         npath = normalize_reddit_path(path) if path else None

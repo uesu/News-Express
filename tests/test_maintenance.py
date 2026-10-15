@@ -346,6 +346,10 @@ class CheckClassificationTests(unittest.TestCase):
             workflow_runs=[{"id": 2, "name": "CI — syntax + offline smoke test",
                             "head_sha": SHA, "path": ".github/workflows/ci.yml",
                             "status": "completed", "conclusion": "success"}],
+            workflow_jobs=[{
+                "id": 10, "name": "application", "run_id": 2, "head_sha": SHA,
+                "status": "completed", "conclusion": "success",
+            }],
         )
         self.assertEqual(other_run["state"], "failed")
         missing_wf_sha = maintenance.classify_checks(
@@ -355,6 +359,16 @@ class CheckClassificationTests(unittest.TestCase):
                             "status": "completed", "conclusion": "success"}],
         )
         self.assertEqual(missing_wf_sha["state"], "failed")
+        missing_jobs = maintenance.classify_checks(
+            checks, expected_names=["application"], head_sha=SHA,
+            expected_workflow="CI — syntax + offline smoke test",
+            expected_workflow_path=".github/workflows/ci.yml",
+            workflow_runs=[{"id": 2, "name": "CI — syntax + offline smoke test",
+                            "head_sha": SHA, "path": ".github/workflows/ci.yml",
+                            "status": "completed", "conclusion": "success"}],
+        )
+        self.assertEqual(missing_jobs["state"], "failed")
+        self.assertEqual(missing_jobs["reason"], "missing-workflow-jobs")
         ready = maintenance.classify_checks(
             checks, expected_names=["application"], head_sha=SHA,
             expected_workflow="CI — syntax + offline smoke test",
@@ -362,6 +376,10 @@ class CheckClassificationTests(unittest.TestCase):
             workflow_runs=[{"id": 2, "name": "CI — syntax + offline smoke test",
                             "head_sha": SHA, "path": ".github/workflows/ci.yml",
                             "status": "completed", "conclusion": "success"}],
+            workflow_jobs=[{
+                "id": 10, "name": "application", "run_id": 2, "head_sha": SHA,
+                "status": "completed", "conclusion": "success",
+            }],
         )
         self.assertEqual(ready["state"], "ready")
 
@@ -389,6 +407,29 @@ class MergeDecisionTests(unittest.TestCase):
             {"id": 2, "state": "APPROVED", "user": {"login": "reviewer"}},
         ]))
         self.assertEqual(superseded.action, "merge")
+        commented = maintenance.decide_merge(_snapshot(reviews=[
+            {"id": 1, "state": "CHANGES_REQUESTED", "user": {"login": "reviewer"}},
+            {"id": 2, "state": "COMMENTED", "user": {"login": "reviewer"}},
+        ]))
+        self.assertEqual(commented.action, "defer")
+        self.assertEqual(commented.reason, "changes-requested")
+        pending = maintenance.decide_merge(_snapshot(reviews=[
+            {"id": 1, "state": "CHANGES_REQUESTED", "user": {"login": "reviewer"}},
+            {"id": 2, "state": "PENDING", "user": {"login": "reviewer"}},
+        ]))
+        self.assertEqual(pending.action, "defer")
+        self.assertEqual(pending.reason, "changes-requested")
+        dismissed = maintenance.decide_merge(_snapshot(reviews=[
+            {"id": 1, "state": "CHANGES_REQUESTED", "user": {"login": "reviewer"}},
+            {"id": 2, "state": "DISMISSED", "user": {"login": "reviewer"}},
+        ]))
+        self.assertEqual(dismissed.action, "merge")
+        two_reviewers = maintenance.decide_merge(_snapshot(reviews=[
+            {"id": 1, "state": "CHANGES_REQUESTED", "user": {"login": "alex"}},
+            {"id": 2, "state": "APPROVED", "user": {"login": "blair"}},
+        ]))
+        self.assertEqual(two_reviewers.action, "defer")
+        self.assertEqual(two_reviewers.reason, "changes-requested")
 
     def test_untrusted_updater_and_head_change(self):
         human = maintenance.decide_merge(_snapshot(pull_request=_pr(login="alice")))
@@ -571,6 +612,268 @@ class CiRegistryTests(unittest.TestCase):
         normalized = maintenance.normalize_compile_header(base)
         for other in variants:
             self.assertNotEqual(normalized, maintenance.normalize_compile_header(other))
+
+
+class RequirementPolicyTests(unittest.TestCase):
+    def test_extra_index_with_pin_is_review_required(self):
+        files = [{
+            "filename": "requirements.txt",
+            "patch": (
+                "-aiohttp==3.14.5\n+aiohttp==3.14.6\n"
+                "+--extra-index-url https://untrusted.example/simple\n"
+            ),
+        }]
+        risk = maintenance.snapshot_risk_from_files(files, "dependabot")
+        self.assertEqual(risk["risk"], "review-required")
+        self.assertFalse(risk["auto_eligible"])
+        self.assertGreaterEqual(risk["members"], 2)
+
+    def test_marker_constraint_extras_url_and_unparsed_are_review(self):
+        cases = [
+            ("-aiohttp==3.14.5\n+aiohttp==3.14.6 ; python_version >= \"3.10\"\n",
+             "environment-marker"),
+            ("-aiohttp==3.14.5\n+aiohttp==3.14.6\n+-c constraints.txt\n",
+             "constraint-file"),
+            ("-aiohttp==3.14.5\n+aiohttp[speedups]==3.14.6\n",
+             "extras-change"),
+            ("-aiohttp==3.14.5\n+https://github.com/foo/bar/archive/x.zip\n",
+             "direct-or-vcs-url"),
+            ("-aiohttp==3.14.5\n+git+https://github.com/foo/bar.git#egg=aiohttp\n",
+             "direct-or-vcs-url"),
+            ("-aiohttp==3.14.5\n+not a requirement line!!!\n",
+             "unparsed-requirement-line"),
+            ("+--index-url https://pypi.org/simple\n",
+             "unexpected-index-or-source"),
+        ]
+        for patch, reason in cases:
+            risk = maintenance.snapshot_risk_from_files(
+                [{"filename": "requirements.txt", "patch": patch}], "dependabot")
+            self.assertEqual(risk["risk"], "review-required", reason)
+            self.assertFalse(risk["auto_eligible"], reason)
+            blob = json.dumps(risk)
+            self.assertIn(reason, blob)
+
+    def test_metadata_cannot_override_file_risk(self):
+        snap = _snapshot(
+            files=[{
+                "filename": "requirements.txt",
+                "patch": (
+                    "-aiohttp==3.14.5\n+aiohttp==3.14.6\n"
+                    "+--extra-index-url https://untrusted.example/simple\n"
+                ),
+            }],
+            risk={"risk": "routine", "auto_eligible": True, "reason": "package-patch-or-minor"},
+        )
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "review-required")
+        self.assertNotEqual(decision.risk, "routine")
+
+
+class BoundJobAndPaginationTests(unittest.TestCase):
+    def test_missing_security_job_fails(self):
+        checks = [
+            {
+                "id": 1, "name": "application", "head_sha": SHA, "status": "completed",
+                "conclusion": "success", "app": {"slug": "github-actions"},
+                "html_url": "https://github.com/uesu/News-Express/actions/runs/2/job/1",
+            },
+            {
+                "id": 2, "name": "workflow-security", "head_sha": SHA, "status": "completed",
+                "conclusion": "success", "app": {"slug": "github-actions"},
+                "html_url": "https://github.com/uesu/News-Express/actions/runs/2/job/2",
+            },
+        ]
+        result = maintenance.classify_checks(
+            checks,
+            expected_names=["application", "workflow-security"],
+            head_sha=SHA,
+            expected_workflow="CI — syntax + offline smoke test",
+            expected_workflow_path=".github/workflows/ci.yml",
+            workflow_runs=[{
+                "id": 2, "name": "CI — syntax + offline smoke test",
+                "head_sha": SHA, "path": ".github/workflows/ci.yml",
+                "status": "completed", "conclusion": "success",
+            }],
+            workflow_jobs=[{
+                "id": 10, "name": "application", "run_id": 2, "head_sha": SHA,
+                "status": "completed", "conclusion": "success",
+            }],
+        )
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("security", result["reason"])
+
+    def test_legacy_status_cannot_satisfy_expected_workflow(self):
+        result = maintenance.classify_checks(
+            [],
+            expected_names=["application"],
+            head_sha=SHA,
+            expected_workflow="CI — syntax + offline smoke test",
+            expected_workflow_path=".github/workflows/ci.yml",
+            workflow_runs=[{
+                "id": 2, "name": "CI — syntax + offline smoke test",
+                "head_sha": SHA, "path": ".github/workflows/ci.yml",
+                "status": "completed", "conclusion": "success",
+            }],
+            workflow_jobs=[{
+                "id": 10, "name": "application", "run_id": 2, "head_sha": SHA,
+                "status": "completed", "conclusion": "success",
+            }],
+            legacy_statuses=[{
+                "context": "application", "state": "success", "sha": SHA,
+            }],
+        )
+        self.assertEqual(result["state"], "failed")
+
+    def test_short_page_with_total_count_fails_closed(self):
+        calls = {"n": 0}
+
+        def fake_json(url, token, method="GET", body=None):
+            calls["n"] += 1
+            return 200, {
+                "total_count": 250,
+                "jobs": [{"id": i, "name": f"job-{i}"} for i in range(50)],
+            }
+
+        original = maintenance._github_json
+        maintenance._github_json = fake_json
+        try:
+            status, payload = maintenance._api_pages(
+                "https://api.github.com/repos/uesu/News-Express/actions/runs/2/jobs?per_page=100",
+                "token",
+                max_pages=3,
+            )
+        finally:
+            maintenance._github_json = original
+        self.assertEqual(status, 0)
+        self.assertEqual(payload.get("message"), "pagination-truncated")
+
+    def test_jobs_pages_collect_until_total(self):
+        pages = [
+            (200, {"total_count": 2, "jobs": [{"id": 1, "name": "application"}]}),
+            (200, {"total_count": 2, "jobs": [{"id": 2, "name": "maintenance"}]}),
+        ]
+
+        def fake_json(url, token, method="GET", body=None):
+            return pages.pop(0)
+
+        original = maintenance._github_json
+        maintenance._github_json = fake_json
+        try:
+            status, payload = maintenance._api_pages(
+                "https://api.github.com/repos/uesu/News-Express/actions/runs/2/jobs?per_page=1",
+                "token",
+            )
+        finally:
+            maintenance._github_json = original
+        self.assertEqual(status, 200)
+        self.assertEqual([j["name"] for j in payload], ["application", "maintenance"])
+
+
+class LiveAdapterTests(unittest.TestCase):
+    def test_truncated_check_pages_fail_closed(self):
+        def fake_json(url, token, method="GET", body=None):
+            if "/pulls/12" in url and "files" not in url and "reviews" not in url and "commits" not in url:
+                return 200, _pr()
+            return 200, {}
+
+        def fake_pages(url, token, **_k):
+            if "check-runs" in url:
+                return 0, {"message": "pagination-truncated", "count": 100, "total": 250}
+            return 200, []
+
+        original_json = maintenance._github_json
+        original_pages = maintenance._api_pages
+        maintenance._github_json = fake_json
+        maintenance._api_pages = fake_pages
+        try:
+            result = maintenance.build_live_snapshot(
+                {
+                    "repository": {"full_name": "uesu/News-Express", "default_branch": "main"},
+                    "pull_request": {"number": 12, "head": {"sha": SHA}},
+                },
+                "token",
+                {"mandatory_check_names": ["application"],
+                 "ci_workflow_name": "CI — syntax + offline smoke test",
+                 "ci_workflow_path": ".github/workflows/ci.yml"},
+            )
+        finally:
+            maintenance._github_json = original_json
+            maintenance._api_pages = original_pages
+        self.assertIsInstance(result, maintenance.Decision)
+        self.assertEqual(result.action, "fail")
+        self.assertIn("checks-api", result.reason)
+
+    def test_extra_index_files_are_review_required_in_snapshot(self):
+        def fake_json(url, token, method="GET", body=None):
+            if "/pulls/12" in url and "files" not in url and "reviews" not in url and "commits" not in url:
+                return 200, _pr()
+            return 200, {}
+
+        def fake_pages(url, token, **_k):
+            if "check-runs" in url:
+                return 200, [{
+                    "id": 1, "name": "application", "head_sha": SHA, "status": "completed",
+                    "conclusion": "success", "app": {"slug": "github-actions"},
+                    "html_url": "https://github.com/uesu/News-Express/actions/runs/2/job/1",
+                }]
+            if "/files" in url:
+                return 200, [{
+                    "filename": "requirements.txt",
+                    "patch": (
+                        "-aiohttp==3.14.5\n+aiohttp==3.14.6\n"
+                        "+--extra-index-url https://untrusted.example/simple\n"
+                    ),
+                }]
+            if "/reviews" in url:
+                return 200, []
+            if "/statuses" in url:
+                return 200, []
+            if "/jobs" in url:
+                return 200, [{
+                    "id": 10, "name": "application", "run_id": 2, "head_sha": SHA,
+                    "status": "completed", "conclusion": "success",
+                }]
+            if "actions/runs" in url:
+                return 200, [{
+                    "id": 2, "name": "CI — syntax + offline smoke test",
+                    "head_sha": SHA, "path": ".github/workflows/ci.yml",
+                    "status": "completed", "conclusion": "success",
+                }]
+            if "/commits" in url:
+                return 200, [{"author": {"login": "dependabot[bot]"}}]
+            return 200, []
+
+        original_json = maintenance._github_json
+        original_pages = maintenance._api_pages
+        maintenance._github_json = fake_json
+        maintenance._api_pages = fake_pages
+        try:
+            snapshot = maintenance.build_live_snapshot(
+                {
+                    "repository": {"full_name": "uesu/News-Express", "default_branch": "main"},
+                    "pull_request": {"number": 12, "head": {"sha": SHA}},
+                },
+                "token",
+                {
+                    "mandatory_check_names": ["application"],
+                    "ci_workflow_name": "CI — syntax + offline smoke test",
+                    "ci_workflow_path": ".github/workflows/ci.yml",
+                    "updater_identities": {
+                        "dependabot": {"login": "dependabot[bot]", "auto_merge_var": "AUTO_MERGE_DEPENDABOT"},
+                    },
+                    "dependabot_allowed_files": ["requirements.txt"],
+                },
+            )
+        finally:
+            maintenance._github_json = original_json
+            maintenance._api_pages = original_pages
+        self.assertIsInstance(snapshot, dict)
+        self.assertEqual(snapshot["risk"]["risk"], "review-required")
+        self.assertFalse(snapshot["risk"]["auto_eligible"])
+        self.assertGreaterEqual(snapshot["risk"]["members"], 2)
+        self.assertTrue(snapshot.get("workflow_jobs"))
+        decision = maintenance.decide_merge(snapshot)
+        self.assertEqual(decision.action, "review-required")
 
 
 if __name__ == "__main__":

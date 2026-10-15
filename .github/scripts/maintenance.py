@@ -468,6 +468,7 @@ def classify_checks(
     workflow_runs: Sequence[Mapping[str, Any]] | None = None,
     expected_workflow_path: str | None = None,
     expected_workflow_id: int | None = None,
+    workflow_jobs: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Require the trusted expected successful set on the exact head.
 
@@ -475,8 +476,12 @@ def classify_checks(
     checks cannot satisfy a mandatory name. Zero checks is never ready.
     Missing SHA or app identity cannot satisfy a mandatory name. When
     ``expected_workflow`` is set, each required check must come from that
-    trusted workflow's run on this head (name/path/id), not merely share a
-    check name with some other successful job.
+    trusted workflow's run on this head (name/path/id) *and* a matching
+    successful job in that run. A familiar github-actions app/name or a
+    separate green run does not authenticate every gate. Legacy Combined
+    Status rows cannot satisfy a required check; they can only fail it
+    when SHA-bound and no expected workflow is in force. Missing or
+    truncated job evidence fails closed.
     """
     expected = [name for name in expected_names if name]
     if not expected:
@@ -522,6 +527,54 @@ def classify_checks(
             return {"state": "failed", "reason": "missing-expected-workflow-id"}
         if not bound_run_ids or 0 in bound_run_ids:
             return {"state": "failed", "reason": "missing-expected-workflow-id"}
+        if workflow_jobs is None:
+            return {"state": "failed", "reason": "missing-workflow-jobs"}
+        latest_jobs: dict[str, Mapping[str, Any]] = {}
+        for job in workflow_jobs:
+            if not isinstance(job, dict):
+                return {"state": "failed", "reason": "malformed-workflow-job"}
+            jname = str(job.get("name") or "")
+            jsha = str(job.get("head_sha") or job.get("sha") or "")
+            if jsha != head_sha:
+                continue
+            try:
+                jrun = int(job.get("run_id") or 0)
+            except (TypeError, ValueError):
+                jrun = 0
+            if jrun not in bound_run_ids:
+                continue
+            previous = latest_jobs.get(jname)
+            if previous is None:
+                latest_jobs[jname] = job
+                continue
+            prev_id = int(previous.get("id") or 0)
+            new_id = int(job.get("id") or 0)
+            if new_id >= prev_id:
+                latest_jobs[jname] = job
+        for name in expected:
+            job = latest_jobs.get(name)
+            if job is None:
+                reason = (
+                    "missing-security-evidence"
+                    if "security" in name.lower()
+                    else "missing-mandatory-job"
+                )
+                return {"state": "failed", "reason": reason, "missing": name}
+            jstatus = str(job.get("status") or "")
+            jconclusion = str(job.get("conclusion") or "")
+            if jstatus != "completed":
+                return {
+                    "state": "pending",
+                    "reason": "mandatory-job-pending",
+                    "missing": name,
+                }
+            if jconclusion != "success":
+                reason = (
+                    "security-job-not-success"
+                    if "security" in name.lower()
+                    else "mandatory-job-not-success"
+                )
+                return {"state": "failed", "reason": reason, "missing": name}
 
     latest: dict[str, Mapping[str, Any]] = {}
     for run in check_runs or []:
@@ -565,7 +618,7 @@ def classify_checks(
         else:
             outcomes[name] = conclusion or "unknown"
 
-    if legacy_statuses:
+    if legacy_statuses and not expected_workflow:
         for status in legacy_statuses:
             if not isinstance(status, dict):
                 return {"state": "failed", "reason": "malformed-legacy-status"}
@@ -646,17 +699,30 @@ def validate_diff(
     return {"ok": True, "reason": "approved-paths"}
 
 
+_DECISION_REVIEW_STATES = {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}
+
+
 def effective_reviews(reviews: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
-    """Newest review per user is the effective state; older votes do not linger."""
+    """Newest *decision* per user. COMMENTED/PENDING never clear a change request."""
     latest: dict[str, Mapping[str, Any]] = {}
     for index, review in enumerate(reviews or []):
         if not isinstance(review, dict):
             continue
+        state = str(review.get("state") or "")
+        if state not in _DECISION_REVIEW_STATES:
+            continue
         user = review.get("user") if isinstance(review.get("user"), dict) else {}
         login = str(user.get("login") or "") or f"anon-{review.get('id') or index}"
         rid = int(review.get("id") or 0)
+        submitted = str(review.get("submitted_at") or "")
         previous = latest.get(login)
-        if previous is None or int(previous.get("id") or 0) <= rid:
+        if previous is None:
+            latest[login] = review
+            continue
+        prev_id = int(previous.get("id") or 0)
+        if rid > prev_id:
+            latest[login] = review
+        elif rid == prev_id and submitted >= str(previous.get("submitted_at") or ""):
             latest[login] = review
     return list(latest.values())
 
@@ -802,12 +868,26 @@ def decide_merge(snapshot: Mapping[str, Any]) -> Decision:
         expected_workflow=expected_workflow,
         workflow_runs=snapshot.get("workflow_runs") if expected_workflow else None,
         expected_workflow_path=expected_workflow_path,
+        workflow_jobs=snapshot.get("workflow_jobs") if expected_workflow else None,
     )
     if classified.get("state") != "ready":
         action = "defer" if classified.get("state") == "pending" else "fail"
         return Decision(action, str(classified.get("reason") or "checks"), risk="blocked", checks=classified.get("checks") or {})
 
-    risk_info = snapshot.get("risk") or {"risk": "review-required", "auto_eligible": False}
+    files = snapshot.get("files") if isinstance(snapshot.get("files"), list) else []
+    computed = snapshot_risk_from_files(files, diff_kind)
+    meta = snapshot.get("risk") if isinstance(snapshot.get("risk"), dict) else {}
+    risk_info = highest_risk(
+        [
+            computed,
+            {
+                "risk": str(meta.get("risk") or "review-required"),
+                "auto_eligible": bool(meta.get("auto_eligible")),
+                "reason": str(meta.get("reason") or "metadata"),
+                "members": int(meta.get("members") or 0),
+            },
+        ]
+    )
     risk = str(risk_info.get("risk") or "review-required")
     auto_eligible = bool(risk_info.get("auto_eligible"))
     if risk != "routine" or not auto_eligible:
@@ -953,6 +1033,7 @@ def cmd_classify_checks(args: argparse.Namespace) -> int:
         workflow_runs=fixture.get("workflow_runs"),
         expected_workflow_path=fixture.get("expected_workflow_path"),
         expected_workflow_id=fixture.get("expected_workflow_id"),
+        workflow_jobs=fixture.get("workflow_jobs"),
     )
     json.dump(result, sys.stdout, indent=2)
     sys.stdout.write("\n")
@@ -983,11 +1064,21 @@ def _api_pages(url: str, token: str, *, max_pages: int = 10) -> tuple[int, Any]:
         elif isinstance(payload, dict) and isinstance(payload.get("workflow_runs"), list):
             batch = payload["workflow_runs"]
             total = int(payload.get("total_count") or 0)
+        elif isinstance(payload, dict) and isinstance(payload.get("jobs"), list):
+            batch = payload["jobs"]
+            total = int(payload.get("total_count") or 0)
+        elif isinstance(payload, dict) and isinstance(payload.get("statuses"), list):
+            batch = payload["statuses"]
+            total = int(payload.get("total_count") or 0)
         else:
             return 0, {"message": "unexpected-list-payload"}
         items.extend(batch)
-        if total is not None and len(items) >= total:
-            return 200, items
+        if total is not None:
+            if len(items) >= total:
+                return 200, items
+            if not batch:
+                return 0, {"message": "pagination-truncated", "count": len(items), "total": total}
+            continue
         if len(batch) < 100:
             return 200, items
     return 0, {"message": "pagination-truncated", "count": len(items), "total": total}
@@ -1040,15 +1131,12 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
     )
     if status != 200 or not isinstance(reviews, list):
         return Decision("fail", f"reviews-api:{status}")
-    status, statuses = _github_json(
-        f"https://api.github.com/repos/{owner}/{name}/commits/{head_sha}/status",
+    status, legacy = _api_pages(
+        f"https://api.github.com/repos/{owner}/{name}/commits/{head_sha}/statuses?per_page=100",
         token,
     )
-    if status != 200 or not isinstance(statuses, dict):
+    if status != 200 or not isinstance(legacy, list):
         return Decision("fail", f"statuses-api:{status}")
-    legacy = statuses.get("statuses") or []
-    if not isinstance(legacy, list):
-        return Decision("fail", "statuses-api:malformed")
     status, workflow_runs = _api_pages(
         f"https://api.github.com/repos/{owner}/{name}/actions/runs?head_sha={head_sha}&per_page=100",
         token,
@@ -1061,6 +1149,37 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
     )
     if status != 200 or not isinstance(commits, list):
         return Decision("fail", f"commits-api:{status}")
+    workflow_jobs: list[Any] = []
+    expected_name = str(profile.get("ci_workflow_name") or "")
+    expected_path = str(profile.get("ci_workflow_path") or "")
+    if expected_name:
+        matching: list[Mapping[str, Any]] = []
+        for run in workflow_runs:
+            if not isinstance(run, dict):
+                return Decision("fail", "malformed-workflow-run")
+            if str(run.get("name") or "") != expected_name:
+                continue
+            if str(run.get("head_sha") or run.get("sha") or "") != head_sha:
+                continue
+            if expected_path and str(run.get("path") or "") != expected_path:
+                continue
+            matching.append(run)
+        if matching:
+            latest_wf = max(matching, key=lambda r: int(r.get("id") or 0))
+            try:
+                rid = int(latest_wf.get("id") or 0)
+            except (TypeError, ValueError):
+                rid = 0
+            if not rid:
+                return Decision("fail", "missing-expected-workflow-id")
+            status, workflow_jobs = _api_pages(
+                f"https://api.github.com/repos/{owner}/{name}/actions/runs/{rid}/jobs?per_page=100",
+                token,
+            )
+            if status != 200 or not isinstance(workflow_jobs, list):
+                return Decision("fail", f"workflow-jobs-api:{status}")
+        else:
+            workflow_jobs = []
     identities = profile.get("updater_identities") or {}
     kind = trusted_updater(pr, identities, commits=commits)
     risk = snapshot_risk_from_files(files, kind_hint=kind)
@@ -1077,6 +1196,7 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
         "reviews": reviews,
         "legacy_statuses": legacy,
         "workflow_runs": workflow_runs,
+        "workflow_jobs": workflow_jobs,
         "commits": commits,
         "risk": risk,
         "allowed_files": allowed,
@@ -1102,14 +1222,73 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
     }
 
 
-_REQ_EQ = re.compile(r"^([A-Za-z0-9_.-]+)==([^\\\s#]+)")
+_REQ_EQ = re.compile(r"^([A-Za-z0-9_.-]+)==([^\\\s#;]+)")
 _REQ_FILES = {
     "requirements.txt", "requirements.in", "requirements-dev.txt", "requirements-dev.in",
 }
+_REQ_POLICY_PREFIX = re.compile(
+    r"^(?:"
+    r"--(?:extra-index-url|index-url|find-links|trusted-host|no-index|"
+    r"pre|no-binary|only-binary|constraint|editable|hash)\b"
+    r"|-(?:i|f|c|e)\b"
+    r")"
+)
+_REQ_VCS_OR_URL = re.compile(
+    r"^(?:git\+|hg\+|svn\+|bzr\+|ssh://|git://|https?://|file:)",
+    re.IGNORECASE,
+)
 
 
 def _norm_pkg(name: str) -> str:
     return name.replace("_", "-").lower()
+
+
+def _requirement_policy_reason(body: str) -> str | None:
+    """Classify a significant requirements line that is not a plain pin."""
+    stripped = body.strip()
+    if not stripped or stripped.startswith("#"):
+        return None
+    if stripped.startswith("--hash="):
+        return None
+    first = stripped.split()[0]
+    if _REQ_POLICY_PREFIX.match(stripped):
+        if first.startswith("--hash"):
+            return "hash-directive"
+        if first in {"-c", "--constraint"} or first.startswith("-c"):
+            return "constraint-file"
+        return "unexpected-index-or-source"
+    if _REQ_VCS_OR_URL.match(stripped) or " @" in f" {stripped}" or stripped.startswith("@"):
+        return "direct-or-vcs-url"
+    if "[" in stripped and "]" in stripped:
+        return "extras-change"
+    if ";" in stripped:
+        return "environment-marker"
+    if _REQ_EQ.match(stripped) or re.match(r"^([A-Za-z0-9_.-]+)[<>=!~]", stripped):
+        return None
+    return "unparsed-requirement-line"
+
+
+def requirement_policy_members(patch: str) -> list[dict[str, Any]]:
+    """One review-required member per significant non-pin requirements line."""
+    members: list[dict[str, Any]] = []
+    for raw in patch.splitlines():
+        if raw.startswith("---") or raw.startswith("+++"):
+            continue
+        if not (raw.startswith("-") or raw.startswith("+")):
+            continue
+        body = raw[1:].strip()
+        reason = _requirement_policy_reason(body)
+        if reason is None:
+            continue
+        members.append(
+            {
+                "risk": "review-required",
+                "auto_eligible": False,
+                "reason": reason,
+                "line": body[:160],
+            }
+        )
+    return members
 
 
 def parse_requirement_version_maps(patch: str) -> tuple[dict[str, str], dict[str, str], bool, bool]:
@@ -1202,9 +1381,13 @@ def snapshot_risk_from_files(files: Sequence[Mapping[str, Any]], kind_hint: str 
                     "reason": "truncated-or-missing-patch", "name": name,
                 })
                 continue
+            policy_members = requirement_policy_members(patch)
+            members.extend(policy_members)
             old_map, new_map, saw_hash, saw_pkg = parse_requirement_version_maps(patch)
             names = set(old_map) | set(new_map)
             if not names:
+                if policy_members:
+                    continue
                 reason = "hash-only" if saw_hash else (
                     "unparsed-requirement-diff" if saw_pkg else "truncated-or-missing-patch"
                 )

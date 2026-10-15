@@ -40,15 +40,22 @@ skipped/neutral/cancelled checks, pending checks, a changed head SHA, hold
 labels, `CHANGES_REQUESTED`, untrusted updaters, and anything other than the
 exact repository variable value `yes` all refuse the merge.
 
-Live evidence is fail-closed: review, status, check-run, workflow-run, and
-commit API failures refuse the merge (they do not become empty lists). Check
-runs are paginated; truncation is a failure. Each required check must come
-from the trusted CI workflow id/path/run on the exact head; a same-name job
-from another workflow is not enough, and a missing SHA or app cannot pass.
-Newest review per user is the effective state. Dependabot allowed paths come
-from the trusted profile, never from the PR's own file list. Grouped lock
-updates classify **every** package; the highest-risk member wins, and
-hash-only or truncated patches are review-required. A Python bump PR must use
+Live evidence is fail-closed: review, status, check-run, workflow-run, job,
+and commit API failures refuse the merge (they do not become empty lists).
+Check runs, statuses, and jobs are paginated; truncation is a failure. Each
+required check must come from the trusted CI workflow id/path/run **and** a
+matching successful job in that run on the exact head; a same-name job from
+another workflow is not enough, a familiar github-actions app/name is not
+enough, and a missing SHA or app cannot pass. Legacy Combined Status rows
+cannot satisfy a required check. Newest *decision* review per user is the
+effective state — `COMMENTED` and `PENDING` never clear `CHANGES_REQUESTED`.
+Dependabot allowed paths come from the trusted profile, never from the PR's
+own file list. Grouped lock updates classify **every** significant
+requirements line (pins, extras, markers, index/constraint/VCS/direct-URL
+directives, hash-only and unparsed lines); the highest-risk member wins, and
+hash-only or truncated patches are review-required. File content is
+reconciled against snapshot metadata so a routine label cannot hide an
+index-url mutation. A Python bump PR must use
 the `chore/python-` prefix; `github-actions[bot]` as commit author alone is
 not enough (a PAT may open the PR). The live adapter refreshes the snapshot
 immediately before merge.
@@ -69,7 +76,8 @@ CPython python.org release date — a rebuilt archive must not silently
 redefine soak age. Forced overrides validate numeric direction, a stable
 linux-x64 archive, and review policy; a lower patch is not auto-eligible.
 Lock regeneration must be byte-stable after compiler-header normalization
-only. Pre- and post-rewrite validation runs the full CI registry, including
+only (`--reuse-hashes --newline=lf --no-emit-index-url`); changing an
+index/constraint/marker/via-comment without a pin change still fails. Pre- and post-rewrite validation runs the full CI registry, including
 `lock-consistency` and `workflow-security`. Pinned `actionlint` is required;
 download failure or `SKIP_ACTIONLINT=1` is not a green gate.
 

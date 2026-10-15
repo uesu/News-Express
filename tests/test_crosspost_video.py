@@ -95,6 +95,34 @@ class OriginalDiscoveryTests(unittest.TestCase):
         )
         self.assertEqual(source, {})
 
+    def test_id_only_structured_parent(self):
+        source = v3.resolve_crosspost_source(
+            own_path="/r/Beta/comments/child011/",
+            base={},
+            post_json={"crosspost_parent": "t3_parent11"},
+        )
+        self.assertEqual(source.get("id"), "parent11")
+        self.assertNotEqual(source.get("id"), "child011")
+
+    def test_mismatched_parent_id_and_permalink_rejected(self):
+        source = v3.resolve_crosspost_source(
+            own_path="/r/Beta/comments/child012/",
+            base={},
+            post_json={
+                "crosspost_parent_list": [{
+                    "id": "child012",
+                    "permalink": "/r/Alpha/comments/parent12/orig/",
+                }],
+            },
+        )
+        self.assertEqual(source, {})
+
+    def test_scheme_relative_foreign_host_rejected(self):
+        self.assertIsNone(v3.find_crosspost_original_path(
+            "crosspost from //evil.example/r/Alpha/comments/parent13/",
+            "/r/Beta/comments/child013/",
+        ))
+
     def test_structured_parent_one_hop(self):
         source = v3.resolve_crosspost_source(
             own_path="/r/Beta/comments/child008/",
@@ -132,6 +160,18 @@ class VideoEligibilityTests(unittest.TestCase):
             "og:image": ["https://i.redd.it/still.jpg"],
         })
         self.assertTrue(all(item["kind"] != "video" for item in media))
+
+    def test_proxy_og_keeps_first_motion_and_skips_later_cover(self):
+        page = (
+            '<meta property="og:video" content="https://v.redd.it/motion456/DASH_720.mp4"/>'
+            '<meta property="og:video" content="https://proxy.embedez.com/render/audio?cover=x"/>'
+        )
+        meta = proxy._og_meta(page)
+        media = proxy._media_from_og(meta)
+        videos = [item for item in media if item.get("kind") == "video"]
+        self.assertEqual(len(videos), 1)
+        self.assertIn("motion456", videos[0]["url"])
+        self.assertFalse(any(proxy.is_audio_cover_url(item.get("url")) for item in media))
 
     def test_proxy_og_prefers_later_motion_video(self):
         page = (

@@ -19,16 +19,22 @@ rewritten when that happens, only relocated.
 * **2026-10-16 — Maintenance correction (PR #66): lock bytes, forced pins,
   structured crosspost parents, selection telemetry, bound checks.** Hashed
   lock regeneration is byte-stable after compiler-header normalization only
-  (index/constraint/marker/via-comment changes without a pin change still
-  fail). Forced CPython overrides validate numeric direction, a stable
-  linux-x64 archive, and review policy — a lower patch is not an auto-eligible
-  proposal. Crosspost originals require structured parent metadata or an
-  explicit original-post / crosspost-from relationship, not a keyword window.
-  Run reports record HTTP transport separately from useful feed/media
-  `host_select`, and an atexit write after an unhandled failure is `failed`.
-  Merge checks bind each required name to the trusted workflow id/path/run/head;
-  missing SHA or app cannot pass. Grouped Dependabot lock diffs still classify
-  every package. `actionlint` must actually run (`SKIP_ACTIONLINT` is not green).
+  (`--reuse-hashes --newline=lf --no-emit-index-url`; index/constraint/marker
+  /via-comment changes without a pin change still fail). Forced CPython
+  overrides validate numeric direction, a stable linux-x64 archive, and review
+  policy — a lower patch is not an auto-eligible proposal. Crosspost originals
+  require structured parent metadata or an explicit original-post /
+  crosspost-from relationship, not a keyword window; scheme-relative foreign
+  hosts and mismatched parent id/permalink pairs are rejected. Run reports
+  record HTTP transport separately from useful feed/media `host_select`, and
+  an atexit write after an unhandled failure is `failed`. Merge checks bind
+  each required name to the trusted workflow id/path/run/head **and** a
+  matching job in that run; missing SHA, app, jobs, or security evidence
+  cannot pass. Grouped Dependabot lock diffs classify every significant
+  requirements line (index/constraint/marker/extras/VCS/unparsed), and file
+  content is reconciled against snapshot metadata. `COMMENTED`/`PENDING`
+  reviews do not clear `CHANGES_REQUESTED`. `actionlint` must actually run
+  (`SKIP_ACTIONLINT` is not green).
 
 * **2026-10-15 — Maintenance: unify safe updates and summaries; fix crosspost
   video fallback.** Exact CPython pin `3.14.8` via `.python-version` plus hashed

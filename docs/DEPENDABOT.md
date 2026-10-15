@@ -154,7 +154,7 @@ API failures, truncated pagination, missing mandatory jobs, skipped/neutral/
 cancelled conclusions, pending checks, unknown mergeability, a changed head
 SHA, an unexpected target, or a hold label all fail closed. Allowed paths come
 from the trusted profile (not the PR file list). Grouped lock updates classify
-every package. After checks are ready it refreshes the snapshot immediately
+every significant requirements line. After checks are ready it refreshes the snapshot immediately
 before calling the merge API; the merge request includes that exact SHA, so
 GitHub rejects a late head change.
 

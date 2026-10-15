@@ -116,6 +116,24 @@ def _lock_diff(before: str, after: str, name: str) -> None:
         print(f"... diff truncated ({len(lines)} lines)", file=sys.stderr)
 
 
+def _print_lock_toolchain() -> None:
+    print("lock-consistency python", sys.version.replace("\n", " "), flush=True)
+    try:
+        import pip
+        print("lock-consistency pip", getattr(pip, "__version__", "?"), flush=True)
+    except Exception as exc:
+        print("lock-consistency pip unavailable:", exc, flush=True)
+    try:
+        import piptools
+        print(
+            "lock-consistency piptools",
+            getattr(piptools, "__version__", "present"),
+            flush=True,
+        )
+    except Exception as exc:
+        print("lock-consistency piptools unavailable:", exc, flush=True)
+
+
 def group_lock_consistency(root: Path, profile: dict) -> int:
     runtime = root / "requirements.txt"
     dev = root / "requirements-dev.txt"
@@ -125,15 +143,16 @@ def group_lock_consistency(root: Path, profile: dict) -> int:
     if " --hash=" not in runtime.read_text(encoding="utf-8"):
         print("requirements.txt is not a hashed lock", file=sys.stderr)
         return 1
+    _print_lock_toolchain()
     before_runtime = _normalize_lock(runtime)
     before_dev = _normalize_lock(dev) if dev.is_file() else ""
     env = os.environ.copy()
-    env["CUSTOM_COMPILE_COMMAND"] = str(profile.get("custom_compile_command") or "")
     env["PYTHONHASHSEED"] = "0"
     compile_cmd = list(profile.get("compile_command") or [])
     if not compile_cmd:
         print("compile_command missing from profile", file=sys.stderr)
         return 1
+    env["CUSTOM_COMPILE_COMMAND"] = " ".join(compile_cmd)
     code = run_cmd(compile_cmd, cwd=root, env=env)
     if code:
         return code
@@ -147,11 +166,7 @@ def group_lock_consistency(root: Path, profile: dict) -> int:
         return 1
     dev_cmd = list(profile.get("dev_compile_command") or [])
     if dev_cmd and (root / "requirements-dev.in").is_file():
-        env["CUSTOM_COMPILE_COMMAND"] = (
-            "python -m piptools compile --generate-hashes --allow-unsafe "
-            "--resolver=backtracking --strip-extras --output-file=requirements-dev.txt "
-            "requirements-dev.in"
-        )
+        env["CUSTOM_COMPILE_COMMAND"] = " ".join(dev_cmd)
         code = run_cmd(dev_cmd, cwd=root, env=env)
         if code:
             return code
