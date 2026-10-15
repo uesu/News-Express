@@ -1,0 +1,215 @@
+{
+  "generated_utc": "2026-10-15T10:42:30.264224+00:00",
+  "github_actions": true,
+  "runner_os": "Linux",
+  "runner_arch": "X64",
+  "runner_environment": "github-hosted",
+  "run_id": "38722163102",
+  "note": "Read region/cloud from Set up job logs; the runner label does not prove Azure region.",
+  "run_url": "https://github.com/uesu/News-Express/actions/runs/38722163102",
+  "head_sha": "c32b8ac726018a7b231add5dbb5a9828f147f105",
+  "evidence_source": "https://api.github.com/repos/uesu/News-Express/check-runs/116379108444/annotations",
+  "job": {
+    "id": 116379108444,
+    "status": "completed",
+    "conclusion": "success",
+    "started_at": "2026-10-15T10:42:27Z",
+    "completed_at": "2026-10-15T10:42:48Z",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_name": "GitHub Actions 1000020311",
+    "runner_group_name": "GitHub Actions"
+  },
+  "cloud_region": "not obtained; do not infer Azure region from ubuntu-latest",
+  "results": [
+    {
+      "endpoint": "redlib_home",
+      "requested_url": "https://redlib.freedit.eu/",
+      "started_utc": "2026-10-15T10:42:30.321984+00:00",
+      "pristine_request": false,
+      "kind": "home",
+      "http_status": 403,
+      "final_url": "https://redlib.freedit.eu/",
+      "content_type": "text/html; charset=UTF-8",
+      "content_encoding": "identity",
+      "bytes_read": 5588,
+      "markers": [
+        "javascript_required"
+      ],
+      "body_class": "homepage_only_not_feed_evidence",
+      "candidate_response": false,
+      "elapsed_seconds": 0.131
+    },
+    {
+      "endpoint": "redlib_requested_rss",
+      "requested_url": "https://redlib.freedit.eu/r/Genshin_Impact_Leaks/new.rss?limit=100",
+      "started_utc": "2026-10-15T10:42:32.523515+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "http_status": 200,
+      "final_url": "https://redlib.freedit.eu/r/Genshin_Impact_Leaks/new.rss?limit=100",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "cf-cache-status": "DYNAMIC",
+      "bytes_read": 5381,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 0.171
+    },
+    {
+      "endpoint": "redlib_engine_rss",
+      "requested_url": "https://redlib.freedit.eu/r/Genshin_Impact_Leaks/new/.rss",
+      "started_utc": "2026-10-15T10:42:34.761800+00:00",
+      "pristine_request": false,
+      "kind": "reddit_feed",
+      "http_status": 200,
+      "final_url": "https://redlib.freedit.eu/r/Genshin_Impact_Leaks/new/.rss",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "cf-cache-status": "DYNAMIC",
+      "bytes_read": 5381,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 0.155
+    },
+    {
+      "endpoint": "redlib_requested_html",
+      "requested_url": "https://redlib.freedit.eu/r/Genshin_Impact_Leaks/new?limit=100",
+      "started_utc": "2026-10-15T10:42:36.984385+00:00",
+      "pristine_request": false,
+      "kind": "listing",
+      "http_status": 403,
+      "final_url": "https://redlib.freedit.eu/r/Genshin_Impact_Leaks/new?limit=100",
+      "content_type": "text/html; charset=UTF-8",
+      "content_encoding": "identity",
+      "bytes_read": 5775,
+      "markers": [
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 0.054
+    },
+    {
+      "endpoint": "redlib_pristine_html",
+      "requested_url": "https://redlib.freedit.eu/r/Genshin_Impact_Leaks/new?limit=100&_fresh=1792060959108",
+      "started_utc": "2026-10-15T10:42:39.108033+00:00",
+      "pristine_request": true,
+      "kind": "listing",
+      "http_status": 403,
+      "final_url": "https://redlib.freedit.eu/r/Genshin_Impact_Leaks/new?limit=100&_fresh=1792060959108",
+      "content_type": "text/html; charset=UTF-8",
+      "content_encoding": "identity",
+      "bytes_read": 5875,
+      "markers": [
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 0.036
+    },
+    {
+      "endpoint": "nitter_requested_rss",
+      "requested_url": "https://nitter.freedit.eu/TYPEII_EN/rss",
+      "started_utc": "2026-10-15T10:42:41.211217+00:00",
+      "pristine_request": false,
+      "kind": "twitter_feed",
+      "http_status": 403,
+      "final_url": "https://nitter.freedit.eu/TYPEII_EN/rss",
+      "content_type": "text/html; charset=UTF-8",
+      "content_encoding": "identity",
+      "bytes_read": 5308,
+      "markers": [
+        "javascript_required"
+      ],
+      "body_class": "non_feed_or_dtd",
+      "matching_entries": 0,
+      "candidate_response": false,
+      "elapsed_seconds": 0.119
+    },
+    {
+      "endpoint": "nitter_control_rss",
+      "requested_url": "https://nitter.cf/TYPEII_EN/rss",
+      "started_utc": "2026-10-15T10:42:43.399033+00:00",
+      "pristine_request": false,
+      "kind": "twitter_feed",
+      "http_status": 200,
+      "final_url": "https://nitter.cf/TYPEII_EN/rss",
+      "content_type": "application/rss+xml; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "public, max-age=0, s-maxage=60, stale-while-revalidate=120, must-revalidate",
+      "cf-cache-status": "EXPIRED",
+      "bytes_read": 14991,
+      "markers": [],
+      "body_class": "feed_with_matching_entries",
+      "entries": 20,
+      "matching_entries": 10,
+      "newest_matching": [
+        {
+          "id": "2110581431927967903",
+          "date_utc": "2026-10-15T04:00:00+00:00"
+        },
+        {
+          "id": "2109654625897054655",
+          "date_utc": "2026-10-12T14:37:12+00:00"
+        },
+        {
+          "id": "2109131880599834691",
+          "date_utc": "2026-10-11T04:00:00+00:00"
+        },
+        {
+          "id": "2108890295383277774",
+          "date_utc": "2026-10-10T12:00:02+00:00"
+        },
+        {
+          "id": "2105870393584074977",
+          "date_utc": "2026-10-02T04:00:01+00:00"
+        }
+      ],
+      "candidate_response": true,
+      "elapsed_seconds": 0.886
+    },
+    {
+      "endpoint": "redlib_control_html",
+      "requested_url": "https://redlib.catsarch.com/r/Genshin_Impact_Leaks/new?limit=100&_fresh=1792060966351",
+      "started_utc": "2026-10-15T10:42:46.351898+00:00",
+      "pristine_request": true,
+      "kind": "listing",
+      "http_status": 429,
+      "final_url": "https://redlib.catsarch.com/r/Genshin_Impact_Leaks/new?limit=100&_fresh=1792060966351",
+      "content_type": "text/html; charset=utf-8",
+      "content_encoding": "identity",
+      "cache-control": "no-store",
+      "bytes_read": 7146,
+      "markers": [
+        "anubis",
+        "javascript_required"
+      ],
+      "body_class": "html_without_post_links",
+      "post_ids_count": 0,
+      "post_ids_sample": [],
+      "oldest_visible_age_seconds": null,
+      "candidate_response": false,
+      "elapsed_seconds": 0.145
+    }
+  ]
+}

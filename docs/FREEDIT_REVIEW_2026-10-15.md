@@ -1,23 +1,68 @@
 # Freedit review — 2026-10-15
 
-## Live-test follow-up requested
+## Live-test result — completed
 
-After the initial offline review, the user requested live tests. The diagnostic
-now has a push trigger restricted to `arena/c45edf9b-news-express` and its three
-code/workflow/test paths, so it can run without merging into main or opening a
-PR. Only the diagnostic additions will be committed/pushed. Check annotations
-expose escaped public-result JSON through the GitHub API because signed log
-downloads are inaccessible here. Results are pending at this revision; the
-initial review's no-run/no-push statements below describe the earlier stage.
-No production monitor or default branch is being changed.
+**Freedit did not supply usable RSS or listing HTML in the live GitHub-hosted
+runner test. Do not add Redlib Freedit or promote Nitter Freedit on this evidence.**
+
+- Run: [38722163102](https://github.com/uesu/News-Express/actions/runs/38722163102).
+- Tested commit: `c32b8ac726018a7b231add5dbb5a9828f147f105` on
+  `arena/c45edf9b-news-express`; event: diagnostic-only branch push.
+- Requests: **2026-10-15 10:42:30–10:42:46 UTC** (18:42 in Manila).
+- Runner: GitHub-hosted Linux/X64, `ubuntu-latest`,
+  `GitHub Actions 1000020311`; job `116379108444`, completed in 21 seconds.
+- Exact cloud/region was **not obtained**. Do not label this a verified specific
+  Azure-region result based only on the hosted-runner label.
+- Evidence was retrieved from the check-run annotations API, not inaccessible
+  signed full-log downloads. The diagnostic published escaped public JSON via
+  notice annotations; it required no check-write permission or repository secret.
+
+| Request | HTTP | Observed body/result | Usable candidate? |
+|---|---:|---|---|
+| Redlib Freedit homepage | 403 | HTML, JavaScript-required marker | No; homepage alone would not be feed evidence anyway |
+| Redlib Freedit `/new.rss?limit=100` | 200 | HTML with Anubis + JavaScript-required markers; zero matching entries | **No RSS** |
+| Redlib Freedit `/new/.rss` (engine path) | 200 | HTML with Anubis + JavaScript-required markers; zero matching entries | **No RSS** |
+| Redlib Freedit `/new?limit=100` | 403 | HTML, JavaScript-required marker; zero post IDs | No |
+| Redlib Freedit pristine `/new?limit=100&_fresh=...` | 403 | HTML, JavaScript-required marker; zero post IDs | No |
+| Nitter Freedit `/TYPEII_EN/rss` | 403 | HTML, JavaScript-required marker; zero matching entries | No |
+| nitter.cf `/TYPEII_EN/rss` control | 200 | RSS: 20 entries, 10 with matching account status paths | **Yes** |
+| catsarch pristine Redlib listing control | 429 | HTML with Anubis + JavaScript-required markers; zero post IDs | No |
+
+The nitter.cf control's newest matching ID was `2110581431927967903`, published
+`2026-10-15T04:00:00+00:00`. The successful control establishes that this runner
+could obtain a real feed from another mirror during the same test. The catsarch
+control was itself challenged/rate-limited; it does not establish a working
+Reddit listing baseline. The Redlib RSS responses illustrate why HTTP 200 alone
+must not count as success.
+
+This is a direct **GitHub-hosted-runner failure/challenge observation**, not
+proof of a permanent or universal Azure/datacenter-block policy, nor proof of
+failure from residential browsers. No JavaScript challenge bypass, credentials,
+cookies, production monitors or Discord calls were used. A green diagnostic job
+means all measurements completed, not that the mirrors worked. All 27 offline
+diagnostic tests also passed on the runner.
+
+Machine-readable observations, including exact requested URLs, times, headers,
+body classifications and sampled control IDs:
+[`diagnostics/freedit-2026-10-15-run-38722163102.json`](diagnostics/freedit-2026-10-15-run-38722163102.json).
+
+Only the isolated diagnostic additions were committed/pushed to the session
+branch. No PR was opened; main, production repositories, runtime fleets and
+Kite files were not changed. The push trigger is limited to this session branch
+and the three diagnostic code/workflow/test paths; documentation/result-only
+pushes do not run it. No scheduler or automatic production promotion was added.
+
+The earlier initial-review section below is retained as the pre-test record.
+Its "unverified" and "no push/run" statements have been superseded by this live
+follow-up, not by a production deployment.
 
 ## Initial review decision
 
-**Do not change the production fleets on the evidence currently available.**
+**Pre-test recommendation: do not change the production fleets on the evidence then available.**
 
 - **Nitter Freedit is already configured**, at position **5**, in current News-Express, both production copies, and Game-Express. No duplicate addition or new secret is needed. Keep it a trial fallback; do not move it ahead of the operator-selected first four without runner evidence.
 - **Redlib Freedit is not configured.** Its RSS and HTML capabilities must be evaluated separately. The user's `/new.rss?limit=100` URL is different from the engine's `/new/.rss` URL.
-- **GitHub Actions/Azure reachability remains unverified for Freedit.** Healthy monitor runs, a working homepage, and off-runner tests do not establish it. This workspace permits outbound access only to GitHub/package-registry hosts, not Freedit or the control mirrors. No live Freedit request or diagnostic workflow dispatch was performed here. There is no observed Freedit HTTP status to report.
+- **GitHub Actions/Azure reachability remains unverified for Freedit.** Healthy monitor runs, a working homepage, and off-runner tests do not establish it. This workspace permits outbound access only to GitHub/package-registry hosts, not Freedit or the control mirrors. At the initial-review stage no live Freedit request or diagnostic workflow dispatch had been performed. The subsequent branch-triggered live results are recorded above.
 - The additions accompanying this review are an isolated, manual diagnostic and its offline tests. No monitor engine, production workflow, fleet, secret, Variable, posting behavior or runtime cache was changed. No commit, push, PR or deployment was performed. Existing Kite deliverables were not modified.
 
 ## Audit scope and evidence quality
@@ -123,7 +168,7 @@ The workflow supports `workflow_dispatch` and a diagnostic-path-only push on the
 
 ### How to obtain the missing runner evidence
 
-The initial review did not dispatch anything. The requested follow-up uses the branch-only push trigger; the manual instructions below remain an alternative for future use.
+The initial review did not dispatch anything. The completed follow-up used the branch-only push trigger; the manual instructions below remain an alternative for future use.
 
 1. If desired, accept these four additions into the **current development tree**, preserving the newer remote runtime code. No PR is required by this deliverable. A newly added manual workflow normally needs to exist on the default branch before the Actions UI exposes its Run workflow button.
 2. Run **Freedit endpoint probe (no posting)** from News-Express's Actions page. Do **not** run a live monitor as a substitute; Game's test mode can also send real cards.
@@ -151,7 +196,7 @@ A workstation result remains off-runner evidence.
 
 ## Validation performed locally
 
-All tests below ran offline on the session checkout (not on a hosted runner):
+All tests below ran offline on the session checkout. The diagnostic suite also passed on the hosted runner in the live follow-up:
 
 - `python3 tests/test_freedit_probe.py` — **27 tests pass**, covering URL spelling, RSS/Atom parsing, account/subreddit matching, error HTML, listing extraction, MIME gating, candidate acceptance/rejection, DTD rejection, credential exclusion, redirects, oversized responses, transport failures, worker/deadline errors workflow-command escaping and branch-scoped workflow safety checks.
 - `python3 tests/test_smoke.py` — **SMOKE TEST: ALL PASS**.
