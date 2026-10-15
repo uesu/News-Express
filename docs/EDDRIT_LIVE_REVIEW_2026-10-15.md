@@ -1,5 +1,7 @@
 # Eddrit and Freedit subreddit-root live review — 2026-10-15
 
+**Later fleet-wide follow-up:** see [OTHER_INSTANCES_LIVE_REVIEW_2026-10-15.md](OTHER_INSTANCES_LIVE_REVIEW_2026-10-15.md) for the remaining public Nitter/Redlib hosts. The shared diagnostic workflow now runs that matrix; the results below remain the historical record of this earlier run.
+
 ## Scope
 
 Requested follow-up to the first Freedit probe: test the exact Eddrit URL
