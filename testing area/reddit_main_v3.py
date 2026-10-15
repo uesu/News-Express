@@ -247,6 +247,7 @@ except Exception:
     RunReport = None  # type: ignore
 
 _run_report = None
+_report_closed = False
 
 
 def _report_outcome(kind: str, reason: str | None = None) -> None:
@@ -267,14 +268,37 @@ def _report_target(name: str, *, usable: bool = False) -> None:
         _run_report.target_usable(name)
 
 
-def _close_report(*, result: str | None = None, save_status: str | None = None) -> None:
-    if _run_report is None:
+def _report_selected_host(url_or_host: str | None) -> None:
+    if _run_report is None or not url_or_host:
         return
-    if save_status is not None:
-        _run_report.mark_local_save(save_status)
-    if result:
-        _run_report.end_monitor(result)
-    _run_report.write()
+    raw = str(url_or_host).strip()
+    if not raw:
+        return
+    host = urlparse(raw).hostname if "://" in raw else raw.split("/")[0]
+    if host:
+        _run_report.host_select(host)
+
+
+def _close_report(*, result: str | None = None, save_status: str | None = None) -> None:
+    global _run_report, _report_closed
+    report = _run_report
+    if report is None or _report_closed:
+        return
+    _run_report = None
+    _report_closed = True
+    try:
+        if save_status is not None:
+            report.mark_local_save(save_status)
+        if result:
+            report.end_monitor(result)
+        elif report.monitor_started is not None and report.monitor_ended is None:
+            report.mark_failed("unhandled-exception")
+        report.write()
+    except Exception as exc:
+        try:
+            report.warn(f"report-close-failed:{type(exc).__name__}")
+        except Exception:
+            pass
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 load_dotenv()
@@ -1366,6 +1390,9 @@ _LABELED_ORIGINAL_RE = re.compile(
     r"(?:r/(?:u_)?[^/\s?<>]+|u(?:ser)?/[^/\s?<>]+)/comments/[a-zA-Z0-9]+/?)"
     r"[^\]\[\n]{0,80}original(?:\s+|&nbsp;)*post)",
 )
+_CROSSPOST_REL_RE = re.compile(
+    r"(?is)crosspost(?:ed)?(?:\s+this)?(?:\s+from|\s+of)\b"
+)
 
 
 def canonical_post_id(link: str | None) -> str | None:
@@ -1413,24 +1440,18 @@ def _normalized_foreign_safe_path(raw: str, text: str, start: int) -> str | None
     return path
 
 
-def _permalink_in_crosspost_context(text: str, start: int, end: int) -> bool:
-    """True only when 'crosspost' is adjacent to this permalink, not elsewhere."""
-    low = text.lower()
-    window = low[max(0, start - 180):min(len(low), end + 80)]
-    return "crosspost" in window
-
-
 def find_crosspost_original_path(text: str | None, own_path: str | None = None) -> str | None:
     """Identify the original post path for a crosspost.
 
     Structured parent metadata is handled separately. Text parsing accepts:
     * an explicitly labelled Original Post permalink (no English 'crosspost'
       keyword required), and
-    * a permalink in a 'crosspost' context that is not the child itself.
+    * a permalink in the same clause as a crosspost-from / crosspost-of
+      relationship that is not the child itself.
 
     Comparisons use the canonical post id so a slugged child permalink cannot
-    be mistaken for the original. Arbitrary body links are not parents.
-    The word 'crosspost' anywhere in the body is not enough.
+    be mistaken for the original. A nearby 'crosspost' keyword plus an
+    unrelated body link is not a parent.
     """
     if not text:
         return None
@@ -1444,15 +1465,16 @@ def find_crosspost_original_path(text: str | None, own_path: str | None = None) 
             if path and not (own_id and canonical_post_id(path) == own_id):
                 return path
 
-    for m in CROSSPOST_PERMALINK_RE.finditer(text):
-        if not _permalink_in_crosspost_context(text, m.start(), m.end()):
-            continue
-        path = _normalized_foreign_safe_path(m.group(0), text, m.start())
-        if not path:
-            continue
-        if own_id and canonical_post_id(path) == own_id:
-            continue
-        return path
+    for rel in _CROSSPOST_REL_RE.finditer(text):
+        rest = text[rel.end():]
+        clause = re.split(r"(?:\.(?:\s|$))|\n\n", rest, maxsplit=1)[0]
+        for match in CROSSPOST_PERMALINK_RE.finditer(clause):
+            path = _normalized_foreign_safe_path(match.group(0), clause, match.start())
+            if not path:
+                continue
+            if own_id and canonical_post_id(path) == own_id:
+                continue
+            return path
     return None
 
 
@@ -2796,6 +2818,7 @@ async def fetch_combined_feed(session: aiohttp.ClientSession):
         _report_feed(len(feed.entries), usable=True)
         for sub in covered:
             _report_target(sub, usable=True)
+        _report_selected_host("https://www.reddit.com")
     else:
         _report_feed(0, usable=False)
     return feed
@@ -2813,6 +2836,7 @@ async def fetch_working_reddit_feed(session: aiohttp.ClientSession, subreddit: s
             logging.info(f"Successfully fetched r/{subreddit} from {instance}")
             _report_feed(len(feed.entries), usable=True)
             _report_target(subreddit, usable=True)
+            _report_selected_host(instance)
             return feed
         # round 15 (2026-09-20): eddrit.com — token-free RSS fallback.
         # Sits AFTER redlib.miningtcup.me (token-gated, tried first) and
@@ -2832,6 +2856,7 @@ async def fetch_working_reddit_feed(session: aiohttp.ClientSession, subreddit: s
                     logging.info(f"Successfully fetched r/{subreddit} from {EDDRIT_BASE}")
                     _report_feed(len(eddrit_feed.entries), usable=True)
                     _report_target(subreddit, usable=True)
+                    _report_selected_host(EDDRIT_BASE)
                     return eddrit_feed
             except Exception as e:
                 logging.error(
@@ -5316,7 +5341,8 @@ def test_post_entries(now: float) -> list:
 # ■ MAIN
 # ---------------------------------------------------------------------------
 async def main():
-    global _run_report
+    global _run_report, _report_closed
+    _report_closed = False
     _run_report = RunReport("reddit_monitor", "v3") if RunReport else None
     if _run_report is not None:
         _run_report.set_configured(len(SUBREDDITS))

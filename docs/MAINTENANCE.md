@@ -42,14 +42,16 @@ exact repository variable value `yes` all refuse the merge.
 
 Live evidence is fail-closed: review, status, check-run, workflow-run, and
 commit API failures refuse the merge (they do not become empty lists). Check
-runs are paginated; truncation is a failure. The expected CI workflow name
-must succeed on the same head. Dependabot allowed paths come from the trusted
-profile, never from the PR's own file list. Grouped lock updates classify
-**every** package; the highest-risk member wins, and hash-only or truncated
-patches are review-required. A Python bump PR must use the `chore/python-`
-prefix; `github-actions[bot]` as commit author alone is not enough (a PAT
-may open the PR). The live adapter refreshes the snapshot immediately before
-merge.
+runs are paginated; truncation is a failure. Each required check must come
+from the trusted CI workflow id/path/run on the exact head; a same-name job
+from another workflow is not enough, and a missing SHA or app cannot pass.
+Newest review per user is the effective state. Dependabot allowed paths come
+from the trusted profile, never from the PR's own file list. Grouped lock
+updates classify **every** package; the highest-risk member wins, and
+hash-only or truncated patches are review-required. A Python bump PR must use
+the `chore/python-` prefix; `github-actions[bot]` as commit author alone is
+not enough (a PAT may open the PR). The live adapter refreshes the snapshot
+immediately before merge.
 
 `AUTO_MERGE_DEPENDABOT` and `AUTO_MERGE_PYTHON_BUMP` are exact `yes` switches.
 The allowed merge method is squash, with merge as a fallback.
@@ -61,27 +63,35 @@ required for publish; missing it is a configuration error, not a
 `GITHUB_TOKEN` fallback. Publish runs only when candidate wheels installed
 (`wheels==yes`). The rewrite allowlist is `.python-version` only. Next-minor
 soak uses an upstream release date (manifest field or a bounded GitHub
-release lookup); missing dates defer. Pre- and post-rewrite validation runs
-the full CI registry, including `lock-consistency` and `workflow-security`.
-Pinned `actionlint` is required; download failure or `SKIP_ACTIONLINT=1` is
-not a green gate.
+release lookup); missing dates defer. The GitHub `published_at` for
+`actions/python-versions` is setup-python artifact publication time, not the
+CPython python.org release date — a rebuilt archive must not silently
+redefine soak age. Forced overrides validate numeric direction, a stable
+linux-x64 archive, and review policy; a lower patch is not auto-eligible.
+Lock regeneration must be byte-stable after compiler-header normalization
+only. Pre- and post-rewrite validation runs the full CI registry, including
+`lock-consistency` and `workflow-security`. Pinned `actionlint` is required;
+download failure or `SKIP_ACTIONLINT=1` is not a green gate.
 
 ## Monitor summaries
 
 V3 engines write `RUN_REPORT_PATH` JSON with real numeric totals, the checked
 out SHA, the lock digest, and skip/hold reasons they already computed. HTTP
-and host counters wrap the existing session (no extra requests). Early-exit
-and failed local-save paths still emit a report. The workflow persist step
-writes a persistence sidecar. `render_run_summary.py` prints that report; a
-missing file is **unavailable**, never a fake zero. Log-grep counters are not
-used. Persistence (local save / commit / push) is reported independently.
+counters wrap the existing session (no extra requests). `host_select` records
+a useful feed or media choice, not every HTTP 2xx/3xx. Early-exit and failed
+local-save paths still emit a report; an atexit write after an unhandled
+failure is `failed`. Report-write errors never mask the application
+exception. The workflow persist step writes a persistence sidecar.
+`render_run_summary.py` prints that report; a missing file is
+**unavailable**, never a fake zero. Log-grep counters are not used.
+Persistence (local save / commit / push) is reported independently.
 
 ## Crosspost video
 
 Child-post identity, routing, and dedup stay on the child. Media may be
-fetched from one resolved original (structured parent metadata, labelled
-Original Post, or a permalink **adjacent** to a crosspost notice). A
-`crosspost` keyword elsewhere in the body is not a parent. Profile aliases
+fetched from one resolved original (structured parent metadata, a labelled
+Original Post, or a permalink in a crosspost-from / crosspost-of clause). A
+`crosspost` keyword plus an unrelated body link is not a parent. Profile aliases
 (`/user/…` ↔ `/r/u_…`) are retried when the first route returns stills for a
 video post. Audio-cover renderers are not motion video; og consumers skip a
 leading audio-cover `og:video` and keep a later motion URL. EmbedEZ/RedditEZ

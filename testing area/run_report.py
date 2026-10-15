@@ -93,8 +93,6 @@ class RunReport:
 
     def start_monitor(self) -> None:
         self.monitor_started = time.monotonic()
-        if self.result == "not-run":
-            self.result = "completed"
 
     def end_monitor(self, result: str | None = None) -> None:
         self.monitor_ended = time.monotonic()
@@ -251,9 +249,12 @@ class RunReport:
             with open(dest, "w", encoding="utf-8") as fh:
                 json.dump(self.as_dict(), fh, indent=2)
                 fh.write("\n")
-        except OSError as exc:
+        except Exception as exc:
             # Telemetry must never mask the original application failure.
-            self.warnings.append(f"report-write-failed:{type(exc).__name__}")
+            try:
+                self.warnings.append(f"report-write-failed:{type(exc).__name__}")
+            except Exception:
+                pass
 
 
 class ReportingSession:
@@ -293,8 +294,6 @@ class _ReportingRequest:
         status = getattr(resp, "status", None)
         if status == 429:
             self._report.note_rate_limit()
-        elif isinstance(status, int) and 200 <= status < 400 and host:
-            self._report.host_select(host)
 
     def _note_error(self, exc: BaseException) -> None:
         name = type(exc).__name__

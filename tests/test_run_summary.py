@@ -118,7 +118,27 @@ class RunReportTests(unittest.TestCase):
         self.assertEqual(inner.calls, 1)
         self.assertEqual(report.http_requests, 1)
         self.assertEqual(report.hosts_attempted, ["redlib.example"])
+        self.assertEqual(report.hosts_selected, [])
+        report.host_select("redlib.example")
         self.assertEqual(report.hosts_selected, ["redlib.example"])
+
+    def test_start_monitor_is_not_a_successful_outcome(self):
+        report = RunReport("reddit_monitor", "v3")
+        report.start_monitor()
+        self.assertEqual(report.result, "not-run")
+        report.mark_failed("unhandled-exception")
+        self.assertEqual(report.result, "failed")
+
+    def test_write_failure_does_not_raise(self):
+        report = RunReport("reddit_monitor", "v3")
+        report.start_monitor()
+        report.error("application-failed")
+        with tempfile.TemporaryDirectory() as tmp:
+            blocker = Path(tmp) / "not-a-dir"
+            blocker.write_text("x", encoding="utf-8")
+            report.write(str(blocker / "report.json"))
+        self.assertTrue(any(item.startswith("report-write-failed:") for item in report.warnings))
+        self.assertIn("application-failed", report.errors)
 
     def test_engine_counters_are_real_and_redacted(self):
         os.environ["MONITOR_CODE_SHA"] = "cafebabe"

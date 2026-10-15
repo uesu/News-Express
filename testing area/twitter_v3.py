@@ -105,7 +105,7 @@ import logging
 import aiohttp
 import feedparser
 from email.utils import parsedate_to_datetime
-from urllib.parse import quote as url_quote
+from urllib.parse import quote as url_quote, urlparse
 from dotenv import load_dotenv
 
 try:
@@ -114,6 +114,7 @@ except Exception:
     RunReport = None  # type: ignore
 
 _run_report = None
+_report_closed = False
 
 
 def _report_outcome(kind: str, reason: str | None = None) -> None:
@@ -134,14 +135,37 @@ def _report_target(name: str, *, usable: bool = False) -> None:
         _run_report.target_usable(name)
 
 
-def _close_report(*, result: str | None = None, save_status: str | None = None) -> None:
-    if _run_report is None:
+def _report_selected_host(url_or_host: str | None) -> None:
+    if _run_report is None or not url_or_host:
         return
-    if save_status is not None:
-        _run_report.mark_local_save(save_status)
-    if result:
-        _run_report.end_monitor(result)
-    _run_report.write()
+    raw = str(url_or_host).strip()
+    if not raw:
+        return
+    host = urlparse(raw).hostname if "://" in raw else raw.split("/")[0]
+    if host:
+        _run_report.host_select(host)
+
+
+def _close_report(*, result: str | None = None, save_status: str | None = None) -> None:
+    global _run_report, _report_closed
+    report = _run_report
+    if report is None or _report_closed:
+        return
+    _run_report = None
+    _report_closed = True
+    try:
+        if save_status is not None:
+            report.mark_local_save(save_status)
+        if result:
+            report.end_monitor(result)
+        elif report.monitor_started is not None and report.monitor_ended is None:
+            report.mark_failed("unhandled-exception")
+        report.write()
+    except Exception as exc:
+        try:
+            report.warn(f"report-close-failed:{type(exc).__name__}")
+        except Exception:
+            pass
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 load_dotenv()
@@ -1480,6 +1504,7 @@ async def fetch_working_feed(session: aiohttp.ClientSession, account: str):
                                      f"{len(feed.entries)} entries.")
                         _report_feed(len(feed.entries), usable=True)
                         _report_target(account, usable=True)
+                        _report_selected_host(instance)
                         return feed
                     logging.info(f"[{account}] {instance}: HTTP 200 but 0 entries "
                                  f"(bot check / stale instance?) — trying next.")
@@ -1644,7 +1669,8 @@ def build_v3_payload(account: str, tweet: dict, read_post_url: str,
 
 
 async def main():
-    global _run_report
+    global _run_report, _report_closed
+    _report_closed = False
     _run_report = RunReport("twitter_monitor", "v3") if RunReport else None
     if _run_report is not None:
         _run_report.set_configured(len(ACCOUNTS))

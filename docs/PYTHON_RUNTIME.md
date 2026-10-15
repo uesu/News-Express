@@ -51,7 +51,11 @@ News-Express uses the normal `MAJOR.MINOR.PATCH` terminology:
 | `3.14.8 -> 3.15.0` | new **MINOR** series | PR only; manual review required even if validation passes |
 | `3.x -> 4.x` | **MAJOR** update | deliberate manual migration; never handled as an ordinary patch/minor bump |
 
-A new minor series must never be described as a patch update.
+A new minor series must never be described as a patch update. A lower
+patch such as `3.14.8 -> 3.14.7` is a **downgrade**, not an auto-eligible
+proposal, even when forced. Forced versions must exist as a stable
+linux-x64 archive in the setup-python manifest; missing, prerelease, or
+out-of-policy majors remain review-required or failed.
 
 ## Repository and production scope
 
@@ -135,7 +139,7 @@ interpreter:
 |---|---|
 | candidate exists in the `actions/python-versions` manifest with a linux-x64 build | that manifest is what `setup-python` resolves; a version absent from it breaks the workflows |
 | `pip install --only-binary=:all: -r requirements.txt` | compiled dependencies must have prebuilt wheels for the candidate ABI; if wheels are missing, the bump is deferred instead of compiling from source |
-| soak period for new minor series only (`PYTHON_BUMP_SOAK_DAYS`, default `30`) | an `x.y.0` minor release is deliberately reviewed after it has been available; the selector uses the manifest `release_date`/`published_at` or a bounded GitHub release lookup, and **defers** when no date is available; patch releases skip the soak |
+| soak period for new minor series only (`PYTHON_BUMP_SOAK_DAYS`, default `30`) | an `x.y.0` minor release is deliberately reviewed after it has been available; the selector uses the manifest `release_date`/`published_at` or a bounded GitHub release lookup, and **defers** when no date is available; patch releases skip the soak. The GitHub `published_at` for `actions/python-versions` is the **setup-python artifact publication time**, not the CPython python.org release date. A rebuilt archive must not silently redefine soak age. |
 | `python -m compileall -q "testing area" tests` | syntax/importability gate for every Python file used by the monitors and tests |
 | `python tests/test_smoke.py` | offline card-pipeline and workflow invariant guards |
 | `python tests/test_reddit_signals.py` | pure Reddit gate/decision guards |

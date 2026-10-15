@@ -8,6 +8,7 @@ never uses production secrets, and never writes GitHub state.
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import os
 import re
@@ -99,32 +100,20 @@ def _normalize_lock(path: Path) -> str:
     return maintenance.normalize_compile_header(path.read_text(encoding="utf-8"))
 
 
-def _lock_identity(text: str) -> str:
-    """Package pins and hashes only — ignore header/via-comment churn."""
-    packages: list[tuple[str, tuple[str, ...]]] = []
-    current: str | None = None
-    hashes: list[str] = []
-
-    def flush() -> None:
-        nonlocal current, hashes
-        if current:
-            packages.append((current, tuple(sorted(hashes))))
-        current, hashes = None, []
-
-    for raw in text.splitlines():
-        stripped = raw.strip().rstrip("\\").strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if stripped.startswith("--hash="):
-            hashes.append(stripped)
-            continue
-        match = re.match(r"^([A-Za-z0-9_.-]+)==(\S+)", stripped)
-        if match:
-            flush()
-            current = f"{match.group(1).replace('_', '-').lower()}=={match.group(2)}"
-    flush()
-    packages.sort()
-    return "\n".join(f"{name} {' '.join(hashes)}" for name, hashes in packages) + "\n"
+def _lock_diff(before: str, after: str, name: str) -> None:
+    lines = list(
+        difflib.unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile=f"{name} (before)",
+            tofile=f"{name} (after)",
+            n=1,
+        )
+    )
+    for line in lines[:120]:
+        sys.stderr.write(line if line.endswith("\n") else line + "\n")
+    if len(lines) > 120:
+        print(f"... diff truncated ({len(lines)} lines)", file=sys.stderr)
 
 
 def group_lock_consistency(root: Path, profile: dict) -> int:
@@ -140,6 +129,7 @@ def group_lock_consistency(root: Path, profile: dict) -> int:
     before_dev = _normalize_lock(dev) if dev.is_file() else ""
     env = os.environ.copy()
     env["CUSTOM_COMPILE_COMMAND"] = str(profile.get("custom_compile_command") or "")
+    env["PYTHONHASHSEED"] = "0"
     compile_cmd = list(profile.get("compile_command") or [])
     if not compile_cmd:
         print("compile_command missing from profile", file=sys.stderr)
@@ -148,23 +138,31 @@ def group_lock_consistency(root: Path, profile: dict) -> int:
     if code:
         return code
     after_runtime = _normalize_lock(runtime)
-    if _lock_identity(after_runtime) != _lock_identity(before_runtime):
-        print("requirements.txt regeneration produced a pin/hash diff", file=sys.stderr)
-        return 1
     if after_runtime != before_runtime:
-        print("requirements.txt header/comments changed; pins and hashes are stable")
+        print(
+            "requirements.txt regeneration was not byte-stable after compiler-header normalization",
+            file=sys.stderr,
+        )
+        _lock_diff(before_runtime, after_runtime, "requirements.txt")
+        return 1
     dev_cmd = list(profile.get("dev_compile_command") or [])
     if dev_cmd and (root / "requirements-dev.in").is_file():
-        env["CUSTOM_COMPILE_COMMAND"] = "python -m piptools compile --generate-hashes --allow-unsafe --resolver=backtracking --strip-extras --output-file=requirements-dev.txt requirements-dev.in"
+        env["CUSTOM_COMPILE_COMMAND"] = (
+            "python -m piptools compile --generate-hashes --allow-unsafe "
+            "--resolver=backtracking --strip-extras --output-file=requirements-dev.txt "
+            "requirements-dev.in"
+        )
         code = run_cmd(dev_cmd, cwd=root, env=env)
         if code:
             return code
         after_dev = _normalize_lock(dev)
-        if _lock_identity(after_dev) != _lock_identity(before_dev):
-            print("requirements-dev.txt regeneration produced a pin/hash diff", file=sys.stderr)
-            return 1
         if after_dev != before_dev:
-            print("requirements-dev.txt header/comments changed; pins and hashes are stable")
+            print(
+                "requirements-dev.txt regeneration was not byte-stable after compiler-header normalization",
+                file=sys.stderr,
+            )
+            _lock_diff(before_dev, after_dev, "requirements-dev.txt")
+            return 1
     return 0
 
 

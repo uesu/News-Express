@@ -118,11 +118,62 @@ class VersionAndSelectTests(unittest.TestCase):
 
     def test_skip_minor_and_major_are_not_auto(self):
         current = maintenance.parse_version("3.14.8")
-        forced = maintenance.select_python_candidate(current, [], force="3.16.0")
+        forced = maintenance.select_python_candidate(
+            current,
+            [{"version": "3.16.0", "stable": True, "files": [{"platform": "linux", "arch": "x64"}]}],
+            force="3.16.0",
+        )
         self.assertEqual(forced["status"], "review-required")
-        major = maintenance.select_python_candidate(current, [], force="4.0.0")
+        self.assertFalse(forced["auto_eligible"])
+        major = maintenance.select_python_candidate(
+            current,
+            [{"version": "4.0.0", "stable": True, "files": [{"platform": "linux", "arch": "x64"}]}],
+            force="4.0.0",
+        )
         self.assertEqual(major["status"], "review-required")
         self.assertFalse(major["auto_eligible"])
+
+    def test_forced_override_validates_direction_archive_and_policy(self):
+        current = maintenance.parse_version("3.14.8")
+        linux = [{"platform": "linux", "arch": "x64"}]
+        empty = maintenance.select_python_candidate(current, [], force="3.14.7")
+        self.assertNotEqual(empty["status"], "proposed")
+        self.assertNotEqual(empty.get("kind"), "patch")
+        self.assertFalse(empty.get("auto_eligible"))
+        self.assertEqual(empty["reason"], "override-unavailable")
+        downgrade = maintenance.select_python_candidate(
+            current,
+            [{"version": "3.14.7", "stable": True, "files": linux}],
+            force="3.14.7",
+        )
+        self.assertEqual(downgrade["status"], "review-required")
+        self.assertEqual(downgrade["kind"], "downgrade")
+        self.assertFalse(downgrade["auto_eligible"])
+        prerelease = maintenance.select_python_candidate(current, [], force="3.14.9rc1")
+        self.assertEqual(prerelease["status"], "failed")
+        self.assertIn("override-invalid", prerelease["reason"])
+        same = maintenance.select_python_candidate(current, [], force="3.14.8")
+        self.assertEqual(same["status"], "up-to-date")
+        win_only = maintenance.select_python_candidate(
+            current,
+            [{"version": "3.14.9", "stable": True, "files": [{"platform": "win32", "arch": "x64"}]}],
+            force="3.14.9",
+        )
+        self.assertEqual(win_only["status"], "failed")
+        self.assertEqual(win_only["reason"], "override-unavailable")
+        patch = maintenance.select_python_candidate(
+            current,
+            [{"version": "3.14.9", "stable": True, "files": linux}],
+            force="3.14.9",
+        )
+        self.assertEqual(patch["status"], "proposed")
+        self.assertEqual(patch["kind"], "patch")
+        self.assertTrue(patch["auto_eligible"])
+        self.assertEqual(
+            maintenance.classify_python_change("3.14.8", "3.14.7")["auto_eligible"],
+            False,
+        )
+        self.assertEqual(maintenance.classify_python_change("3.14.8", "3.14.7")["kind"], "downgrade")
 
     def test_prerelease_manifest_entries_are_ignored(self):
         current = maintenance.parse_version("3.14.8")
@@ -241,6 +292,18 @@ class CheckClassificationTests(unittest.TestCase):
             expected_names=["application"], head_sha=SHA)
         self.assertEqual(result["state"], "failed")
 
+    def test_missing_sha_or_app_cannot_pass(self):
+        missing_sha = maintenance.classify_checks(
+            [{"id": 1, "name": "application", "status": "completed",
+              "conclusion": "success", "app": {"slug": "github-actions"}}],
+            expected_names=["application"], head_sha=SHA)
+        self.assertEqual(missing_sha["state"], "failed")
+        missing_app = maintenance.classify_checks(
+            [{"id": 1, "name": "application", "head_sha": SHA, "status": "completed",
+              "conclusion": "success"}],
+            expected_names=["application"], head_sha=SHA)
+        self.assertEqual(missing_app["state"], "failed")
+
     def test_latest_id_wins(self):
         result = maintenance.classify_checks(
             [
@@ -256,6 +319,7 @@ class CheckClassificationTests(unittest.TestCase):
         checks = [{
             "id": 1, "name": "application", "head_sha": SHA, "status": "completed",
             "conclusion": "success", "app": {"slug": "github-actions"},
+            "html_url": "https://github.com/uesu/News-Express/actions/runs/2/job/1",
         }]
         missing = maintenance.classify_checks(
             checks, expected_names=["application"], head_sha=SHA,
@@ -266,14 +330,38 @@ class CheckClassificationTests(unittest.TestCase):
             checks, expected_names=["application"], head_sha=SHA,
             expected_workflow="CI — syntax + offline smoke test",
             workflow_runs=[{"id": 1, "name": "other", "head_sha": SHA,
+                            "path": ".github/workflows/ci.yml",
                             "status": "completed", "conclusion": "success"}],
         )
         self.assertEqual(wrong["state"], "failed")
-        ready = maintenance.classify_checks(
+        other_run = maintenance.classify_checks(
+            [{
+                "id": 1, "name": "application", "head_sha": SHA, "status": "completed",
+                "conclusion": "success", "app": {"slug": "github-actions"},
+                "html_url": "https://github.com/uesu/News-Express/actions/runs/999/job/1",
+            }],
+            expected_names=["application"], head_sha=SHA,
+            expected_workflow="CI — syntax + offline smoke test",
+            expected_workflow_path=".github/workflows/ci.yml",
+            workflow_runs=[{"id": 2, "name": "CI — syntax + offline smoke test",
+                            "head_sha": SHA, "path": ".github/workflows/ci.yml",
+                            "status": "completed", "conclusion": "success"}],
+        )
+        self.assertEqual(other_run["state"], "failed")
+        missing_wf_sha = maintenance.classify_checks(
             checks, expected_names=["application"], head_sha=SHA,
             expected_workflow="CI — syntax + offline smoke test",
             workflow_runs=[{"id": 2, "name": "CI — syntax + offline smoke test",
-                            "head_sha": SHA, "status": "completed", "conclusion": "success"}],
+                            "status": "completed", "conclusion": "success"}],
+        )
+        self.assertEqual(missing_wf_sha["state"], "failed")
+        ready = maintenance.classify_checks(
+            checks, expected_names=["application"], head_sha=SHA,
+            expected_workflow="CI — syntax + offline smoke test",
+            expected_workflow_path=".github/workflows/ci.yml",
+            workflow_runs=[{"id": 2, "name": "CI — syntax + offline smoke test",
+                            "head_sha": SHA, "path": ".github/workflows/ci.yml",
+                            "status": "completed", "conclusion": "success"}],
         )
         self.assertEqual(ready["state"], "ready")
 
@@ -296,6 +384,11 @@ class MergeDecisionTests(unittest.TestCase):
         self.assertEqual(hold.action, "defer")
         changes = maintenance.decide_merge(_snapshot(reviews=[{"state": "CHANGES_REQUESTED"}]))
         self.assertEqual(changes.action, "defer")
+        superseded = maintenance.decide_merge(_snapshot(reviews=[
+            {"id": 1, "state": "CHANGES_REQUESTED", "user": {"login": "reviewer"}},
+            {"id": 2, "state": "APPROVED", "user": {"login": "reviewer"}},
+        ]))
+        self.assertEqual(superseded.action, "merge")
 
     def test_untrusted_updater_and_head_change(self):
         human = maintenance.decide_merge(_snapshot(pull_request=_pr(login="alice")))
@@ -451,13 +544,33 @@ class CiRegistryTests(unittest.TestCase):
             maintenance.normalize_compile_header(text),
         )
 
-    def test_lock_identity_ignores_via_comments(self):
-        import ci as ci_mod
-        a = "pkg==1.0.0 \\\n    --hash=sha256:aaa\n    # via foo\n"
-        b = "pkg==1.0.0 \\\n    --hash=sha256:aaa\n    # via bar\n"
-        self.assertEqual(ci_mod._lock_identity(a), ci_mod._lock_identity(b))
-        c = "pkg==1.0.1 \\\n    --hash=sha256:aaa\n"
-        self.assertNotEqual(ci_mod._lock_identity(a), ci_mod._lock_identity(c))
+    def test_lock_header_only_python_patch_is_equivalent(self):
+        before = (
+            "# This file is autogenerated by pip-compile with Python 3.14.8\n"
+            "aiohttp==3.14.5 \\\n    --hash=sha256:aaa\n"
+        )
+        after = (
+            "# This file is autogenerated by pip-compile with Python 3.14\n"
+            "aiohttp==3.14.5 \\\n    --hash=sha256:aaa\n"
+        )
+        self.assertEqual(
+            maintenance.normalize_compile_header(before),
+            maintenance.normalize_compile_header(after),
+        )
+
+    def test_lock_constraint_marker_index_without_pin_change_must_differ(self):
+        header = "# This file is autogenerated by pip-compile with Python 3.14.8\n"
+        pin = "aiohttp==3.14.5 \\\n    --hash=sha256:aaa\n"
+        base = header + pin
+        variants = [
+            header + "-c constraints.txt\n" + pin,
+            header + "aiohttp==3.14.5 ; python_version >= '3.14' \\\n    --hash=sha256:aaa\n",
+            header + "--index-url https://example.test/simple\n" + pin,
+            header + "aiohttp==3.14.5 \\\n    --hash=sha256:aaa\n    # via otherpkg\n",
+        ]
+        normalized = maintenance.normalize_compile_header(base)
+        for other in variants:
+            self.assertNotEqual(normalized, maintenance.normalize_compile_header(other))
 
 
 if __name__ == "__main__":

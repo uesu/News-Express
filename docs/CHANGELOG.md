@@ -16,21 +16,19 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
-* **2026-10-16 — Maintenance correction (PR #66): grouped risk, fail-closed
-  live evidence, required actionlint, soak dates, engine telemetry, motion-first
-  og video.** Grouped Dependabot lock diffs classify every package (a major
-  hidden behind a later patch is review-required; hash-only/truncated patches
-  too). Live merge evidence fails closed on review/status/check/workflow/commit
-  API errors, paginates check runs, verifies the CI workflow identity, uses the
-  trusted allowlist rather than the PR file list, refreshes immediately before
-  merge, and does not treat `github-actions[bot]` commit authorship alone as a
-  Python bump. `actionlint` must actually run (`SKIP_ACTIONLINT` is not green).
-  Next-minor soak looks up an upstream release date; post-rewrite validation
-  runs lock-consistency and workflow-security. V3 reports count real HTTP/host
-  activity from the existing session and still write on early exits. Crosspost
-  originals require a labelled Original Post or an adjacent crosspost
-  permalink; og consumers skip a leading audio-cover `og:video` for later
-  motion.
+* **2026-10-16 — Maintenance correction (PR #66): lock bytes, forced pins,
+  structured crosspost parents, selection telemetry, bound checks.** Hashed
+  lock regeneration is byte-stable after compiler-header normalization only
+  (index/constraint/marker/via-comment changes without a pin change still
+  fail). Forced CPython overrides validate numeric direction, a stable
+  linux-x64 archive, and review policy — a lower patch is not an auto-eligible
+  proposal. Crosspost originals require structured parent metadata or an
+  explicit original-post / crosspost-from relationship, not a keyword window.
+  Run reports record HTTP transport separately from useful feed/media
+  `host_select`, and an atexit write after an unhandled failure is `failed`.
+  Merge checks bind each required name to the trusted workflow id/path/run/head;
+  missing SHA or app cannot pass. Grouped Dependabot lock diffs still classify
+  every package. `actionlint` must actually run (`SKIP_ACTIONLINT` is not green).
 
 * **2026-10-15 — Maintenance: unify safe updates and summaries; fix crosspost
   video fallback.** Exact CPython pin `3.14.8` via `.python-version` plus hashed

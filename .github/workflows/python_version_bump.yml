@@ -83,7 +83,7 @@ jobs:
 
   validate:
     needs: select
-    if: needs.select.outputs.status == 'proposed' || needs.select.outputs.status == 'review-required'
+    if: ${{ needs.select.outputs.status == 'proposed' || needs.select.outputs.status == 'review-required' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -119,16 +119,12 @@ jobs:
       - name: Frozen wheels-only install
         id: wheels
         run: |
-          set +e
-          python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
-          STATUS=$?
-          set -e
-          if [ "$STATUS" -ne 0 ]; then
+          if python -m pip install --require-hashes --only-binary=:all: -r requirements.txt; then
+            echo "ok=yes" >> "$GITHUB_OUTPUT"
+          else
             echo "ok=no" >> "$GITHUB_OUTPUT"
             echo "::notice::No prebuilt wheels yet for $(python --version) — deferring this bump."
-            exit 0
           fi
-          echo "ok=yes" >> "$GITHUB_OUTPUT"
 
       - name: Validate the candidate tree
         if: steps.wheels.outputs.ok == 'yes'
@@ -166,9 +162,7 @@ jobs:
 
   publish:
     needs: [select, validate]
-    if: >-
-      needs.validate.outputs.wheels == 'yes' &&
-      (needs.select.outputs.status == 'proposed' || needs.select.outputs.status == 'review-required')
+    if: ${{ needs.validate.outputs.wheels == 'yes' && (needs.select.outputs.status == 'proposed' || needs.select.outputs.status == 'review-required') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

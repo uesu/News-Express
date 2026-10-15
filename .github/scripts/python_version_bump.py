@@ -40,6 +40,12 @@ def fetch_manifest_release_date(entry: dict) -> str | None:
 
     Fixture/decide paths never call this. Live selection uses it only when the
     manifest omits release_date/published_at so a next-minor soak can run.
+
+    The GitHub release ``published_at`` for ``actions/python-versions`` is the
+    **setup-python artifact publication time**, not the CPython python.org
+    release date. A rebuilt archive must not silently redefine soak age; the
+    selector defers when no date is available rather than treating a rebuilt
+    artifact timestamp as a fresh CPython release.
     """
     for key in ("release_date", "published_at"):
         raw = str(entry.get(key) or "")

@@ -115,8 +115,10 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    `.python-version` and is installed with `--require-hashes --only-binary=:all:`.
    Dependabot does not self-merge; `maintenance_merge.yml` reads policy from
    the trusted default branch only. Live evidence is fail-closed (no empty-list
-   fallback on API errors). Pinned `actionlint` must run. Grouped lock risk
-   classifies every package.
+   fallback on API errors). Each required check is bound to the trusted
+   workflow id/path/run/head. Pinned `actionlint` must run. Grouped lock risk
+   classifies every package. Lock regeneration is byte-stable after
+   compiler-header normalization only.
 8. Heal eligibility is classified by **URL**, never by response
    `content_type` (it is empty exactly when unresolved — round 56).
    `heal_eligible_items` reads module-global `MEDIA_HEAL_SCOPE` at call

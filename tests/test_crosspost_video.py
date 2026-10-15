@@ -59,7 +59,7 @@ class OriginalDiscoveryTests(unittest.TestCase):
 
     def test_own_slugged_link_is_skipped(self):
         html = (
-            'crosspost <a href="/r/Beta/comments/child004/child_slug/">self</a> '
+            'crossposted this from <a href="/r/Beta/comments/child004/child_slug/">self</a> '
             '<a href="/r/Alpha/comments/parent04/orig_slug/">orig</a>'
         )
         path = v3.find_crosspost_original_path(html, "/r/Beta/comments/child004/child_slug/")
@@ -163,6 +163,71 @@ class VideoEligibilityTests(unittest.TestCase):
         self.assertIn("/r/u_sampleuser/comments/parent10/", aliases)
         self.assertEqual(v3._path_aliases("/r/Beta/comments/child010/"),
                          ["/r/Beta/comments/child010/"])
+
+
+class UnrelatedBodyLinkTests(unittest.TestCase):
+    def test_crosspost_keyword_plus_unrelated_link_is_not_a_parent(self):
+        text = (
+            "This is a crosspost. Unrelated discussion: "
+            "https://www.reddit.com/r/example/comments/abc123/topic/"
+        )
+        self.assertIsNone(v3.find_crosspost_original_path(
+            text, "/r/example/comments/child99/",
+        ))
+
+
+class NewsIncidentMediaFixtures(unittest.TestCase):
+    """Both Ananta incidents are parser/resolver fixtures only — not routing."""
+
+    CASES = (
+        ("1x6h1mf", "1x6h1a5", "1y2gic17nlvh1"),
+        ("1x6lgak", "1x6lbhb", "22e7ve17smvh1"),
+    )
+
+    def test_structured_parent_recovers_motion_for_both_incidents(self):
+        for child, parent, video in self.CASES:
+            with self.subTest(child=child):
+                source = v3.resolve_crosspost_source(
+                    own_path=f"/r/NewsSub/comments/{child}/",
+                    base={},
+                    post_json={
+                        "crosspost_parent_list": [{
+                            "id": parent,
+                            "permalink": f"/r/SourceSub/comments/{parent}/orig/",
+                            "media": {"reddit_video": {
+                                "fallback_url": f"https://v.redd.it/{video}/DASH_1080.mp4",
+                            }},
+                        }],
+                    },
+                )
+                self.assertEqual(source.get("id"), parent)
+                self.assertEqual(source.get("vred_id"), video)
+                self.assertFalse(v3.is_same_reddit_post(
+                    source.get("path"), f"/r/NewsSub/comments/{child}/"))
+
+    def test_html_labeled_original_and_og_motion_for_both_incidents(self):
+        for child, parent, video in self.CASES:
+            with self.subTest(child=child):
+                html = (
+                    f'<a href="/r/SourceSub/comments/{parent}/orig/">Original Post</a>'
+                    f'<meta property="og:video" content="https://proxy.embedez.com/render/audio?cover=x"/>'
+                    f'<meta property="og:video" content="https://v.redd.it/{video}/DASH_1080.mp4"/>'
+                )
+                path = v3.find_crosspost_original_path(
+                    html, f"/r/NewsSub/comments/{child}/")
+                self.assertEqual(path, f"/r/SourceSub/comments/{parent}/")
+                meta = proxy._og_meta(html)
+                media = proxy._media_from_og(meta)
+                videos = [item for item in media if item.get("kind") == "video"]
+                self.assertEqual(len(videos), 1)
+                self.assertEqual(
+                    v3.extract_vreddit_id_from_media_url(videos[0]["url"]), video)
+                encoded = (
+                    "https://proxy.embedez.com/render/video.mp4?"
+                    f"videoUrl=https%3A%2F%2Fv.redd.it%2F{video}%2FCMAF_1080.mp4"
+                    f"&audioUrl=https%3A%2F%2Fv.redd.it%2F{video}%2FCMAF_AUDIO_128.mp4"
+                )
+                self.assertEqual(v3.extract_vreddit_id_from_media_url(encoded), video)
 
 
 class ChildIdentityTests(unittest.TestCase):

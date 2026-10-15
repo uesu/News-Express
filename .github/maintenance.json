@@ -26,6 +26,7 @@
   ],
   "final_gate": "maintenance-ci",
   "ci_workflow_name": "CI — syntax + offline smoke test",
+  "ci_workflow_path": ".github/workflows/ci.yml",
   "test_commands": {
     "compile": ["python", "-m", "compileall", "-q", "testing area", "tests", ".github/scripts"],
     "application": [

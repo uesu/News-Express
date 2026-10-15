@@ -133,6 +133,8 @@ def read_pin(pin_file: str | os.PathLike | None = None) -> Version:
 def version_kind(current: Version, candidate: Version) -> str:
     if candidate.tuple == current.tuple:
         return "none"
+    if candidate < current:
+        return "downgrade"
     if candidate.major != current.major:
         return "major"
     if candidate.minor != current.minor:
@@ -218,34 +220,59 @@ def select_python_candidate(
         try:
             forced = parse_version(force)
         except ValueError as exc:
-            return {"status": "failed", "reason": f"override-invalid: {exc}"}
+            return {
+                "status": "failed",
+                "reason": f"override-invalid: {exc}",
+                "current": str(current),
+                "auto_eligible": False,
+            }
         kind = version_kind(current, forced)
         if kind == "none":
-            return {"status": "up-to-date", "reason": "forced-current", "current": str(current)}
-        if kind == "major" or (kind == "minor" and forced.minor != current.minor + 1 and forced.major == current.major):
             return {
-                "status": "review-required",
-                "reason": "override-out-of-policy",
+                "status": "up-to-date",
+                "reason": "forced-current",
+                "current": str(current),
+                "auto_eligible": False,
+            }
+        versions = iter_stable_manifest_versions(manifest)
+        match = next((item for item in versions if item[0] == forced), None)
+        if match is None:
+            return {
+                "status": "failed",
+                "reason": "override-unavailable",
                 "kind": kind,
                 "candidate": str(forced),
                 "current": str(current),
                 "auto_eligible": False,
             }
-        if kind == "minor" and forced.minor != current.minor + 1:
+        release_url = str(match[1].get("release_url") or "")
+        if kind == "downgrade":
+            return {
+                "status": "review-required",
+                "reason": "override-downgrade",
+                "kind": kind,
+                "candidate": str(forced),
+                "current": str(current),
+                "release_url": release_url,
+                "auto_eligible": False,
+            }
+        if kind == "major" or (kind == "minor" and forced.minor != current.minor + 1):
             return {
                 "status": "review-required",
                 "reason": "override-out-of-policy",
                 "kind": kind,
                 "candidate": str(forced),
                 "current": str(current),
+                "release_url": release_url,
                 "auto_eligible": False,
             }
         return {
-            "status": "proposed",
+            "status": "proposed" if kind == "patch" else "review-required",
             "reason": "manual-override",
             "kind": kind,
             "candidate": str(forced),
             "current": str(current),
+            "release_url": release_url,
             "auto_eligible": kind == "patch",
         }
 
@@ -323,6 +350,8 @@ def classify_python_change(current: str, candidate: str) -> dict[str, Any]:
     kind = version_kind(cur, nxt)
     if kind == "none":
         return {"risk": "routine", "kind": kind, "auto_eligible": False, "reason": "no-change"}
+    if kind == "downgrade":
+        return {"risk": "review-required", "kind": kind, "auto_eligible": False, "reason": "downgrade"}
     if kind == "patch":
         return {"risk": "routine", "kind": kind, "auto_eligible": True, "reason": "stable-patch"}
     if kind == "minor":
@@ -408,6 +437,26 @@ def auto_merge_enabled(value: str | None) -> bool:
     return (value or "").strip() == AUTO_YES
 
 
+_ACTIONS_RUN_RE = re.compile(r"/actions/runs/(\d+)")
+
+
+def _check_app_slug(run: Mapping[str, Any]) -> str:
+    app = run.get("app") if isinstance(run.get("app"), dict) else {}
+    return str(app.get("slug") or app.get("name") or run.get("app_slug") or "")
+
+
+def _workflow_run_id_from_check(run: Mapping[str, Any]) -> int | None:
+    raw = run.get("workflow_run_id")
+    if raw not in (None, ""):
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+    html = str(run.get("html_url") or run.get("details_url") or "")
+    match = _ACTIONS_RUN_RE.search(html)
+    return int(match.group(1)) if match else None
+
+
 def classify_checks(
     check_runs: Sequence[Mapping[str, Any]],
     *,
@@ -417,19 +466,24 @@ def classify_checks(
     legacy_statuses: Sequence[Mapping[str, Any]] | None = None,
     expected_workflow: str | None = None,
     workflow_runs: Sequence[Mapping[str, Any]] | None = None,
+    expected_workflow_path: str | None = None,
+    expected_workflow_id: int | None = None,
 ) -> dict[str, Any]:
     """Require the trusted expected successful set on the exact head.
 
     Skipped, neutral, cancelled, pending, missing, unrelated, or foreign
     checks cannot satisfy a mandatory name. Zero checks is never ready.
-    When ``expected_workflow`` is set, a successful workflow run of that
-    name on the same head is also required.
+    Missing SHA or app identity cannot satisfy a mandatory name. When
+    ``expected_workflow`` is set, each required check must come from that
+    trusted workflow's run on this head (name/path/id), not merely share a
+    check name with some other successful job.
     """
     expected = [name for name in expected_names if name]
     if not expected:
         return {"state": "failed", "reason": "no-expected-checks"}
     if not SHA_RE.fullmatch((head_sha or "").lower()):
         return {"state": "failed", "reason": "missing-head-sha"}
+    bound_run_ids: set[int] = set()
     if expected_workflow:
         if workflow_runs is None:
             return {"state": "failed", "reason": "missing-workflow-runs"}
@@ -439,10 +493,19 @@ def classify_checks(
                 return {"state": "failed", "reason": "malformed-workflow-run"}
             name = str(run.get("name") or "")
             sha = str(run.get("head_sha") or run.get("sha") or "")
+            path = str(run.get("path") or "")
             if name != expected_workflow:
                 continue
-            if sha and sha != head_sha:
+            if sha != head_sha:
                 continue
+            if expected_workflow_path and path != expected_workflow_path:
+                continue
+            if expected_workflow_id is not None:
+                try:
+                    if int(run.get("id") or 0) != int(expected_workflow_id):
+                        continue
+                except (TypeError, ValueError):
+                    continue
             matching.append(run)
         if not matching:
             return {"state": "failed", "reason": "missing-expected-workflow"}
@@ -453,6 +516,12 @@ def classify_checks(
             return {"state": "pending", "reason": "expected-workflow-pending"}
         if wf_conclusion != "success":
             return {"state": "failed", "reason": "expected-workflow-not-success"}
+        try:
+            bound_run_ids.add(int(latest_wf.get("id") or 0))
+        except (TypeError, ValueError):
+            return {"state": "failed", "reason": "missing-expected-workflow-id"}
+        if not bound_run_ids or 0 in bound_run_ids:
+            return {"state": "failed", "reason": "missing-expected-workflow-id"}
 
     latest: dict[str, Mapping[str, Any]] = {}
     for run in check_runs or []:
@@ -460,12 +529,18 @@ def classify_checks(
             return {"state": "failed", "reason": "malformed-check"}
         name = str(run.get("name") or "")
         sha = str(run.get("head_sha") or run.get("sha") or "")
-        if sha and sha != head_sha:
+        if sha != head_sha:
             continue
-        app = run.get("app") if isinstance(run.get("app"), dict) else {}
-        slug = str(app.get("slug") or app.get("name") or run.get("app_slug") or "")
-        if trusted_apps and slug and slug not in trusted_apps and name in expected:
-            return {"state": "failed", "reason": f"untrusted-app:{name}:{slug}"}
+        slug = _check_app_slug(run)
+        if name in expected:
+            if not slug:
+                continue
+            if trusted_apps and slug not in trusted_apps:
+                return {"state": "failed", "reason": f"untrusted-app:{name}:{slug}"}
+        if bound_run_ids:
+            run_id = _workflow_run_id_from_check(run)
+            if run_id not in bound_run_ids:
+                continue
         previous = latest.get(name)
         if previous is None:
             latest[name] = run
@@ -499,7 +574,7 @@ def classify_checks(
                 continue
             state = str(status.get("state") or "")
             sha = str(status.get("sha") or status.get("head_sha") or "")
-            if sha and sha != head_sha:
+            if sha != head_sha:
                 continue
             if state != "success":
                 outcomes[name] = state or "failed"
@@ -571,6 +646,21 @@ def validate_diff(
     return {"ok": True, "reason": "approved-paths"}
 
 
+def effective_reviews(reviews: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """Newest review per user is the effective state; older votes do not linger."""
+    latest: dict[str, Mapping[str, Any]] = {}
+    for index, review in enumerate(reviews or []):
+        if not isinstance(review, dict):
+            continue
+        user = review.get("user") if isinstance(review.get("user"), dict) else {}
+        login = str(user.get("login") or "") or f"anon-{review.get('id') or index}"
+        rid = int(review.get("id") or 0)
+        previous = latest.get(login)
+        if previous is None or int(previous.get("id") or 0) <= rid:
+            latest[login] = review
+    return list(latest.values())
+
+
 def review_blocks(pr: Mapping[str, Any], reviews: Sequence[Mapping[str, Any]], hold_labels: Sequence[str]) -> str | None:
     if pr.get("draft") is True:
         return "draft"
@@ -585,9 +675,7 @@ def review_blocks(pr: Mapping[str, Any], reviews: Sequence[Mapping[str, Any]], h
     for hold in hold_labels:
         if hold.lower() in labels:
             return f"hold-label:{hold}"
-    for review in reviews or []:
-        if not isinstance(review, dict):
-            continue
+    for review in effective_reviews(reviews):
         state = str(review.get("state") or "")
         if state == "CHANGES_REQUESTED":
             return "changes-requested"
@@ -705,6 +793,7 @@ def decide_merge(snapshot: Mapping[str, Any]) -> Decision:
 
     expected = list(policy.get("mandatory_check_names") or [])
     expected_workflow = str(policy.get("ci_workflow_name") or "") or None
+    expected_workflow_path = str(policy.get("ci_workflow_path") or "") or None
     classified = classify_checks(
         snapshot["checks"] if isinstance(snapshot["checks"], list) else [],
         expected_names=expected,
@@ -712,6 +801,7 @@ def decide_merge(snapshot: Mapping[str, Any]) -> Decision:
         legacy_statuses=snapshot.get("legacy_statuses") or [],
         expected_workflow=expected_workflow,
         workflow_runs=snapshot.get("workflow_runs") if expected_workflow else None,
+        expected_workflow_path=expected_workflow_path,
     )
     if classified.get("state") != "ready":
         action = "defer" if classified.get("state") == "pending" else "fail"
@@ -765,6 +855,12 @@ def production_manifest(root: str | os.PathLike, files: Sequence[str]) -> dict[s
 
 
 def normalize_compile_header(text: str, python_series: str = "3.14") -> str:
+    """Normalize only the pip-compile Python version in the generated header.
+
+    Index URLs, constraints, markers, via-comments, and pin/hash lines are
+    compared as-is. A rebuilt interpreter patch in the header may pass;
+    changing those other directives without a pin change must not.
+    """
     return re.sub(r"with Python \d+\.\d+(?:\.\d+)?", f"with Python {python_series}", text)
 
 
@@ -855,6 +951,8 @@ def cmd_classify_checks(args: argparse.Namespace) -> int:
         legacy_statuses=fixture.get("legacy_statuses") or [],
         expected_workflow=fixture.get("expected_workflow"),
         workflow_runs=fixture.get("workflow_runs"),
+        expected_workflow_path=fixture.get("expected_workflow_path"),
+        expected_workflow_id=fixture.get("expected_workflow_id"),
     )
     json.dump(result, sys.stdout, indent=2)
     sys.stdout.write("\n")
@@ -992,6 +1090,7 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
             "default_branch": default_branch,
             "mandatory_check_names": profile.get("mandatory_check_names") or [],
             "ci_workflow_name": profile.get("ci_workflow_name") or "",
+            "ci_workflow_path": profile.get("ci_workflow_path") or "",
             "human_review_labels": profile.get("human_review_labels") or list(HOLD_LABELS_FALLBACK),
             "updater_identities": identities,
             "allowed_merge_method": profile.get("allowed_merge_method") or "squash",
