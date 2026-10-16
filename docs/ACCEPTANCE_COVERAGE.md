@@ -13,17 +13,19 @@ tests; named coverage is in the tables below.
 
 ## Current-head hosted CI
 
-News #66 implementation head `be4bacaa0e4a1688517549c99915d93d0227024e`:
-[run 38837001161](https://github.com/uesu/News-Express/actions/runs/38837001161)
+News #66 docs/inventory head `fc65483a802e3f627fdb2b1a56d0913fd1ce18d1`:
+[run 38855237517](https://github.com/uesu/News-Express/actions/runs/38855237517)
 — application, maintenance, lock-consistency, workflow-security,
 maintenance-ci all SUCCESS.
 
+Implementation-byte head `be4bacaa0e4a1688517549c99915d93d0227024e` (helpers,
+engines, locks unchanged):
+[run 38837001161](https://github.com/uesu/News-Express/actions/runs/38837001161).
+
 Prior lock repair `a828015`:
 [run 38828287085](https://github.com/uesu/News-Express/actions/runs/38828287085).
-Prior evidence commit `66e5a9c`:
-[run 38830506391](https://github.com/uesu/News-Express/actions/runs/38830506391).
 
-A later **docs-only** commit does not replace run 38837001161 for unchanged
+A later **docs-only** commit does not replace those runs for unchanged
 helpers, engines, and locks. Recheck hosted jobs if those files change.
 
 ## N1 — no new reproduced News code blocker
@@ -38,9 +40,11 @@ changes are not a News CI fix.
 
 See [`COPY_MANIFEST.md`](COPY_MANIFEST.md) and
 [`proposal_head_hashes.json`](proposal_head_hashes.json). Compared heads are
-News #66 `be4baca`, Reddit #2 `8435662`, Twitter #29 `2f879fa` — not deployed
-`main`. Shared helpers are **not** identical. The master identical-helper
-requirement is **unmet**; four PRs are **not fully aligned**.
+News implementation `be4baca`, Reddit #2 `62a9c30`, Twitter #29 `26b84ff`
+(replacement of named `bbc6065`) — not deployed `main`. Shared helpers are
+**not** identical. The master identical-helper requirement is **unmet**;
+four PRs are **not fully aligned**. The explicit “unmet” note is inventory,
+not completion.
 
 ## N3 — coverage vs remaining limits
 

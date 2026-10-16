@@ -27,13 +27,20 @@ cache snapshots.
 
 | Role | Repository | PR | Git SHA |
 |---|---|---|---|
-| News development | `uesu/News-Express` | [#66](https://github.com/uesu/News-Express/pull/66) | `be4bacaa0e4a1688517549c99915d93d0227024e` |
-| Reddit production proposal | `uesu/7jkxmy9nvbc` | [#2](https://github.com/uesu/7jkxmy9nvbc/pull/2) | `84356621636607dbd455b60de4d4a7a60c20d3d0` |
-| Twitter production proposal | `uesu/wvkhabh2s22` | [#29](https://github.com/uesu/wvkhabh2s22/pull/29) | `2f879fae99147137b4f8635739e0d1115c043cca` |
+| News implementation bytes | `uesu/News-Express` | [#66](https://github.com/uesu/News-Express/pull/66) | `be4bacaa0e4a1688517549c99915d93d0227024e` |
+| Reddit production proposal | `uesu/7jkxmy9nvbc` | [#2](https://github.com/uesu/7jkxmy9nvbc/pull/2) | `62a9c30d624ac9717ad3ce11ab380897b03af379` |
+| Twitter production proposal | `uesu/wvkhabh2s22` | [#29](https://github.com/uesu/wvkhabh2s22/pull/29) | `26b84ff455ac5675476a55fde357dd63387627ad` |
 | Game (independent app) | `uesu/Game-Express` | [#49](https://github.com/uesu/Game-Express/pull/49) | `5837ce4c9eef9ad80bb1d2b8c154652b1836d1de` |
 
-A later docs-only commit on News #66 does not replace the News git SHA above
-for helper/engine/lock hashes. If those files change, recompute.
+News docs-only successors (including `fc65483`) do **not** replace `be4baca`
+for helper/engine/lock hashes. This document does not embed its own commit SHA
+as those bytes.
+
+Reddit `62a9c30` supersedes `84356621636607dbd455b60de4d4a7a60c20d3d0`.
+Twitter `26b84ff` is the current PR #29 head and supersedes named
+`bbc60651cb415cfe45dbf94179f42daf635d3d41` (one commit ahead; only
+proposer/controller files differ from `bbc6065`). If those files change,
+recompute.
 
 Deployed `main` on the production copies (`3691cc88b2ef…` / `58547a93c866…`)
 is a **different** snapshot (live caches, unhashed `requirements.txt`, no
@@ -47,15 +54,15 @@ alone is not a defect. Four PRs are **not fully aligned**.
 Computed from file bytes at the git SHAs above (full digests in the JSON
 artifact). Game is omitted from this table; see the helper disposition.
 
-| Shared file | News | Reddit | Twitter |
+| Shared file | News `be4baca` | Reddit `62a9c30` | Twitter `26b84ff` |
 |---|---|---|---|
 | `.python-version` | `5abd4dc1efa0` | `5abd4dc1efa0` | `5abd4dc1efa0` |
-| `.github/scripts/ci.py` | `171925850552` | `605207595f82` | `495979e1f7d5` |
-| `.github/scripts/maintenance.py` | `5f0435c56cd7` | `c06559dcc766` | `3b32723efc87` |
-| `.github/scripts/python_version_bump.py` | `913221935f13` | `a3011aba88dc` | `132d47c01045` |
+| `.github/scripts/ci.py` | `171925850552` | `605207595f82` | `3fe705cc1f02` |
+| `.github/scripts/maintenance.py` | `5f0435c56cd7` | `ed7dd1ef5e52` | `766548226b01` |
+| `.github/scripts/python_version_bump.py` | `913221935f13` | `a3011aba88dc` | `01f087f4f568` |
 | `.github/scripts/render_run_summary.py` | `97eedb3160cc` | `97eedb3160cc` | `7fe2a96696f9` |
 | `.github/scripts/merge_monitor_caches.py` | `0e53a8c1a450` | `0e53a8c1a450` | `0e53a8c1a450` |
-| `.github/workflows/maintenance_merge.yml` | `dc7669138d8a` | `dc7669138d8a` | `33a223d81978` |
+| `.github/workflows/maintenance_merge.yml` | `dc7669138d8a` | `dc7669138d8a` | `1911ab367463` |
 | `.github/workflows/reddit_monitor.yml` | `a41eb60add7a` | `a41eb60add7a` | `2554d344d348` |
 | `.github/workflows/twitter_monitor.yml` | `d1d9b3c3124d` | `d1d9b3c3124d` | `d74f6ad7cdac` |
 | `testing area/reddit_main_v3.py` | `b31ec6a46080` | `345d4edf772d` | `d22764b8b86f` |
@@ -65,6 +72,14 @@ artifact). Game is omitted from this table; see the helper disposition.
 | `testing area/reddit_signals.py` | `4b7a77f5bd56` | `4b7a77f5bd56` | `4b7a77f5bd56` |
 | `testing area/run_report.py` | `aaa3138a4e95` | `76528e639b58` | *absent* |
 | `tests/test_crosspost_video.py` | `ba04e4fc1595` | `259c9f22b4f8` | *absent* |
+
+**Delta vs the previous inventory:** Reddit engines/locks/monitors are unchanged
+from `8435662`; only `maintenance.py` (`c06559dcc766` → `ed7dd1ef5e52`) and
+`tests/test_maintenance.py` moved (check-run binding + alert-state validation).
+Twitter engines/media files are unchanged from `2f879fa` / `bbc6065`; the
+`26b84ff` successor only retouches proposer/controller paths
+(`python_version_bump.py`/`yml`, `maintenance_merge.yml`,
+`tests/test_maintenance.py`). News helper/engine/lock bytes are still `be4baca`.
 
 ## Content review (not filename inference)
 
@@ -96,9 +111,10 @@ artifact). Game is omitted from this table; see the helper disposition.
 * Hash-package association (`requirement_hash_members`,
   `unchanged-version-hash-mutation`) and SHA-bound failed legacy overlay
   (`mandatory-check-not-success`) — present in News `maintenance.py`;
-  Reddit's helper has producer/security collectors News does not; Twitter's
-  helper is a 17-function different module (`decision_from_fixture`,
-  `resolve_check_provenance`).
+  Reddit's helper (`ed7dd1ef5e52`, 56 functions) has producer/security
+  collectors plus check-run URL binding / alert-state validation News does
+  not; Twitter's helper (`766548226b01`, 18 functions) is a different
+  module (`decision_from_fixture`, `resolve_check_provenance`).
 * Crosspost structured parent + original-post markup, audio-cover skip,
   original media-ID inheritance, round-67 quality, HTTP-200 error body,
   child card snapshot, child dedup keys — News `reddit_main_v3.py` +
@@ -117,7 +133,8 @@ different implementations of related policy.
 ## Shared-helper requirement — explicit disposition (unmet)
 
 The master spec requires **identical helpers + a project-specific profile**.
-At the four proposal heads above that requirement is **not met**.
+At the four proposal heads above that requirement is **not met**. Recording
+that fact is inventory, **not** completion of the requirement.
 
 This News PR will **not**:
 

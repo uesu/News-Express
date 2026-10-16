@@ -16,6 +16,14 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-16 — Recompute superseded proposal heads (PR #66).** Hash inventory
+  now uses Reddit #2 `62a9c30` and Twitter #29 `26b84ff` (replacement of named
+  `bbc6065`). News implementation bytes remain `be4baca`; this docs commit
+  does not hash itself. Reddit only moved `maintenance.py` (check-run binding /
+  alert state); Twitter only moved proposer/controller files. Engines/media
+  hashes are unchanged. Identical helpers remain unmet — that note is not
+  completion. Hosted run 38855237517.
+
 * **2026-10-16 — Proposal-head hash manifest (PR #66).** Compare News #66
   `be4baca`, Reddit #2 `8435662`, and Twitter #29 `2f879fa` — not deployed
   `main`. SHA-256 file bytes are in `docs/proposal_head_hashes.json` (that
