@@ -40,11 +40,11 @@ changes are not a News CI fix.
 
 See [`COPY_MANIFEST.md`](COPY_MANIFEST.md) and
 [`proposal_head_hashes.json`](proposal_head_hashes.json). Compared heads are
-News implementation `be4baca`, Reddit #2 `62a9c30`, Twitter #29 `26b84ff`
-(replacement of named `bbc6065`) — not deployed `main`. Shared helpers are
-**not** identical. The master identical-helper requirement is **unmet**;
-four PRs are **not fully aligned**. The explicit “unmet” note is inventory,
-not completion.
+News implementation `be4baca`, Reddit #2 `d123c0d` (supersedes `62a9c30`;
+`reddit_proxy.py` / smoke now match News), Twitter #29 `26b84ff` — not
+deployed `main`. Shared helpers are **not** identical. The master
+identical-helper requirement is **unmet** and **not excepted**; four PRs are
+**not fully aligned**. The explicit “unmet” note is inventory, not completion.
 
 ## N3 — coverage vs remaining limits
 

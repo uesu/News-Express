@@ -13,20 +13,18 @@
       "repo": "uesu/News-Express",
       "pr": 66,
       "sha": "be4bacaa0e4a1688517549c99915d93d0227024e",
-      "note": "News #66 implementation-byte head. Docs-only successors (including fc65483) must not be treated as this SHA for helpers/engines/locks."
+      "note": "News #66 implementation-byte head. Docs-only successors (including 6041d2c) must not be treated as this SHA for helpers/engines/locks."
     },
     "reddit": {
       "repo": "uesu/7jkxmy9nvbc",
       "pr": 2,
-      "sha": "62a9c30d624ac9717ad3ce11ab380897b03af379",
-      "supersedes": "84356621636607dbd455b60de4d4a7a60c20d3d0"
+      "sha": "d123c0d7028061771e3b1789dd9414fed82c06f8",
+      "supersedes": "62a9c30d624ac9717ad3ce11ab380897b03af379"
     },
     "twitter": {
       "repo": "uesu/wvkhabh2s22",
       "pr": 29,
-      "sha": "26b84ff455ac5675476a55fde357dd63387627ad",
-      "supersedes": "bbc60651cb415cfe45dbf94179f42daf635d3d41",
-      "note": "Current PR #29 head; one commit ahead of the named bbc6065 snapshot. Only proposer/controller files differ from bbc6065."
+      "sha": "26b84ff455ac5675476a55fde357dd63387627ad"
     },
     "game": {
       "repo": "uesu/Game-Express",
@@ -104,7 +102,7 @@
     },
     ".github/workflows/ci.yml": {
       "news": "4b043c1fc6bea2a379974f7a638ab1be169b1737895be96bf2aab2298da25371",
-      "reddit": "7beff2e38a3494ced08a53d59026bd05959e389acf12cd5f07018c87f52d7629",
+      "reddit": "4b043c1fc6bea2a379974f7a638ab1be169b1737895be96bf2aab2298da25371",
       "twitter": "8b30011dc7ecd019b6765f2ab62f1bf7cedd96791f43d1a7b28e8625e98dc6b4",
       "game": "b8383aa1192f2753f6481a49aa1792a502b719458b1e7b338964c6dcee2d7592"
     },
@@ -158,7 +156,7 @@
     },
     "testing area/reddit_proxy.py": {
       "news": "082aa9a2e4dc5c8ff8b8d3701a3d0cfe8c518df1f314bb6920f9506939e08af9",
-      "reddit": "06b7894e9dc71efe36a2b8477af453be20f2f3d5a9fe235ce302ebf8149fa39f",
+      "reddit": "082aa9a2e4dc5c8ff8b8d3701a3d0cfe8c518df1f314bb6920f9506939e08af9",
       "twitter": "c7e02d9531d0e12198995dc7236fd8fe4173ec851e71296a0fc0f3361b684e27",
       "game": null
     },
@@ -176,7 +174,7 @@
     },
     "tests/test_crosspost_video.py": {
       "news": "ba04e4fc15953a730e52d9abc2d1382b71717a2ac9c2bedb5768f76e7da61d80",
-      "reddit": "259c9f22b4f8274a1cdea779b514729115e93651087bd7c2e5e8f5f63651f10f",
+      "reddit": "7fde63ae8d31117911197d8f6dcefea281bb388cbf4e60960d206c7b872c0c61",
       "twitter": null,
       "game": null
     },
@@ -200,7 +198,7 @@
     },
     "tests/test_smoke.py": {
       "news": "0eb1dd9eaf2cc600eaefafa06115938221b26ca2a3a5b32b73c34271cc5c42ce",
-      "reddit": "ec4cc6e167977e02dcd64b5858d7d4e250d4ac91ffdd3996d915fe5f8b35f228",
+      "reddit": "0eb1dd9eaf2cc600eaefafa06115938221b26ca2a3a5b32b73c34271cc5c42ce",
       "twitter": "6f6d1f1a6b22aa7465a829a6827c3fb6f2c291108b57ff4c8daf6bd5dae8cf38",
       "game": "f2e80030dcf1ebf0cef19ae2eb73e8576ee89f11528c82524dca30a1e3b57134"
     },

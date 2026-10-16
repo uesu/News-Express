@@ -149,13 +149,16 @@ class ProductionCopyTests(unittest.TestCase):
         self.assertIn("open acceptance item", text)
         self.assertIn("inventory, **not** completion of the requirement", text)
         self.assertIn("be4bacaa0e4a1688517549c99915d93d0227024e", text)
-        self.assertIn("62a9c30d624ac9717ad3ce11ab380897b03af379", text)
+        self.assertIn("d123c0d7028061771e3b1789dd9414fed82c06f8", text)
         self.assertIn("26b84ff455ac5675476a55fde357dd63387627ad", text)
-        self.assertIn("bbc60651cb415cfe45dbf94179f42daf635d3d41", text)
+        self.assertIn("62a9c30d624ac9717ad3ce11ab380897b03af379", text)
         self.assertIn("171925850552", text)
         self.assertIn("5f0435c56cd7", text)
         self.assertIn("ed7dd1ef5e52", text)
         self.assertIn("766548226b01", text)
+        self.assertIn("082aa9a2e4dc", text)
+        self.assertIn("c7e02d9531d0", text)
+        self.assertIn("No maintainer-approved exception has been granted", text)
         self.assertIn("do **not** claim the helpers are identical", text)
         self.assertNotIn("After both implementation PRs are accepted", text)
         coverage = (ROOT / "docs" / "ACCEPTANCE_COVERAGE.md").read_text(encoding="utf-8")
@@ -175,7 +178,7 @@ class ProductionCopyTests(unittest.TestCase):
         )
         self.assertEqual(
             artifact["heads"]["reddit"]["sha"],
-            "62a9c30d624ac9717ad3ce11ab380897b03af379",
+            "d123c0d7028061771e3b1789dd9414fed82c06f8",
         )
         self.assertEqual(
             artifact["heads"]["twitter"]["sha"],

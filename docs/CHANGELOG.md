@@ -16,6 +16,13 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-16 — Reddit `d123c0d` media-parser inventory (PR #66).** Recompute
+  hashes against Reddit #2 `d123c0d7028061771e3b1789dd9414fed82c06f8`.
+  `reddit_proxy.py` and `tests/test_smoke.py` now match News `be4baca` (OG
+  multi-value `og:video` so an audio-cover cannot hide motion). `ci.yml`
+  matches too. Twitter `26b84ff` `reddit_proxy.py` is still `c7e02d9531d0`.
+  Helpers remain unmet / not excepted / not waived. No tree copied.
+
 * **2026-10-16 — Recompute superseded proposal heads (PR #66).** Hash inventory
   now uses Reddit #2 `62a9c30` and Twitter #29 `26b84ff` (replacement of named
   `bbc6065`). News implementation bytes remain `be4baca`; this docs commit
