@@ -24,6 +24,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import maintenance  # noqa: E402
+import maintenance_common  # noqa: E402
 
 REPO_ROOT = maintenance.REPO_ROOT
 TEST_FILE_RE = re.compile(r"^test_.*\.py$")
@@ -146,6 +147,12 @@ def _lock_diff(before: str, after: str, name: str) -> None:
 
 def _print_lock_toolchain() -> None:
     print("lock-consistency python", sys.version.replace("\n", " "), flush=True)
+    print(
+        "lock-consistency pinned",
+        f"pip=={maintenance_common.PINNED_PIP}",
+        f"pip-tools=={maintenance_common.PINNED_PIP_TOOLS}",
+        flush=True,
+    )
     try:
         import pip
         print("lock-consistency pip", getattr(pip, "__version__", "?"), flush=True)
@@ -162,6 +169,28 @@ def _print_lock_toolchain() -> None:
         print("lock-consistency piptools unavailable:", exc, flush=True)
 
 
+def _compiler_pin_failures(root: Path, profile: dict) -> list[str]:
+    """Require the pinned compiler to appear in the lock that records it."""
+    pinned_pip, pinned_tools = maintenance_common.compiler_pins(profile)
+    problems: list[str] = []
+    if pinned_pip != maintenance_common.PINNED_PIP or pinned_tools != maintenance_common.PINNED_PIP_TOOLS:
+        problems.append(
+            f"profile compiler pip=={pinned_pip} pip-tools=={pinned_tools} "
+            f"does not match helper pins pip=={maintenance_common.PINNED_PIP} "
+            f"pip-tools=={maintenance_common.PINNED_PIP_TOOLS}"
+        )
+    dev = root / "requirements-dev.txt"
+    if not dev.is_file():
+        problems.append("missing requirements-dev.txt (compiler pins live there)")
+        return problems
+    text = dev.read_text(encoding="utf-8")
+    if f"pip=={pinned_pip}" not in text:
+        problems.append(f"requirements-dev.txt must contain pip=={pinned_pip}")
+    if f"pip-tools=={pinned_tools}" not in text:
+        problems.append(f"requirements-dev.txt must contain pip-tools=={pinned_tools}")
+    return problems
+
+
 def group_lock_consistency(root: Path, profile: dict) -> int:
     runtime = root / "requirements.txt"
     dev = root / "requirements-dev.txt"
@@ -170,6 +199,12 @@ def group_lock_consistency(root: Path, profile: dict) -> int:
         return 1
     if " --hash=" not in runtime.read_text(encoding="utf-8"):
         print("requirements.txt is not a hashed lock", file=sys.stderr)
+        return 1
+    pin_problems = _compiler_pin_failures(root, profile)
+    if pin_problems:
+        for problem in pin_problems:
+            print(problem, file=sys.stderr)
+            _github_error("compiler-pin-mismatch", problem)
         return 1
     _print_lock_toolchain()
     before_runtime = _normalize_lock(runtime)

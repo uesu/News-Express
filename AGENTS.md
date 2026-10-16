@@ -52,8 +52,8 @@ onto the other.
   order, GIF converter chain + content types, mp4-vs-AVIF priority, the
   media-heal contract). `tests/test_crosspost_video.py` — original-post
   discovery and video-fallback eligibility. Maintenance/reporting:
-  `tests/test_maintenance.py`, `tests/test_run_summary.py`,
-  `tests/test_configuration_contract.py`.
+  `tests/test_maintenance.py`, `tests/test_maintenance_common.py`,
+  `tests/test_run_summary.py`, `tests/test_configuration_contract.py`.
 - `docs/` — current changelog + topic guides: `CHANGELOG.md` (current release
   notes, round 63 onward), `CI_SMOKE.md`, `DEPENDABOT.md`, `DISCOHOOK.md`,
   `PYTHON_RUNTIME.md`, `REPOSITORY_TRACKING.md` (per-monitor Variable

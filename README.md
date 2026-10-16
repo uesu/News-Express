@@ -164,7 +164,7 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 │   ├── test_smoke.py              # offline smoke suite (run by CI)
 │   ├── test_reddit_signals.py     # pure gate/unit suite
 │   ├── test_twitter_media.py      # focused X media suite (run by CI)
-│   ├── test_maintenance.py · test_run_summary.py · test_configuration_contract.py
+│   ├── test_maintenance.py · test_maintenance_common.py · test_run_summary.py · test_configuration_contract.py
 │   ├── test_crosspost_video.py    # original-post / video-fallback guards
 │   └── fixtures/posted_cards.py   # production-card replay fixtures
 ├── AGENTS.md                      # onboarding for AI coding agents

@@ -24,6 +24,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+import maintenance_common
+
 SCHEMA_VERSION = 1
 SCRIPTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPTS_DIR.parent.parent
@@ -829,6 +831,10 @@ def decide_merge(snapshot: Mapping[str, Any]) -> Decision:
     if str(snapshot["repository"]) != expected_repo:
         return Decision("fail", "unexpected-repository")
 
+    association = maintenance_common.repo_association_failure(pr, expected_repo)
+    if association:
+        return Decision("fail", association, risk="blocked")
+
     identities = policy.get("updater_identities") or {}
     kind = trusted_updater(pr, identities, commits=snapshot.get("commits"))
     if kind is None:
@@ -885,6 +891,67 @@ def decide_merge(snapshot: Mapping[str, Any]) -> Decision:
     if classified.get("state") != "ready":
         action = "defer" if classified.get("state") == "pending" else "fail"
         return Decision(action, str(classified.get("reason") or "checks"), risk="blocked", checks=classified.get("checks") or {})
+
+    producers_policy = policy.get("check_producers") or {}
+    if producers_policy:
+        producers = maintenance_common.verify_check_producers(
+            snapshot.get("producer_evidence"),
+            expected_names=expected,
+            head_sha=head_sha,
+            producers=producers_policy,
+            repository=expected_repo,
+        )
+        if producers.get("state") != "ready":
+            return Decision(
+                "fail",
+                str(producers.get("reason") or "producers"),
+                risk="blocked",
+                checks=classified.get("checks") or {},
+            )
+
+    required_security = list(policy.get("required_security_evidence") or [])
+    security_mode = str(policy.get("security_evidence_mode") or "")
+    if security_mode or required_security:
+        security = maintenance_common.verify_security_evidence(
+            snapshot.get("security_evidence"),
+            required_security,
+            mode=security_mode,
+        )
+        if security.get("state") == "failed":
+            return Decision(
+                "fail",
+                str(security.get("reason") or "security-evidence"),
+                risk="blocked",
+                checks=classified.get("checks") or {},
+            )
+        if security.get("state") != "ready":
+            return Decision(
+                "defer",
+                str(security.get("reason") or "security-evidence-unavailable"),
+                risk="blocked",
+                checks=classified.get("checks") or {},
+            )
+
+    publication = maintenance_common.verify_publication_gate(
+        mode=str(policy.get("publication_evidence_mode") or ""),
+        kind=kind,
+        evidence=snapshot.get("publication_evidence") if isinstance(snapshot.get("publication_evidence"), dict) else {},
+        pr=pr,
+        candidate_version=str(snapshot.get("candidate_version") or "") or None,
+        trusted_proposer_path=str(policy.get("publication_proposer_workflow") or maintenance_common.DEFAULT_PROPOSER_PATH),
+        proposal_files=list(policy.get("publication_proposal_files") or maintenance_common.DEFAULT_PROPOSAL_FILES),
+        pinned_pip=str(policy.get("pinned_pip") or maintenance_common.PINNED_PIP),
+        pinned_pip_tools=str(policy.get("pinned_pip_tools") or maintenance_common.PINNED_PIP_TOOLS),
+        repository=expected_repo,
+    )
+    if publication.get("state") != "ready":
+        action = "defer" if publication.get("state") == "pending" else "fail"
+        return Decision(
+            action,
+            str(publication.get("reason") or "publication-evidence"),
+            risk="blocked",
+            checks=classified.get("checks") or {},
+        )
 
     files = snapshot.get("files") if isinstance(snapshot.get("files"), list) else []
     computed = snapshot_risk_from_files(files, diff_kind)
@@ -1131,6 +1198,23 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
     )
     if status != 200 or not isinstance(check_runs, list):
         return Decision("fail", f"checks-api:{status}")
+    mandatory = list(profile.get("mandatory_check_names") or [])
+
+    def _get_json(url: str) -> tuple[int, Any]:
+        return _github_json(url, token)
+
+    def _get_pages(url: str) -> tuple[int, Any]:
+        return _api_pages(url, token)
+
+    producer_evidence = maintenance_common.collect_producer_evidence(
+        owner, name, check_runs, mandatory, _get_json
+    )
+    _security_mode, required_security = maintenance_common.security_policy(profile)
+    head_ref = str((pr.get("head") or {}).get("ref") or "")
+    security_evidence = maintenance_common.collect_security_evidence(
+        owner, name, head_sha, required_security, _get_pages, ref=head_ref
+    )
+    pub_mode, pub_path, pub_files = maintenance_common.publication_policy(profile)
     status, files = _api_pages(
         f"https://api.github.com/repos/{owner}/{name}/pulls/{pr_number}/files?per_page=100",
         token,
@@ -1199,11 +1283,14 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
         allowed = list((identities.get("python_bump") or {}).get("allowed_files") or [".python-version"])
     else:
         allowed = list(profile.get("dependabot_allowed_files") or DEFAULT_DEPENDABOT_ALLOWED)
+    pinned_pip, pinned_tools = maintenance_common.compiler_pins(profile)
     return {
         "repository": full_name,
         "head_sha": head_sha,
         "pull_request": pr,
         "checks": check_runs,
+        "producer_evidence": producer_evidence,
+        "security_evidence": security_evidence,
         "files": files,
         "reviews": reviews,
         "legacy_statuses": legacy,
@@ -1223,6 +1310,14 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
             "mandatory_check_names": profile.get("mandatory_check_names") or [],
             "ci_workflow_name": profile.get("ci_workflow_name") or "",
             "ci_workflow_path": profile.get("ci_workflow_path") or "",
+            "check_producers": profile.get("check_producers") or {},
+            "security_evidence_mode": _security_mode,
+            "required_security_evidence": required_security,
+            "publication_evidence_mode": pub_mode,
+            "publication_proposer_workflow": pub_path,
+            "publication_proposal_files": list(pub_files),
+            "pinned_pip": pinned_pip,
+            "pinned_pip_tools": pinned_tools,
             "human_review_labels": profile.get("human_review_labels") or list(HOLD_LABELS_FALLBACK),
             "updater_identities": identities,
             "allowed_merge_method": profile.get("allowed_merge_method") or "squash",

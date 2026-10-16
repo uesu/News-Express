@@ -36,15 +36,25 @@ unassociated hash-only, extra-index, SHA-bound failed legacy status, COMMENTED
 after CHANGES_REQUESTED, forced `3.14.7` `override-unavailable`. Twitter CI
 changes are not a News CI fix.
 
-## N2 — proposal-head inventory, not parity
+## N2 — News-local common-helper candidate, still unmet across four PRs
 
 See [`COPY_MANIFEST.md`](COPY_MANIFEST.md) and
 [`proposal_head_hashes.json`](proposal_head_hashes.json). Compared heads are
-News implementation `be4baca`, Reddit #2 `d123c0d` (supersedes `62a9c30`;
-`reddit_proxy.py` / smoke now match News), Twitter #29 `26b84ff` — not
-deployed `main`. Shared helpers are **not** identical. The master
-identical-helper requirement is **unmet** and **not excepted**; four PRs are
-**not fully aligned**. The explicit “unmet” note is inventory, not completion.
+News ancestor implementation `be4baca`, News Part A candidate (this working
+tree; a commit cannot embed its own final self-hash), Reddit #2 `d123c0d`
+(supersedes `62a9c30`; `reddit_proxy.py` / smoke now match News), Twitter #29
+`26b84ff` — not deployed `main`.
+
+News now ships `.github/scripts/maintenance_common.py` (producer binding,
+security evidence, publication gate, python.org soak dates, compiler pins)
+wired through `decide_merge` / `build_live_snapshot` / `python_version_bump`
+/ lock-consistency, with a profile seam in `.github/maintenance.json`.
+That candidate is **not** approved for blind adoption and does **not** prove
+Game / Reddit / Twitter compatibility. Shared helpers across the four PRs
+are **not** identical. The master identical-helper requirement is **unmet**
+and **not excepted**; four PRs are **not fully aligned**. The explicit
+“unmet” note is inventory, not completion. Helper-only fixtures are not live
+merges.
 
 ## N3 — coverage vs remaining limits
 

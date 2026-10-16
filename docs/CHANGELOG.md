@@ -16,6 +16,17 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-16 — N2 Part A common-helper candidate (PR #66).** Add
+  `.github/scripts/maintenance_common.py` (producer identity, security
+  evidence, publication gate, python.org soak dates, pinned compiler) and
+  wire it through News `decide_merge`, live snapshot, python bump, and
+  lock-consistency. Profile seam: `check_producers`, `security_evidence`
+  (mode=disabled, recorded), `publication_evidence` (mode=disabled,
+  recorded), `compiler`. News hash-package association, SHA-bound legacy
+  overlay, expected-workflow jobs, engines, and posting are unchanged.
+  Candidate is not approved for blind adoption and does not prove
+  Game/Reddit/Twitter compatibility. Identical helpers remain unmet.
+
 * **2026-10-16 — Reddit `d123c0d` media-parser inventory (PR #66).** Recompute
   hashes against Reddit #2 `d123c0d7028061771e3b1789dd9414fed82c06f8`.
   `reddit_proxy.py` and `tests/test_smoke.py` now match News `be4baca` (OG

@@ -5,15 +5,16 @@ Selection, soak, and risk policy live in maintenance.py. This entry point
 reads `.python-version`, optionally a fixture, and prints a JSON result.
 It never merges, never rewrites README/history, and treats missing optional
 docs as success for production copies.
+
+Release-age authority is python.org (maintenance_common.fetch_release_dates).
+The setup-python versions-manifest ``published_at`` is archive publication,
+not the CPython release date, and is not used for soak.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,6 +23,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import maintenance  # noqa: E402
+import maintenance_common  # noqa: E402
 
 REPO_ROOT = maintenance.REPO_ROOT
 
@@ -36,50 +38,29 @@ def optional_docs_present(profile: dict, root: Path) -> bool:
 
 
 def fetch_manifest_release_date(entry: dict) -> str | None:
-    """Bounded lookup of a setup-python manifest entry's published time.
-
-    Fixture/decide paths never call this. Live selection uses it only when the
-    manifest omits release_date/published_at so a next-minor soak can run.
+    """Documented non-authority. Do not use this for soak age.
 
     The GitHub release ``published_at`` for ``actions/python-versions`` is the
     **setup-python artifact publication time**, not the CPython python.org
-    release date. A rebuilt archive must not silently redefine soak age; the
-    selector defers when no date is available rather than treating a rebuilt
-    artifact timestamp as a fresh CPython release.
+    release date. Kept so callers that still probe the archive timestamp can
+    see it is not the soak authority.
     """
     for key in ("release_date", "published_at"):
         raw = str(entry.get(key) or "")
         if maintenance.parse_iso_date(raw):
             return raw
-    url = str(entry.get("release_url") or "")
-    if "/releases/tag/" not in url:
-        return None
-    tag = url.rsplit("/tag/", 1)[-1]
-    if not tag:
-        return None
-    api = f"https://api.github.com/repos/actions/python-versions/releases/tags/{tag}"
-    req = urllib.request.Request(api, method="GET")
-    req.add_header("Accept", "application/vnd.github+json")
-    req.add_header("User-Agent", "news-express-python-bump")
-    req.add_header("X-GitHub-Api-Version", "2026-03-10")
-    token = os.environ.get("GITHUB_TOKEN") or ""
-    if token:
-        req.add_header("Authorization", f"Bearer {token}")
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            payload = json.loads(resp.read().decode("utf-8") or "{}")
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    published = str(payload.get("published_at") or payload.get("created_at") or "")
-    return published or None
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture", help="side-effect-free JSON fixture")
     parser.add_argument("--manifest", help="setup-python versions-manifest.json")
+    parser.add_argument(
+        "--release-date-cache",
+        default="",
+        help="cache file for authoritative upstream release dates",
+    )
     parser.add_argument("--force", default="")
     parser.add_argument("--soak-days", type=int, default=0)
     parser.add_argument("--ignore-soak", action="store_true")
@@ -125,14 +106,19 @@ def main(argv: list[str] | None = None) -> int:
         manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
         current = maintenance.read_pin(pin_path)
         soak = args.soak_days or int(profile.get("python", {}).get("soak_days_default") or 30)
+        dates, date_state, date_detail = maintenance_common.fetch_release_dates(
+            cache_path=Path(args.release_date_cache) if args.release_date_cache else None
+        )
+        manifest, date_report = maintenance_common.apply_release_dates(manifest, dates, date_state)
+        date_report["detail"] = date_detail
         result = maintenance.select_python_candidate(
             current,
             manifest,
             soak_days=soak,
             ignore_soak=args.ignore_soak,
             force=args.force or None,
-            date_lookup=lambda _version, entry: fetch_manifest_release_date(entry),
         )
+        result["release_dates"] = date_report
         result["optional_docs_present"] = optional_docs_present(profile, root)
         json.dump(result, sys.stdout, indent=2)
         sys.stdout.write("\n")

@@ -2,7 +2,9 @@
 
 News-Express and Game-Express share this helper layout and a project-specific
 `.github/maintenance.json` profile. The applications stay independent; only
-the policy helpers are meant to stay identical.
+the policy helpers are meant to stay identical. That requirement is still
+unmet across the four proposal heads. `.github/scripts/maintenance_common.py`
+is the News-local candidate (not approved for blind adoption).
 
 Production copies may omit README/docs. Runtime, CI, the merge controller, and
 the runtime proposer must still work. Do not copy development docs into
@@ -17,6 +19,7 @@ dedup caches**.
 | `requirements.txt` / `requirements-dev.txt` | Hashed frozen graphs |
 | `.github/maintenance.json` | Project profile (checks, compile commands, identities) |
 | `.github/scripts/maintenance.py` | Pure policy + explicit `apply-live` adapter |
+| `.github/scripts/maintenance_common.py` | Portable producer / security / publication / soak / compiler pins |
 | `.github/scripts/python_version_bump.py` | Pin proposer (no merge, no GitHub writes without flags) |
 | `.github/scripts/ci.py` | Command registry; every `tests/test_*.py` must be listed |
 | `.github/scripts/render_run_summary.py` | Markdown footer from a structured report |

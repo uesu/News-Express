@@ -121,6 +121,7 @@ class ProductionCopyTests(unittest.TestCase):
             ".github/workflows/reddit_monitor.yml",
             ".github/workflows/twitter_monitor.yml",
             ".github/scripts/maintenance.py",
+            ".github/scripts/maintenance_common.py",
             ".github/scripts/ci.py",
             ".python-version",
             "requirements.txt",
@@ -160,6 +161,8 @@ class ProductionCopyTests(unittest.TestCase):
         self.assertIn("c7e02d9531d0", text)
         self.assertIn("No maintainer-approved exception has been granted", text)
         self.assertIn("do **not** claim the helpers are identical", text)
+        self.assertIn("not** approved for blind adoption", text)
+        self.assertIn("maintenance_common.py", text)
         self.assertNotIn("After both implementation PRs are accepted", text)
         coverage = (ROOT / "docs" / "ACCEPTANCE_COVERAGE.md").read_text(encoding="utf-8")
         self.assertIn("not production parity", coverage)
@@ -173,9 +176,11 @@ class ProductionCopyTests(unittest.TestCase):
             (ROOT / "docs" / "proposal_head_hashes.json").read_text(encoding="utf-8")
         )
         self.assertEqual(
-            artifact["heads"]["news"]["sha"],
+            artifact["heads"]["news"]["ancestor_implementation_bytes"],
             "be4bacaa0e4a1688517549c99915d93d0227024e",
         )
+        self.assertIn("cannot embed its own final self-hash", artifact["heads"]["news"]["note"])
+        self.assertIn("not approved for blind adoption", artifact["heads"]["news"]["note"])
         self.assertEqual(
             artifact["heads"]["reddit"]["sha"],
             "d123c0d7028061771e3b1789dd9414fed82c06f8",
@@ -187,6 +192,7 @@ class ProductionCopyTests(unittest.TestCase):
         helpers = (
             ".github/scripts/ci.py",
             ".github/scripts/maintenance.py",
+            ".github/scripts/maintenance_common.py",
             ".github/scripts/python_version_bump.py",
             ".github/scripts/render_run_summary.py",
             "testing area/reddit_main_v3.py",

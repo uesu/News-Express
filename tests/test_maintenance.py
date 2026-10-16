@@ -21,7 +21,8 @@ SHA2 = "b" * 40
 
 
 def _pr(*, login="dependabot[bot]", sha=SHA, ref="dependabot/pip/foo", draft=False,
-        labels=None, mergeable=True, mergeable_state="clean", base="main"):
+        labels=None, mergeable=True, mergeable_state="clean", base="main",
+        repo="uesu/News-Express", head_repo=None, base_repo=None):
     return {
         "number": 12,
         "state": "open",
@@ -30,8 +31,15 @@ def _pr(*, login="dependabot[bot]", sha=SHA, ref="dependabot/pip/foo", draft=Fal
         "mergeable": mergeable,
         "mergeable_state": mergeable_state,
         "user": {"login": login},
-        "head": {"sha": sha, "ref": ref},
-        "base": {"ref": base},
+        "head": {
+            "sha": sha,
+            "ref": ref,
+            "repo": {"full_name": repo if head_repo is None else head_repo},
+        },
+        "base": {
+            "ref": base,
+            "repo": {"full_name": repo if base_repo is None else base_repo},
+        },
         "labels": labels or [],
     }
 
@@ -985,6 +993,8 @@ class LiveAdapterTests(unittest.TestCase):
                     "mandatory_check_names": ["application"],
                     "ci_workflow_name": "CI — syntax + offline smoke test",
                     "ci_workflow_path": ".github/workflows/ci.yml",
+                    "security_evidence": {"mode": "disabled"},
+                    "publication_evidence": {"mode": "disabled"},
                     "updater_identities": {
                         "dependabot": {"login": "dependabot[bot]", "auto_merge_var": "AUTO_MERGE_DEPENDABOT"},
                     },
@@ -1059,6 +1069,8 @@ class LiveAdapterTests(unittest.TestCase):
                     "mandatory_check_names": ["application"],
                     "ci_workflow_name": "CI — syntax + offline smoke test",
                     "ci_workflow_path": ".github/workflows/ci.yml",
+                    "security_evidence": {"mode": "disabled"},
+                    "publication_evidence": {"mode": "disabled"},
                     "updater_identities": {
                         "dependabot": {"login": "dependabot[bot]", "auto_merge_var": "AUTO_MERGE_DEPENDABOT"},
                     },
@@ -1129,6 +1141,8 @@ class LiveAdapterTests(unittest.TestCase):
                     "mandatory_check_names": ["application"],
                     "ci_workflow_name": "CI — syntax + offline smoke test",
                     "ci_workflow_path": ".github/workflows/ci.yml",
+                    "security_evidence": {"mode": "disabled"},
+                    "publication_evidence": {"mode": "disabled"},
                     "updater_identities": {
                         "dependabot": {"login": "dependabot[bot]", "auto_merge_var": "AUTO_MERGE_DEPENDABOT"},
                     },
@@ -1146,6 +1160,172 @@ class LiveAdapterTests(unittest.TestCase):
         })
         self.assertEqual(decision.action, "fail")
         self.assertIn("mandatory-check-not-success", decision.reason)
+
+
+def _producer_ok(name="application", *, check_id=1, run_id=10, job_id=20, sha=SHA):
+    return {
+        name: {
+            "workflow": ".github/workflows/ci.yml",
+            "job": name,
+            "check_run_id": check_id,
+            "run_id": run_id,
+            "run_record_id": run_id,
+            "job_id": job_id,
+            "job_record_id": job_id,
+            "job_run_id": run_id,
+            "job_check_run_url": (
+                f"https://api.github.com/repos/uesu/News-Express/check-runs/{check_id}"
+            ),
+            "run_attempt": 1,
+            "job_run_attempt": 1,
+            "head_sha": sha,
+            "job_head_sha": sha,
+            "job_status": "completed",
+            "job_conclusion": "success",
+            "run_status": "completed",
+            "run_conclusion": "success",
+        }
+    }
+
+
+class CommonHelperCallerTests(unittest.TestCase):
+    """Caller-level probes so a passing helper fixture cannot hide a broken decide_merge."""
+
+    def test_missing_repo_association_fails_closed(self):
+        pr = _pr()
+        del pr["head"]["repo"]
+        decision = maintenance.decide_merge(_snapshot(pull_request=pr))
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "missing-repo-association")
+
+    def test_fork_head_fails_closed(self):
+        decision = maintenance.decide_merge(
+            _snapshot(pull_request=_pr(head_repo="alice/News-Express"))
+        )
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "cross-fork-head")
+
+    def test_foreign_base_fails_closed(self):
+        decision = maintenance.decide_merge(
+            _snapshot(pull_request=_pr(base_repo="other/News-Express"))
+        )
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "foreign-base-repository")
+
+    def test_configured_producers_without_evidence_fail_through_decide_merge(self):
+        snap = _snapshot()
+        snap["policy"] = {
+            **snap["policy"],
+            "check_producers": {
+                "application": {"workflow": ".github/workflows/ci.yml", "job": "application"},
+            },
+        }
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertIn("missing-producer-evidence:application", decision.reason)
+
+    def test_foreign_check_run_url_fails_through_decide_merge(self):
+        evidence = _producer_ok()
+        evidence["application"]["job_check_run_url"] = (
+            "https://api.github.com/repos/evil/fork/check-runs/1"
+        )
+        snap = _snapshot(producer_evidence=evidence)
+        snap["policy"] = {
+            **snap["policy"],
+            "check_producers": {
+                "application": {"workflow": ".github/workflows/ci.yml", "job": "application"},
+            },
+        }
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertIn("producer-check-run-foreign-repository", decision.reason)
+
+    def test_verified_producers_still_merge(self):
+        snap = _snapshot(producer_evidence=_producer_ok())
+        snap["policy"] = {
+            **snap["policy"],
+            "check_producers": {
+                "application": {"workflow": ".github/workflows/ci.yml", "job": "application"},
+            },
+        }
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "merge")
+
+    def test_security_unconfigured_fails_through_decide_merge(self):
+        snap = _snapshot()
+        snap["policy"] = {**snap["policy"], "security_evidence_mode": "unconfigured"}
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "security-evidence-unconfigured")
+
+    def test_security_disabled_still_merges(self):
+        snap = _snapshot()
+        snap["policy"] = {**snap["policy"], "security_evidence_mode": "disabled"}
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "merge")
+
+    def test_open_code_scanning_alerts_fail_through_decide_merge(self):
+        snap = _snapshot(
+            security_evidence={"code-scanning": {"state": "ok", "open": 2}},
+        )
+        snap["policy"] = {
+            **snap["policy"],
+            "security_evidence_mode": "required",
+            "required_security_evidence": ["code-scanning"],
+        }
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "unresolved-code-scanning-alerts:2")
+
+    def test_unavailable_security_evidence_defers_not_clean(self):
+        snap = _snapshot(
+            security_evidence={"code-scanning": {"state": "unavailable", "detail": "alerts-http:403"}},
+        )
+        snap["policy"] = {
+            **snap["policy"],
+            "security_evidence_mode": "required",
+            "required_security_evidence": ["code-scanning"],
+        }
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "defer")
+        self.assertIn("security-evidence-unavailable:code-scanning:unavailable", decision.reason)
+
+    def test_python_bump_publication_unconfigured_fails_through_decide_merge(self):
+        pr = _pr(login="github-actions[bot]", ref="chore/python-3.14.9")
+        snap = _snapshot(
+            pull_request=pr,
+            files=[{"filename": ".python-version", "patch": "-3.14.8\n+3.14.9\n"}],
+            risk={"risk": "routine", "auto_eligible": True, "reason": "python-patch"},
+        )
+        snap["policy"] = {**snap["policy"], "publication_evidence_mode": ""}
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "publication-evidence-unconfigured")
+
+    def test_python_bump_publication_disabled_still_merges(self):
+        pr = _pr(login="github-actions[bot]", ref="chore/python-3.14.9")
+        snap = _snapshot(
+            pull_request=pr,
+            files=[{"filename": ".python-version", "patch": "-3.14.8\n+3.14.9\n"}],
+            risk={"risk": "routine", "auto_eligible": True, "reason": "python-patch"},
+        )
+        snap["policy"] = {**snap["policy"], "publication_evidence_mode": "disabled"}
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "merge")
+
+    def test_mismatched_publication_record_fails_through_decide_merge(self):
+        pr = _pr(login="github-actions[bot]", ref="chore/python-3.14.9")
+        snap = _snapshot(
+            pull_request=pr,
+            files=[{"filename": ".python-version", "patch": "-3.14.8\n+3.14.9\n"}],
+            risk={"risk": "routine", "auto_eligible": True, "reason": "python-patch"},
+            publication_evidence={"repository": "uesu/News-Express"},
+            candidate_version="3.14.9",
+        )
+        snap["policy"] = {**snap["policy"], "publication_evidence_mode": "required"}
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "no-proposer-run")
 
 
 if __name__ == "__main__":
