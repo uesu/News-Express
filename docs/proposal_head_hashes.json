@@ -66,7 +66,7 @@
       "game": "367a33838aeaea6ba002240df310cf1d13ab59d2b2ddcf630dde9d43eedbc776"
     },
     ".github/maintenance.json": {
-      "news": "d4e481d960e47b00a75897f68f45e62235481346049569840ac9f996d8afbad3",
+      "news": "a0ac3c75c2d09332591c1984dae95b214da85918ed0d814b73112df7d0d92a81",
       "reddit": "7e2983403a26623e04c5736445cb18695b4bebc194c86c2377591faa9d7b0fc8",
       "twitter": "e632a062314486c463005e4c8030bb0e9eb1d551a1f254d37672a5afb35bb86d",
       "game": "eba443c8a66310d56bd55bbc110eb422336ba36c7082bd7b924347c86fc25efa"
@@ -78,13 +78,13 @@
       "game": "5530132b5be2a870d162121fc2b2da6771a6f584dd78571b097c94ef5831f654"
     },
     ".github/scripts/maintenance.py": {
-      "news": "cce2cdbd41b9a02120f6ea9b3be6b4d5e0ec4019c1aeb3f91bc8fbe0819f3167",
+      "news": "bdc9a5b767ea98f2cf4db13d916f11d7a39e342a75515328d3c2556a1759a3ef",
       "reddit": "ed7dd1ef5e5264547c3909dbc7599b09d47c9a0f17494d92bf49671785a69a34",
       "twitter": "766548226b019a0254ed4bac48c30c5b3e46ff9dd21c24fdb0c08dfdcf76c91e",
       "game": "5e2dfb595cd1b5a2c3ebaad7346274e4a5f80925b8e5d9828aa7e32c87f5e2ac"
     },
     ".github/scripts/python_version_bump.py": {
-      "news": "dcdd28c0c314558419c73e0da030415ea09e48410b0893a93c0a2f87fb52c52c",
+      "news": "2983fb5c81d5fb31304a54bd6a74a6355a604457d6434617e673701708cfe1b5",
       "reddit": "a3011aba88dca0554850c0715cc6571f1f8effcc6f696aac793c14fa27ac2f85",
       "twitter": "01f087f4f568ebaee1273fa6d75bab920f7bf5e3bbb3614cb0c7944d9f88d480",
       "game": "b9c9ae1db623a799f3868bc39d4af71254de4b957960f40cd8f6586cbb57595b"
@@ -180,7 +180,7 @@
       "game": null
     },
     "tests/test_maintenance.py": {
-      "news": "ba64cdac8361544c96ce600ff8ea2408bc5cb50e33de4a0e6d7c9dadb72fb523",
+      "news": "1feb19485989d93194c2ad57c9c0b7d6b4292f7b993355dcf9d66672a1311cfb",
       "reddit": "ee0ce3cec735768da65e9233e33f86a44ee57913f94f9488b713ed965a0b35a4",
       "twitter": "c6884a0ad788e5477b687344661ff9039ae073d566a47251f6015a32523a485d",
       "game": "074822c89d75c00da7aa5dab6d693b46d014b2f0f56dcff2ff0cafbdab1885bf"
@@ -192,7 +192,7 @@
       "game": "e2ae7e98e05f1cde37892f84ed8feb235ed0b90104c75daafcc771ce8c1780e9"
     },
     "tests/test_configuration_contract.py": {
-      "news": "f3ca8d8b5d2e55d4d662ee3129bb1cbf09709326fca3baa0ee83ec8d5c83c601",
+      "news": "db606ce7642750ee0089c691a4e34c6681040e79165ad1cafec9e3cd6511e39e",
       "reddit": "3e10e87c34410acdf52db13131227bf6604aaa2315837e8bd67803eb059354db",
       "twitter": "d7805afc949a823bc90a197a402f70efba9678eb630acd343ac4d06583ebca93",
       "game": "cf80f384b6b57684eae916be83090866cb25efbd26b977976d41d41a5cb2378e"
@@ -216,13 +216,13 @@
       "game": null
     },
     ".github/scripts/maintenance_common.py": {
-      "news": "4e9c57ad337b65ede8565d9293a0966f41c33ee20ad3f6823fca07d3031f865f",
+      "news": "67e5b379c5de0a4a86fa78a3af4a8389a39155c88d6f08679eb963ffe2ae1d2a",
       "reddit": null,
       "twitter": null,
       "game": null
     },
     "tests/test_maintenance_common.py": {
-      "news": "4d5a6aca6cd6f6693bfe4aec6e455d0fdba11dc01b85eacf91eea5b5d64a310c",
+      "news": "7fbdc42279cceb13766b09c223fd39379daa2414b638fd3c117e7465725ebeec",
       "reddit": null,
       "twitter": null,
       "game": null

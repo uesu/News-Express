@@ -24,7 +24,11 @@ rewritten when that happens, only relocated.
   `mode=disabled` blocks the python-bump auto-merge lane rather than reading
   as satisfied. The publish job groups `GITHUB_OUTPUT` writes and keeps
   `[bot]` out of the emit script so pinned `actionlint`/shellcheck can pass.
-  Other three PRs are unchanged; N2 remains unmet.
+  Validation notices read compiler versions via `importlib.metadata.version`
+  (`pip` / `pip-tools`); `piptools.__version__` is not authority. The
+  fetched published commit's author/committer login, name, and email must
+  match the configured git identity; the notice string is not proof. Other
+  three PRs are unchanged; N2 remains unmet.
 
 * **2026-10-16 — N2 Part A common-helper candidate (PR #66).** Add
   `.github/scripts/maintenance_common.py` (producer identity, security

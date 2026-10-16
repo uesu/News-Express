@@ -1314,7 +1314,9 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
         allowed = list(profile.get("dependabot_allowed_files") or DEFAULT_DEPENDABOT_ALLOWED)
     pinned_pip, pinned_tools = maintenance_common.compiler_pins(profile)
     publication_block = profile.get("publication_evidence") if isinstance(profile.get("publication_evidence"), dict) else {}
-    expected_commit = str(publication_block.get("commit_identity") or "")
+    expected_login, expected_name, expected_email = maintenance_common.configured_commit_identity(
+        publication_block
+    )
     publication_evidence: dict[str, Any] = {}
     candidate_version = maintenance_common.candidate_version_from_files(files if isinstance(files, list) else [])
     if kind == "python_bump" and pub_mode == "required":
@@ -1327,7 +1329,9 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
             get_pages=_get_pages,
             trusted_proposer_path=pub_path,
             proposal_files=pub_files,
-            expected_commit_identity=expected_commit,
+            expected_commit_identity=expected_login,
+            expected_commit_name=expected_name,
+            expected_commit_email=expected_email,
         )
         if not candidate_version:
             candidate_version = publication_evidence.get("candidate_version")

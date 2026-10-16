@@ -26,6 +26,20 @@ import maintenance_common  # noqa: E402
 
 SHA = "a" * 40
 REPO = "uesu/News-Express"
+BOT = "github-actions[bot]"
+BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+def _published_commit(sha=SHA, *, login=BOT, name=BOT, email=BOT_EMAIL):
+    return {
+        "sha": sha,
+        "author": {"login": login},
+        "committer": {"login": login},
+        "commit": {
+            "author": {"name": name, "email": email},
+            "committer": {"name": name, "email": email},
+        },
+    }
 
 
 class RepoAssociationTests(unittest.TestCase):
@@ -382,7 +396,7 @@ class PublicationTests(unittest.TestCase):
                     "content": base64.b64encode(pin).decode("ascii"),
                 }
             if "/commits/" in url:
-                return 200, {"sha": SHA}
+                return 200, _published_commit(SHA)
             if "/attempts/" in url:
                 return 200, {
                     "id": 44, "run_attempt": 1, "status": "completed",
@@ -430,6 +444,181 @@ class PublicationTests(unittest.TestCase):
             repository=REPO,
         )
         self.assertEqual(verified["state"], "ready")
+
+    def test_correct_notice_wrong_actual_commit_fails_verify(self):
+        pr = {
+            "number": 9,
+            "user": {"login": "news-express-bump"},
+            "head": {"sha": SHA, "ref": "chore/python-3.14.9"},
+        }
+        run = {
+            "id": 44,
+            "workflow_id": 7,
+            "path": maintenance_common.DEFAULT_PROPOSER_PATH,
+            "status": "completed",
+            "conclusion": "success",
+            "run_attempt": 1,
+            "head_sha": "c" * 40,
+            "actor": {"login": "github-actions[bot]"},
+            "repository": {"full_name": REPO},
+            "head_repository": {"full_name": REPO},
+        }
+        evidence = {
+            "repository": REPO,
+            "proposer_run": run,
+            "proposer_attempt": {
+                "id": 44, "run_attempt": 1, "status": "completed",
+                "conclusion": "success", "head_sha": "c" * 40,
+            },
+            "validation_record": {
+                "run_id": 44, "run_attempt": 1, "source_head": "c" * 40,
+                "candidate_version": "3.14.9", "interpreter": "3.14.9",
+                "pip": maintenance_common.PINNED_PIP,
+                "pip_tools": maintenance_common.PINNED_PIP_TOOLS,
+                "digests": {".python-version": "aaa"},
+            },
+            "publication_record": {
+                "run_id": 44, "run_attempt": 1, "pull_number": 9,
+                "published_head": SHA, "branch": "chore/python-3.14.9",
+                "pr_author": "news-express-bump",
+                "run_actor": "github-actions[bot]",
+                "commit_identity": "github-actions[bot]",
+                "digests": {".python-version": "aaa"},
+            },
+            "proposal_digests": {".python-version": "aaa"},
+            "expected_commit_identity": "github-actions[bot]",
+            "published_commit": {
+                "sha": SHA,
+                "author": {"login": "alice"},
+                "committer": {"login": "bob"},
+                "commit": {
+                    "author": {"name": "Alice", "email": "alice@example.test"},
+                    "committer": {"name": "Bob", "email": "bob@example.test"},
+                },
+            },
+        }
+        result = maintenance_common.verify_publication_gate(
+            mode="required",
+            kind="python_bump",
+            evidence=evidence,
+            pr=pr,
+            candidate_version="3.14.9",
+            proposal_files=[".python-version"],
+            repository=REPO,
+        )
+        self.assertEqual(result["state"], "failed")
+        self.assertEqual(result["reason"], "published-commit-author-login-mismatch")
+
+        evidence["published_commit"] = _published_commit(SHA)
+        ok = maintenance_common.verify_publication_gate(
+            mode="required",
+            kind="python_bump",
+            evidence=evidence,
+            pr=pr,
+            candidate_version="3.14.9",
+            proposal_files=[".python-version"],
+            repository=REPO,
+        )
+        self.assertEqual(ok["state"], "ready")
+
+    def test_collect_stores_fetched_commit_for_identity_check(self):
+        source = "c" * 40
+        pin = b"3.14.9\n"
+        digest = hashlib.sha256(pin).hexdigest()
+        validation = maintenance_common.build_validation_record(
+            source_head=source,
+            candidate="3.14.9",
+            interpreter="3.14.9",
+            pip_version=maintenance_common.PINNED_PIP,
+            pip_tools_version=maintenance_common.PINNED_PIP_TOOLS,
+            digests={".python-version": digest},
+            run_id=44,
+            run_attempt=1,
+        )
+        publication = maintenance_common.build_publication_record(
+            run_id=44,
+            run_attempt=1,
+            pull_number=12,
+            published_head=SHA,
+            branch="chore/python-3.14.9",
+            digests={".python-version": digest},
+            pr_author="github-actions[bot]",
+            commit_identity="github-actions[bot]",
+            run_actor="github-actions[bot]",
+        )
+        val_msg = maintenance_common.notice("proposal-validation", validation)[len("::notice::"):]
+        pub_msg = maintenance_common.notice("proposal-publication", publication)[len("::notice::"):]
+        pr = {
+            "number": 12,
+            "user": {"login": "github-actions[bot]"},
+            "head": {"sha": SHA, "ref": "chore/python-3.14.9", "repo": {"full_name": REPO}},
+        }
+        files = [{"filename": ".python-version", "patch": "-3.14.8\n+3.14.9\n"}]
+        fetched = {
+            "sha": SHA,
+            "author": {"login": "alice"},
+            "committer": {"login": "alice"},
+            "commit": {
+                "author": {"name": "Alice", "email": "alice@example.test"},
+                "committer": {"name": "Alice", "email": "alice@example.test"},
+            },
+        }
+
+        def get_json(url: str) -> tuple[int, Any]:
+            if "/contents/" in url:
+                return 200, {
+                    "encoding": "base64",
+                    "content": base64.b64encode(pin).decode("ascii"),
+                }
+            if "/commits/" in url:
+                return 200, fetched
+            if "/attempts/" in url:
+                return 200, {
+                    "id": 44, "run_attempt": 1, "status": "completed",
+                    "conclusion": "success", "head_sha": source,
+                }
+            return 404, {}
+
+        def get_pages(url: str) -> tuple[int, Any]:
+            if "/runs?" in url:
+                return 200, [{
+                    "id": 44, "workflow_id": 7,
+                    "path": ".github/workflows/python_version_bump.yml",
+                    "status": "completed", "conclusion": "success",
+                    "run_attempt": 1, "head_sha": source,
+                    "actor": {"login": "github-actions[bot]"},
+                    "repository": {"full_name": REPO},
+                    "head_repository": {"full_name": REPO},
+                }]
+            if "/jobs" in url:
+                return 200, [{
+                    "id": 9, "name": "publish",
+                    "check_run_url": f"https://api.github.com/repos/{REPO}/check-runs/77",
+                }]
+            if "/annotations" in url:
+                return 200, [{"message": val_msg}, {"message": pub_msg}]
+            return 404, {}
+
+        evidence = maintenance_common.collect_publication_evidence(
+            "uesu", "News-Express", pr, files,
+            get_json=get_json, get_pages=get_pages,
+            trusted_proposer_path=".github/workflows/python_version_bump.yml",
+            proposal_files=[".python-version"],
+            expected_commit_identity="github-actions[bot]",
+        )
+        self.assertNotIn("error", evidence)
+        self.assertEqual(evidence["published_commit"]["author"]["login"], "alice")
+        verified = maintenance_common.verify_publication_gate(
+            mode="required",
+            kind="python_bump",
+            evidence=evidence,
+            pr=pr,
+            candidate_version="3.14.9",
+            proposal_files=[".python-version"],
+            repository=REPO,
+        )
+        self.assertEqual(verified["state"], "failed")
+        self.assertEqual(verified["reason"], "published-commit-author-login-mismatch")
 
     def test_collect_truncated_annotations_fail_closed(self):
         pr = {
@@ -589,6 +778,22 @@ class ReleaseDateTests(unittest.TestCase):
 
 
 class CompilerPinTests(unittest.TestCase):
+    def test_configured_commit_identity_matches_publisher_git(self):
+        profile = json.loads((ROOT / ".github" / "maintenance.json").read_text(encoding="utf-8"))
+        login, name, email = maintenance_common.configured_commit_identity(profile)
+        self.assertEqual(login, "github-actions[bot]")
+        self.assertEqual(name, "github-actions[bot]")
+        self.assertEqual(email, BOT_EMAIL)
+        self.assertIsNotNone(
+            maintenance_common.published_commit_identity_failure(
+                {"sha": SHA},
+                head=SHA,
+                expected_login=login,
+                expected_name=name,
+                expected_email=email,
+            )
+        )
+
     def test_pins_match_dev_lock_and_profile(self):
         self.assertEqual(maintenance_common.PINNED_PIP, "26.1.1")
         self.assertEqual(maintenance_common.PINNED_PIP_TOOLS, "7.5.3")

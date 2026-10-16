@@ -57,9 +57,9 @@ artifact). Game is omitted from this table; see the helper disposition.
 |---|---|---|---|---|
 | `.python-version` | `5abd4dc1efa0` | `5abd4dc1efa0` | `5abd4dc1efa0` | `5abd4dc1efa0` |
 | `.github/scripts/ci.py` | `171925850552` | `e25144fff3e6` | `605207595f82` | `3fe705cc1f02` |
-| `.github/scripts/maintenance.py` | `5f0435c56cd7` | `cce2cdbd41b9` | `ed7dd1ef5e52` | `766548226b01` |
-| `.github/scripts/maintenance_common.py` | *absent* | `4e9c57ad337b` | *absent* | *absent* |
-| `.github/scripts/python_version_bump.py` | `913221935f13` | `dcdd28c0c314` | `a3011aba88dc` | `01f087f4f568` |
+| `.github/scripts/maintenance.py` | `5f0435c56cd7` | `bdc9a5b767ea` | `ed7dd1ef5e52` | `766548226b01` |
+| `.github/scripts/maintenance_common.py` | *absent* | `67e5b379c5de` | *absent* | *absent* |
+| `.github/scripts/python_version_bump.py` | `913221935f13` | `2983fb5c81d5` | `a3011aba88dc` | `01f087f4f568` |
 | `.github/scripts/render_run_summary.py` | `97eedb3160cc` | `97eedb3160cc` | `97eedb3160cc` | `7fe2a96696f9` |
 | `.github/scripts/merge_monitor_caches.py` | `0e53a8c1a450` | `0e53a8c1a450` | `0e53a8c1a450` | `0e53a8c1a450` |
 | `.github/workflows/ci.yml` | `4b043c1fc6be` | `4b043c1fc6be` | `4b043c1fc6be` | `8b30011dc7ec` |

@@ -30,6 +30,11 @@ SCHEMA_VERSION = 1
 PINNED_PIP = "26.1.1"
 PINNED_PIP_TOOLS = "7.5.3"
 
+# Publisher git identity used by python_version_bump.yml. The notice string is
+# not proof; verify these against the fetched commit API object.
+GITHUB_ACTIONS_BOT = "github-actions[bot]"
+GITHUB_ACTIONS_BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
+
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 JsonGetter = Callable[[str], tuple[int, Any]]
@@ -451,6 +456,67 @@ DEFAULT_PROPOSAL_FILES = (
 )
 
 
+def configured_commit_identity(source: Mapping[str, Any] | None) -> tuple[str, str, str]:
+    """Return (login, git name, git email) from a publication_evidence block.
+
+    The workflow actor and PAT PR author are separate identities. This tuple
+    is only the git commit author/committer the publisher is configured to use.
+    """
+    source = source if isinstance(source, Mapping) else {}
+    block = source.get("publication_evidence") if isinstance(source.get("publication_evidence"), dict) else source
+    if not isinstance(block, Mapping):
+        block = {}
+    login = str(block.get("commit_identity") or "").strip()
+    name = str(block.get("commit_name") or login).strip()
+    email = str(block.get("commit_email") or "").strip()
+    if not email and login == GITHUB_ACTIONS_BOT:
+        email = GITHUB_ACTIONS_BOT_EMAIL
+    return login, name, email
+
+
+def published_commit_identity_failure(
+    commit: Mapping[str, Any] | None,
+    *,
+    head: str,
+    expected_login: str,
+    expected_name: str,
+    expected_email: str,
+) -> str | None:
+    """Fail closed unless the fetched commit author and committer match config.
+
+    A publication notice may copy the expected bot string; that is not
+    verification of the independently fetched commit object.
+    """
+    if not isinstance(commit, Mapping) or str(commit.get("sha") or "") != head:
+        return "published-head-not-a-commit"
+    if not expected_login:
+        return "publication-commit-identity-unconfigured"
+    if not expected_name or not expected_email:
+        return "publication-commit-git-identity-unconfigured"
+    inner = commit.get("commit") if isinstance(commit.get("commit"), Mapping) else None
+    if not isinstance(inner, Mapping):
+        return "published-commit-git-identity-missing"
+    for role in ("author", "committer"):
+        user = commit.get(role)
+        login = str(user.get("login") or "").strip() if isinstance(user, Mapping) else ""
+        if not login:
+            return f"published-commit-{role}-login-missing"
+        if login != expected_login:
+            return f"published-commit-{role}-login-mismatch"
+        git_user = inner.get(role) if isinstance(inner.get(role), Mapping) else None
+        if not isinstance(git_user, Mapping):
+            return f"published-commit-{role}-identity-missing"
+        name = str(git_user.get("name") or "").strip()
+        email = str(git_user.get("email") or "").strip()
+        if not name or not email:
+            return f"published-commit-{role}-identity-missing"
+        if name != expected_name:
+            return f"published-commit-{role}-name-mismatch"
+        if email != expected_email:
+            return f"published-commit-{role}-email-mismatch"
+    return None
+
+
 def publication_policy(source: Mapping[str, Any] | None) -> tuple[str, str, tuple[str, ...]]:
     """Resolve (mode, trusted proposer path, proposal files)."""
     source = source if isinstance(source, Mapping) else {}
@@ -589,10 +655,14 @@ def verify_publication_record(
         return {"state": "failed", "reason": "publication-missing-run-actor"}
     if actor and publication["run_actor"] != actor:
         return {"state": "failed", "reason": "publication-run-actor-mismatch"}
-    expected_commit = evidence.get("expected_commit_identity")
+    expected_login, expected_name, expected_email = configured_commit_identity({
+        "commit_identity": evidence.get("expected_commit_identity"),
+        "commit_name": evidence.get("expected_commit_name"),
+        "commit_email": evidence.get("expected_commit_email"),
+    })
     if not publication.get("commit_identity"):
         return {"state": "failed", "reason": "publication-missing-commit-identity"}
-    if expected_commit and publication["commit_identity"] != expected_commit:
+    if expected_login and publication["commit_identity"] != expected_login:
         return {"state": "failed", "reason": "publication-commit-identity-mismatch"}
 
     if not validation.get("source_head"):
@@ -626,8 +696,15 @@ def verify_publication_record(
             return {"state": "failed", "reason": f"publication-digest-mismatch:{name}"}
 
     commit = evidence.get("published_commit")
-    if not isinstance(commit, dict) or commit.get("sha") != head:
-        return {"state": "failed", "reason": "published-head-not-a-commit"}
+    identity_fail = published_commit_identity_failure(
+        commit if isinstance(commit, Mapping) else None,
+        head=head,
+        expected_login=expected_login,
+        expected_name=expected_name,
+        expected_email=expected_email,
+    )
+    if identity_fail:
+        return {"state": "failed", "reason": identity_fail}
     return {"state": "ready", "reason": "publication-verified"}
 
 
@@ -783,6 +860,8 @@ def collect_publication_evidence(
     trusted_proposer_path: str,
     proposal_files: Sequence[str],
     expected_commit_identity: str = "",
+    expected_commit_name: str = "",
+    expected_commit_email: str = "",
 ) -> dict[str, Any]:
     """Bind a python-bump PR to the proposer run that validated and published it.
 
@@ -799,6 +878,8 @@ def collect_publication_evidence(
         "repository": repository,
         "candidate_version": candidate,
         "expected_commit_identity": expected_commit_identity,
+        "expected_commit_name": expected_commit_name,
+        "expected_commit_email": expected_commit_email,
         "proposal_digests": {},
     }
     if not SHA_RE.fullmatch(head_sha.lower()):

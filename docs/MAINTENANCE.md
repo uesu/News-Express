@@ -63,8 +63,10 @@ truncated patches are review-required. File content is
 reconciled against snapshot metadata so a routine label cannot hide an
 index-url mutation. A Python bump PR must use
 the `chore/python-` prefix; `github-actions[bot]` as commit author alone is
-not enough (a PAT may open the PR). The live adapter refreshes the snapshot
-immediately before merge.
+not enough (a PAT may open the PR). Publication evidence compares the
+fetched commit API author/committer login, name, and email to the configured
+git identity; a matching notice string is not that check. The live adapter
+refreshes the snapshot immediately before merge.
 
 `AUTO_MERGE_DEPENDABOT` and `AUTO_MERGE_PYTHON_BUMP` are exact `yes` switches.
 The allowed merge method is squash, with merge as a fallback.

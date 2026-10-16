@@ -20,6 +20,21 @@ import python_version_bump  # noqa: E402
 
 SHA = "a" * 40
 SHA2 = "b" * 40
+BOT = "github-actions[bot]"
+BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+def _published_commit(sha=SHA, *, login=BOT, name=BOT, email=BOT_EMAIL):
+    """API-shaped GET /commits/{sha} payload with matching git identity."""
+    return {
+        "sha": sha,
+        "author": {"login": login},
+        "committer": {"login": login},
+        "commit": {
+            "author": {"name": name, "email": email},
+            "committer": {"name": name, "email": email},
+        },
+    }
 
 
 def _pr(*, login="dependabot[bot]", sha=SHA, ref="dependabot/pip/foo", draft=False,
@@ -606,6 +621,84 @@ class PythonBumpAdapterTests(unittest.TestCase):
             self.assertEqual(record["pr_author"], "news-express-bump")
             self.assertEqual(record["commit_identity"], "github-actions[bot]")
             self.assertEqual(record["run_actor"], "github-actions[bot]")
+
+    def test_emit_validation_reads_pip_tools_metadata_not_dunder_version(self):
+        """pip-tools 7.5.3 has no piptools.__version__; the emitter must not need it."""
+        import importlib
+        import importlib.metadata as md
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            site = tmp_path / "site"
+            repo = tmp_path / "repo"
+            site.mkdir()
+            repo.mkdir()
+            (repo / ".python-version").write_text("3.14.9\n", encoding="utf-8")
+            for dist_name, version, dirname in (
+                ("pip", maintenance_common.PINNED_PIP, f"pip-{maintenance_common.PINNED_PIP}.dist-info"),
+                ("pip-tools", maintenance_common.PINNED_PIP_TOOLS, f"pip_tools-{maintenance_common.PINNED_PIP_TOOLS}.dist-info"),
+            ):
+                dist = site / dirname
+                dist.mkdir()
+                (dist / "METADATA").write_text(
+                    f"Metadata-Version: 2.1\nName: {dist_name}\nVersion: {version}\n",
+                    encoding="utf-8",
+                )
+            pkg = site / "piptools"
+            pkg.mkdir()
+            (pkg / "__init__.py").write_text('__version__ = "0.0.0"\n', encoding="utf-8")
+            interpreter = ".".join(str(part) for part in sys.version_info[:3])
+            old_path = list(sys.path)
+            sys.path.insert(0, str(site))
+            importlib.invalidate_caches()
+            buf = StringIO()
+            sys_stdout = sys.stdout
+            sys.stdout = buf
+            try:
+                measured = python_version_bump._toolchain_versions()
+                self.assertEqual(measured[1], maintenance_common.PINNED_PIP)
+                self.assertEqual(measured[2], maintenance_common.PINNED_PIP_TOOLS)
+                self.assertNotEqual(md.version("pip-tools"), "0.0.0")
+                code = python_version_bump.main([
+                    "--emit-validation",
+                    "--candidate", interpreter,
+                    "--source-head", SHA,
+                    "--run-id", "44",
+                    "--run-attempt", "1",
+                    "--root", str(repo),
+                    "--profile", str(ROOT / ".github" / "maintenance.json"),
+                    "--interpreter", interpreter,
+                ])
+            finally:
+                sys.stdout = sys_stdout
+                sys.path[:] = old_path
+                importlib.invalidate_caches()
+            self.assertEqual(code, 0)
+            record = maintenance_common.parse_notice(buf.getvalue(), "proposal-validation")
+            self.assertEqual(record["pip"], maintenance_common.PINNED_PIP)
+            self.assertEqual(record["pip_tools"], maintenance_common.PINNED_PIP_TOOLS)
+            self.assertEqual(record["interpreter"], interpreter)
+
+    def test_emit_validation_without_compiler_on_path_fails(self):
+        original = python_version_bump._distribution_version
+        python_version_bump._distribution_version = lambda _name: ""
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / ".python-version").write_text("3.14.9\n", encoding="utf-8")
+                code = python_version_bump.main([
+                    "--emit-validation",
+                    "--candidate", "3.14.9",
+                    "--source-head", SHA,
+                    "--run-id", "44",
+                    "--run-attempt", "1",
+                    "--root", str(root),
+                    "--profile", str(ROOT / ".github" / "maintenance.json"),
+                    "--interpreter", "3.14.9",
+                ])
+        finally:
+            python_version_bump._distribution_version = original
+        self.assertEqual(code, 2)
 
 
 class CiRegistryTests(unittest.TestCase):
@@ -1245,7 +1338,7 @@ class LiveAdapterTests(unittest.TestCase):
             if "/contents/" in url:
                 return 200, {"encoding": "base64", "content": base64.b64encode(pin).decode("ascii")}
             if "/commits/" in url and "check-runs" not in url and "statuses" not in url:
-                return 200, {"sha": SHA}
+                return 200, _published_commit(SHA)
             if "/attempts/" in url and "/jobs" not in url:
                 return 200, {
                     "id": 44, "run_attempt": 1, "status": "completed",
@@ -1547,7 +1640,9 @@ class CommonHelperCallerTests(unittest.TestCase):
             },
             "proposal_digests": {".python-version": digest},
             "expected_commit_identity": "github-actions[bot]",
-            "published_commit": {"sha": head},
+            "expected_commit_name": "github-actions[bot]",
+            "expected_commit_email": BOT_EMAIL,
+            "published_commit": _published_commit(head),
             "candidate_version": "3.14.9",
         }
 
@@ -1612,6 +1707,48 @@ class CommonHelperCallerTests(unittest.TestCase):
         decision = maintenance.decide_merge(snap)
         self.assertEqual(decision.action, "fail")
         self.assertEqual(decision.reason, "validation-digest-mismatch:.python-version")
+
+    def test_unrelated_published_commit_identity_fails_through_decide_merge(self):
+        evidence = self._ok_publication()
+        evidence["published_commit"] = {
+            "sha": SHA,
+            "author": {"login": "alice"},
+            "committer": {"login": "bob"},
+            "commit": {
+                "author": {"name": "Alice Example", "email": "alice@example.test"},
+                "committer": {"name": "Bob Example", "email": "bob@example.test"},
+            },
+        }
+        snap = self._python_bump_snapshot(publication_evidence=evidence)
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "published-commit-author-login-mismatch")
+
+    def test_missing_published_commit_login_fails_through_decide_merge(self):
+        evidence = self._ok_publication()
+        evidence["published_commit"] = {
+            "sha": SHA,
+            "author": None,
+            "committer": {"login": BOT},
+            "commit": {
+                "author": {"name": BOT, "email": BOT_EMAIL},
+                "committer": {"name": BOT, "email": BOT_EMAIL},
+            },
+        }
+        snap = self._python_bump_snapshot(publication_evidence=evidence)
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "published-commit-author-login-missing")
+
+    def test_notice_bot_with_wrong_git_email_fails_through_decide_merge(self):
+        evidence = self._ok_publication()
+        evidence["published_commit"] = _published_commit(
+            SHA, login=BOT, name=BOT, email="other@example.test"
+        )
+        snap = self._python_bump_snapshot(publication_evidence=evidence)
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "published-commit-author-email-mismatch")
 
 
 if __name__ == "__main__":

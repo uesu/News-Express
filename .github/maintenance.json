@@ -65,7 +65,9 @@
     "proposer_workflow": ".github/workflows/python_version_bump.yml",
     "proposal_files": [".python-version"],
     "commit_identity": "github-actions[bot]",
-    "note": "Python-bump auto-merge requires bound validation and publication notices from the trusted proposer run. mode=disabled blocks that lane rather than reading as satisfied. PR title/body are not evidence. Actor, PAT author, and commit identity stay distinct."
+    "commit_name": "github-actions[bot]",
+    "commit_email": "41898282+github-actions[bot]@users.noreply.github.com",
+    "note": "Python-bump auto-merge requires bound validation and publication notices from the trusted proposer run. mode=disabled blocks that lane rather than reading as satisfied. PR title/body are not evidence. Actor, PAT author, and git commit identity stay distinct. The fetched commit author/committer login, name, and email must match this identity; the notice string is not proof."
   },
   "test_commands": {
     "compile": ["python", "-m", "compileall", "-q", "testing area", "tests", ".github/scripts"],

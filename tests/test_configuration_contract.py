@@ -95,6 +95,12 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn('} >> "$GITHUB_OUTPUT"', text)
         self.assertIn("COMMIT_IDENTITY:", text)
         self.assertNotIn('--commit-identity "github-actions[bot]"', text)
+        profile = json.loads((ROOT / ".github" / "maintenance.json").read_text(encoding="utf-8"))
+        pub = profile["publication_evidence"]
+        self.assertEqual(pub["commit_identity"], "github-actions[bot]")
+        self.assertEqual(pub["commit_name"], "github-actions[bot]")
+        self.assertEqual(pub["commit_email"], "41898282+github-actions[bot]@users.noreply.github.com")
+        self.assertIn(pub["commit_email"], text)
 
     def test_action_pins_are_shas(self):
         for path in (ROOT / ".github" / "workflows").glob("*.yml"):

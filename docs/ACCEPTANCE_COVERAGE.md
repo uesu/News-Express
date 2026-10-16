@@ -51,7 +51,10 @@ soak dates, compiler pins) wired through `decide_merge` / `build_live_snapshot`
 / `python_version_bump` / lock-consistency, with a profile seam in
 `.github/maintenance.json`. Python-bump auto-merge requires bound
 validation/publication notices (`mode=required`); `disabled` blocks that
-lane. That candidate is **not** approved for blind adoption and does **not**
+lane. Validation notices measure `pip` / `pip-tools` with
+`importlib.metadata.version`. The fetched published commit author/committer
+must match the configured git identity. That candidate is **not** approved
+for blind adoption and does **not**
 prove Game / Reddit / Twitter compatibility. Shared helpers across the four
 PRs are **not** identical. The master identical-helper requirement is
 **unmet** and **not excepted**; four PRs are **not fully aligned**. The

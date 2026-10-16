@@ -46,19 +46,28 @@ def _positive_int(value: str) -> int | None:
     return number if number > 0 else None
 
 
+def _distribution_version(dist_name: str) -> str:
+    """Installed distribution version. Package ``__version__`` is not authority.
+
+    pip-tools 7.5.3 does not expose ``piptools.__version__``. Profile pin
+    strings are not a measurement of the environment.
+    """
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+    except ImportError:
+        return ""
+    try:
+        found = version(dist_name)
+    except PackageNotFoundError:
+        return ""
+    except Exception:
+        return ""
+    return str(found or "")
+
+
 def _toolchain_versions() -> tuple[str, str, str]:
     interpreter = ".".join(str(part) for part in sys.version_info[:3])
-    try:
-        import pip  # type: ignore
-        pip_version = str(getattr(pip, "__version__", "") or "")
-    except Exception:
-        pip_version = ""
-    try:
-        import piptools  # type: ignore
-        tools_version = str(getattr(piptools, "__version__", "") or "")
-    except Exception:
-        tools_version = ""
-    return interpreter, pip_version, tools_version
+    return interpreter, _distribution_version("pip"), _distribution_version("pip-tools")
 
 
 def fetch_manifest_release_date(entry: dict) -> str | None:
@@ -139,6 +148,9 @@ def main(argv: list[str] | None = None) -> int:
             tools_version = args.pip_tools or tools_version
             if not interpreter or not pip_version or not tools_version:
                 print("emit-validation requires the pinned compiler on sys.path", file=sys.stderr)
+                return 2
+            if pip_version != maintenance_common.PINNED_PIP or tools_version != maintenance_common.PINNED_PIP_TOOLS:
+                print("emit-validation compiler does not match pins", file=sys.stderr)
                 return 2
             record = maintenance_common.build_validation_record(
                 source_head=source_head,
