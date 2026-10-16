@@ -250,6 +250,24 @@ class RunReportTests(unittest.TestCase):
         )
         self.assertIn("commit: unchanged", unchanged)
 
+    def test_degraded_failed_and_not_run_are_distinct(self):
+        failed = RunReport("reddit_monitor", "v3")
+        failed.mark_failed("source-outage")
+        self.assertEqual(failed.result, "failed")
+        self.assertIn("source-outage", failed.errors)
+        partial = RunReport("reddit_monitor", "v3")
+        partial.start_monitor()
+        partial.outcome("posted")
+        partial.outcome("skipped", "source-outage")
+        partial.end_monitor("completed")
+        payload = partial.as_dict()
+        self.assertEqual(payload["execution"]["result"], "completed")
+        self.assertEqual(payload["outcomes"]["posted"], 1)
+        self.assertEqual(payload["outcomes"]["skipped"], 1)
+        self.assertEqual(payload["outcomes"]["reasons"]["source-outage"], 1)
+        idle = RunReport("reddit_monitor", "v3")
+        self.assertEqual(idle.as_dict()["execution"]["result"], "not-run")
+
     def test_write_failure_does_not_raise(self):
         report = RunReport("reddit_monitor", "v3")
         report.start_monitor()

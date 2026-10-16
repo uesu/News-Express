@@ -166,7 +166,6 @@
     "docs/MAINTENANCE.md",
     "docs/PYTHON_RUNTIME.md",
     "docs/DEPENDABOT.md",
-    "docs/CI_SMOKE.md",
-    "docs/MAINTENANCE.md"
+    "docs/CI_SMOKE.md"
   ]
 }

@@ -119,4 +119,6 @@ development-side [`COPY_MANIFEST.md`](COPY_MANIFEST.md). Caches listed
 there must not be overwritten when copying this repo onto a production
 checkout. Both engines and both monitor workflows remain `runtime_files`.
 The three heads are not equivalent copies; green development checks do not
-prove production parity.
+prove production parity. Game helpers are not byte-identical at the reviewed
+heads — see the convergence plan in that manifest. Coverage limits:
+[`ACCEPTANCE_COVERAGE.md`](ACCEPTANCE_COVERAGE.md).

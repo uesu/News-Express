@@ -133,7 +133,23 @@ class ProductionCopyTests(unittest.TestCase):
             self.assertIn(cache, excluded)
             self.assertNotIn(cache, runtime)
         self.assertNotIn("NEWS_EXPRESS_UPDATE.md", runtime)
+        self.assertNotIn("docs/COPY_MANIFEST.md", runtime)
+        self.assertNotIn("docs/ACCEPTANCE_COVERAGE.md", runtime)
         self.assertTrue((ROOT / "docs" / "COPY_MANIFEST.md").is_file())
+        self.assertTrue((ROOT / "docs" / "ACCEPTANCE_COVERAGE.md").is_file())
+
+    def test_copy_manifest_does_not_claim_parity_or_identical_helpers(self):
+        text = (ROOT / "docs" / "COPY_MANIFEST.md").read_text(encoding="utf-8")
+        self.assertIn("not equivalent copies", text)
+        self.assertIn("uesu/7jkxmy9nvbc", text)
+        self.assertIn("uesu/wvkhabh2s22", text)
+        self.assertIn("materially different", text)
+        self.assertIn("dependabot_auto_merge.yml", text)
+        self.assertIn("unhashed", text)
+        self.assertIn("do **not** claim the helpers are identical", text)
+        coverage = (ROOT / "docs" / "ACCEPTANCE_COVERAGE.md").read_text(encoding="utf-8")
+        self.assertIn("not production parity", coverage)
+        self.assertIn("Local 3.11.2 is not the gate", coverage)
 
     def test_gitignore_covers_reports(self):
         text = (ROOT / ".gitignore").read_text(encoding="utf-8")

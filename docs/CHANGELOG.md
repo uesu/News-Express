@@ -16,6 +16,17 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-16 — Exact-head copy inventory (PR #66).** `docs/COPY_MANIFEST.md`
+  now records production SHAs `3691cc88b2ef…` / `58547a93c866…` against this
+  development branch: hashed lock, pin, and maintenance helpers are missing
+  on both production copies; live engines/workflows still differ; caches and
+  omitted docs are the authorized differences. Game PR #49 helpers are
+  materially different — not copied either way. `docs/ACCEPTANCE_COVERAGE.md`
+  maps tests to the master checklist and states limits (no live proxy probe,
+  no production parity). Extra regressions cover HTTP-200 error bodies,
+  compatibility quality (no HTTP), engine `_close_report` failed/unhandled,
+  and child-card accent/stats/buttons. Listed-defect fixes are not acceptance.
+
 * **2026-10-16 — Acceptance evidence (PR #66): copy manifest, card identity,
   reporting states.** Development-side `docs/COPY_MANIFEST.md` records the
   shared runtime-file list and that production copies are not equivalent

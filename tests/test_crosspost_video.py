@@ -1,6 +1,7 @@
 """General crosspost-video discovery — no hard-coded incident IDs required."""
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 import types
@@ -8,6 +9,9 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+TESTING = ROOT / "testing area"
+if str(TESTING) not in sys.path:
+    sys.path.insert(0, str(TESTING))
 
 try:
     import aiohttp  # noqa: F401
@@ -415,9 +419,72 @@ class NativeAndQualityTests(unittest.TestCase):
         self.assertEqual(read_post["label"], "Read Post")
         self.assertEqual(read_post["url"], child_url)
         self.assertNotIn("1x6lbhb", read_post["url"])
+        labels = [b["label"] for b in row["components"]]
+        self.assertEqual(labels, ["Read Post", "Citlali News", "Donate"])
+        self.assertEqual(payload["components"][0]["accent_color"], 16729344)
+        self.assertIn("<t:1700000000:f>", blob)
+        self.assertIn("4", blob)
+        self.assertIn("8", blob)
         galleries = [c for c in payload["components"][0]["components"] if c.get("type") == 12]
         urls = [item["media"]["url"] for g in galleries for item in g["items"]]
         self.assertEqual(urls, [f"https://i.redd.it/g{i}.jpg" for i in range(5)])
+
+    def test_http_200_error_body_is_not_video(self):
+        self.assertTrue(v3._looks_like_error_body(b"<html>error</html>"))
+        self.assertTrue(v3._looks_like_error_body(b'{"error":"nope"}'))
+        self.assertTrue(v3._looks_like_error_body(b"\xef\xbb\xbf<html>"))
+        self.assertFalse(v3._looks_like_error_body(b"\x00\x00\x00 ftypmp42"))
+        self.assertFalse(v3._looks_like_error_body(b""))
+        self.assertFalse(v3._looks_like_error_body(None))
+
+    def test_compatibility_quality_upgrade_keeps_base_without_http(self):
+        class BoomSession:
+            def get(self, *args, **kwargs):
+                raise AssertionError("compatibility mode must not probe")
+
+        old = v3.VIDEO_QUALITY_MODE
+        v3.VIDEO_QUALITY_MODE = "compatibility"
+        try:
+            out = asyncio.run(v3.proxy_video_quality_upgrade(
+                BoomSession(), "22e7ve17smvh1",
+                "https://vx.example/base.mp4", "t"))
+        finally:
+            v3.VIDEO_QUALITY_MODE = old
+        self.assertEqual(out, "https://vx.example/base.mp4")
+
+    def test_engine_close_report_unhandled_is_failed_and_write_error_does_not_raise(self):
+        self.assertIsNotNone(v3.RunReport)
+        report = v3.RunReport("reddit_monitor", "v3")
+        report.start_monitor()
+        report.error("application-failed")
+        prev_report, prev_closed = v3._run_report, v3._report_closed
+        v3._run_report = report
+        v3._report_closed = False
+        try:
+            v3._close_report()
+            self.assertTrue(v3._report_closed)
+            self.assertIsNone(v3._run_report)
+            self.assertEqual(report.result, "failed")
+            self.assertIn("application-failed", report.errors)
+
+            report2 = v3.RunReport("reddit_monitor", "v3")
+            report2.start_monitor()
+
+            def boom(_path=None):
+                raise OSError("disk")
+
+            report2.write = boom
+            v3._run_report = report2
+            v3._report_closed = False
+            v3._close_report(result="completed", save_status="saved")
+            self.assertTrue(v3._report_closed)
+            self.assertEqual(report2.result, "completed")
+            self.assertTrue(any(
+                item.startswith("report-close-failed:") for item in report2.warnings
+            ))
+        finally:
+            v3._run_report = prev_report
+            v3._report_closed = prev_closed
 
 
 if __name__ == "__main__":
