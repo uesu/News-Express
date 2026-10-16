@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +15,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import maintenance  # noqa: E402
+import maintenance_common  # noqa: E402
 import python_version_bump  # noqa: E402
 
 SHA = "a" * 40
@@ -550,6 +552,60 @@ class PythonBumpAdapterTests(unittest.TestCase):
 
     def test_live_without_fixture_or_manifest_refuses(self):
         self.assertEqual(python_version_bump.main([]), 2)
+
+    def test_emit_validation_and_publication_notices(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".python-version").write_text("3.14.9\n", encoding="utf-8")
+            buf = StringIO()
+            sys_stdout = sys.stdout
+            sys.stdout = buf
+            try:
+                code = python_version_bump.main([
+                    "--emit-validation",
+                    "--candidate", "3.14.9",
+                    "--source-head", SHA,
+                    "--run-id", "44",
+                    "--run-attempt", "1",
+                    "--root", str(root),
+                    "--profile", str(ROOT / ".github" / "maintenance.json"),
+                    "--interpreter", "3.14.9",
+                    "--pip", maintenance_common.PINNED_PIP,
+                    "--pip-tools", maintenance_common.PINNED_PIP_TOOLS,
+                ])
+            finally:
+                sys.stdout = sys_stdout
+            self.assertEqual(code, 0)
+            record = maintenance_common.parse_notice(buf.getvalue(), "proposal-validation")
+            self.assertEqual(record["candidate_version"], "3.14.9")
+            self.assertEqual(record["run_id"], 44)
+            self.assertEqual(record["source_head"], SHA)
+
+            buf = StringIO()
+            sys.stdout = buf
+            try:
+                code = python_version_bump.main([
+                    "--emit-publication",
+                    "--candidate", "3.14.9",
+                    "--published-head", SHA,
+                    "--pull-number", "12",
+                    "--branch", "chore/python-3.14.9",
+                    "--pr-author", "news-express-bump",
+                    "--commit-identity", "github-actions[bot]",
+                    "--run-actor", "github-actions[bot]",
+                    "--run-id", "44",
+                    "--run-attempt", "1",
+                    "--root", str(root),
+                    "--profile", str(ROOT / ".github" / "maintenance.json"),
+                ])
+            finally:
+                sys.stdout = sys_stdout
+            self.assertEqual(code, 0)
+            record = maintenance_common.parse_notice(buf.getvalue(), "proposal-publication")
+            self.assertEqual(record["pull_number"], 12)
+            self.assertEqual(record["pr_author"], "news-express-bump")
+            self.assertEqual(record["commit_identity"], "github-actions[bot]")
+            self.assertEqual(record["run_actor"], "github-actions[bot]")
 
 
 class CiRegistryTests(unittest.TestCase):
@@ -1161,6 +1217,126 @@ class LiveAdapterTests(unittest.TestCase):
         self.assertEqual(decision.action, "fail")
         self.assertIn("mandatory-check-not-success", decision.reason)
 
+    def test_live_snapshot_collects_publication_records_for_python_bump(self):
+        import base64
+        import hashlib
+        pin = b"3.14.9\n"
+        digest = hashlib.sha256(pin).hexdigest()
+        source = "c" * 40
+        validation = maintenance_common.build_validation_record(
+            source_head=source, candidate="3.14.9", interpreter="3.14.9",
+            pip_version=maintenance_common.PINNED_PIP,
+            pip_tools_version=maintenance_common.PINNED_PIP_TOOLS,
+            digests={".python-version": digest}, run_id=44, run_attempt=1,
+        )
+        publication = maintenance_common.build_publication_record(
+            run_id=44, run_attempt=1, pull_number=12, published_head=SHA,
+            branch="chore/python-3.14.9", digests={".python-version": digest},
+            pr_author="github-actions[bot]", commit_identity="github-actions[bot]",
+            run_actor="github-actions[bot]",
+        )
+        val_msg = maintenance_common.notice("proposal-validation", validation)[len("::notice::"):]
+        pub_msg = maintenance_common.notice("proposal-publication", publication)[len("::notice::"):]
+        pr = _pr(login="github-actions[bot]", ref="chore/python-3.14.9")
+
+        def fake_json(url, token, method="GET", body=None):
+            if "/pulls/12" in url and "files" not in url and "reviews" not in url and "commits" not in url:
+                return 200, pr
+            if "/contents/" in url:
+                return 200, {"encoding": "base64", "content": base64.b64encode(pin).decode("ascii")}
+            if "/commits/" in url and "check-runs" not in url and "statuses" not in url:
+                return 200, {"sha": SHA}
+            if "/attempts/" in url and "/jobs" not in url:
+                return 200, {
+                    "id": 44, "run_attempt": 1, "status": "completed",
+                    "conclusion": "success", "head_sha": source,
+                    "path": ".github/workflows/python_version_bump.yml",
+                }
+            return 200, {}
+
+        def fake_pages(url, token, **_k):
+            if "check-runs" in url and "annotations" not in url:
+                return 200, [{
+                    "id": 1, "name": "application", "head_sha": SHA, "status": "completed",
+                    "conclusion": "success", "app": {"slug": "github-actions"},
+                    "html_url": "https://github.com/uesu/News-Express/actions/runs/2/job/1",
+                }]
+            if "/files" in url:
+                return 200, [{"filename": ".python-version", "patch": "-3.14.8\n+3.14.9\n"}]
+            if "/reviews" in url or "/statuses" in url:
+                return 200, []
+            if "/jobs" in url and "/runs/44/" in url:
+                return 200, [{
+                    "id": 9, "name": "publish",
+                    "check_run_url": "https://api.github.com/repos/uesu/News-Express/check-runs/77",
+                }]
+            if "/jobs" in url:
+                return 200, [{
+                    "id": 10, "name": "application", "run_id": 2, "head_sha": SHA,
+                    "status": "completed", "conclusion": "success",
+                }]
+            if "python_version_bump.yml/runs" in url:
+                return 200, [{
+                    "id": 44, "workflow_id": 7,
+                    "path": ".github/workflows/python_version_bump.yml",
+                    "status": "completed", "conclusion": "success",
+                    "run_attempt": 1, "head_sha": source,
+                    "actor": {"login": "github-actions[bot]"},
+                    "repository": {"full_name": "uesu/News-Express"},
+                    "head_repository": {"full_name": "uesu/News-Express"},
+                }]
+            if "/annotations" in url:
+                return 200, [{"message": val_msg}, {"message": pub_msg}]
+            if "actions/runs" in url:
+                return 200, [{
+                    "id": 2, "name": "CI — syntax + offline smoke test",
+                    "head_sha": SHA, "path": ".github/workflows/ci.yml",
+                    "status": "completed", "conclusion": "success",
+                }]
+            if "/commits" in url:
+                return 200, [{"author": {"login": "github-actions[bot]"}}]
+            return 200, []
+
+        original_json = maintenance._github_json
+        original_pages = maintenance._api_pages
+        maintenance._github_json = fake_json
+        maintenance._api_pages = fake_pages
+        try:
+            snapshot = maintenance.build_live_snapshot(
+                {
+                    "repository": {"full_name": "uesu/News-Express", "default_branch": "main"},
+                    "pull_request": {"number": 12, "head": {"sha": SHA}},
+                },
+                "token",
+                {
+                    "mandatory_check_names": ["application"],
+                    "ci_workflow_name": "CI — syntax + offline smoke test",
+                    "ci_workflow_path": ".github/workflows/ci.yml",
+                    "security_evidence": {"mode": "disabled"},
+                    "publication_evidence": {
+                        "mode": "required",
+                        "proposer_workflow": ".github/workflows/python_version_bump.yml",
+                        "proposal_files": [".python-version"],
+                        "commit_identity": "github-actions[bot]",
+                    },
+                    "updater_identities": {
+                        "python_bump": {
+                            "login": "github-actions[bot]",
+                            "auto_merge_var": "AUTO_MERGE_PYTHON_BUMP",
+                            "branch_prefix": "chore/python-",
+                            "allowed_files": [".python-version"],
+                        },
+                    },
+                },
+            )
+        finally:
+            maintenance._github_json = original_json
+            maintenance._api_pages = original_pages
+        self.assertIsInstance(snapshot, dict)
+        self.assertEqual(snapshot["candidate_version"], "3.14.9")
+        self.assertNotIn("error", snapshot.get("publication_evidence") or {})
+        self.assertEqual(snapshot["publication_evidence"]["publication_record"]["pull_number"], 12)
+
 
 def _producer_ok(name="application", *, check_id=1, run_id=10, job_id=20, sha=SHA):
     return {
@@ -1302,7 +1478,7 @@ class CommonHelperCallerTests(unittest.TestCase):
         self.assertEqual(decision.action, "fail")
         self.assertEqual(decision.reason, "publication-evidence-unconfigured")
 
-    def test_python_bump_publication_disabled_still_merges(self):
+    def test_python_bump_publication_disabled_blocks_auto_merge_lane(self):
         pr = _pr(login="github-actions[bot]", ref="chore/python-3.14.9")
         snap = _snapshot(
             pull_request=pr,
@@ -1311,7 +1487,69 @@ class CommonHelperCallerTests(unittest.TestCase):
         )
         snap["policy"] = {**snap["policy"], "publication_evidence_mode": "disabled"}
         decision = maintenance.decide_merge(snap)
-        self.assertEqual(decision.action, "merge")
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "publication-lane-blocked")
+
+    def _python_bump_snapshot(self, **overrides):
+        pr = overrides.pop("pull_request", None) or _pr(
+            login="github-actions[bot]", ref="chore/python-3.14.9"
+        )
+        files = overrides.pop("files", [{"filename": ".python-version", "patch": "-3.14.8\n+3.14.9\n"}])
+        risk = overrides.pop("risk", {"risk": "routine", "auto_eligible": True, "reason": "python-patch"})
+        snap = _snapshot(
+            pull_request=pr,
+            files=files,
+            risk=risk,
+            **overrides,
+        )
+        snap["policy"] = {
+            **snap["policy"],
+            "publication_evidence_mode": "required",
+            "publication_proposal_files": [".python-version"],
+            "publication_proposer_workflow": ".github/workflows/python_version_bump.yml",
+        }
+        return snap
+
+    def _ok_publication(self, *, head=SHA, source=None, digest="aaa"):
+        source = source or ("c" * 40)
+        return {
+            "repository": "uesu/News-Express",
+            "proposer_run": {
+                "id": 44,
+                "workflow_id": 7,
+                "path": ".github/workflows/python_version_bump.yml",
+                "status": "completed",
+                "conclusion": "success",
+                "run_attempt": 1,
+                "head_sha": source,
+                "actor": {"login": "github-actions[bot]"},
+                "repository": {"full_name": "uesu/News-Express"},
+                "head_repository": {"full_name": "uesu/News-Express"},
+            },
+            "proposer_attempt": {
+                "id": 44, "run_attempt": 1, "status": "completed",
+                "conclusion": "success", "head_sha": source,
+            },
+            "validation_record": {
+                "run_id": 44, "run_attempt": 1, "source_head": source,
+                "candidate_version": "3.14.9", "interpreter": "3.14.9",
+                "pip": maintenance_common.PINNED_PIP,
+                "pip_tools": maintenance_common.PINNED_PIP_TOOLS,
+                "digests": {".python-version": digest},
+            },
+            "publication_record": {
+                "run_id": 44, "run_attempt": 1, "pull_number": 12,
+                "published_head": head, "branch": "chore/python-3.14.9",
+                "pr_author": "github-actions[bot]",
+                "run_actor": "github-actions[bot]",
+                "commit_identity": "github-actions[bot]",
+                "digests": {".python-version": digest},
+            },
+            "proposal_digests": {".python-version": digest},
+            "expected_commit_identity": "github-actions[bot]",
+            "published_commit": {"sha": head},
+            "candidate_version": "3.14.9",
+        }
 
     def test_mismatched_publication_record_fails_through_decide_merge(self):
         pr = _pr(login="github-actions[bot]", ref="chore/python-3.14.9")
@@ -1326,6 +1564,54 @@ class CommonHelperCallerTests(unittest.TestCase):
         decision = maintenance.decide_merge(snap)
         self.assertEqual(decision.action, "fail")
         self.assertEqual(decision.reason, "no-proposer-run")
+
+    def test_verified_publication_merges_python_bump(self):
+        snap = self._python_bump_snapshot(publication_evidence=self._ok_publication())
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "merge")
+
+    def test_title_is_not_candidate_evidence(self):
+        pr = _pr(login="github-actions[bot]", ref="chore/python-3.14.9")
+        snap = self._python_bump_snapshot(
+            pull_request=pr,
+            files=[{"filename": ".python-version", "patch": "-3.14.8\n+not-a-pin\n"}],
+            publication_evidence=self._ok_publication(),
+            candidate_version="3.14.9",
+        )
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "candidate-version-unparsed")
+
+    def test_moved_published_head_fails_through_decide_merge(self):
+        evidence = self._ok_publication(head="d" * 40)
+        snap = self._python_bump_snapshot(publication_evidence=evidence)
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "publication-head-mismatch")
+
+    def test_wrong_run_attempt_fails_through_decide_merge(self):
+        evidence = self._ok_publication()
+        evidence["validation_record"]["run_attempt"] = 2
+        snap = self._python_bump_snapshot(publication_evidence=evidence)
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "validation-record-run-mismatch")
+
+    def test_collection_error_fails_through_decide_merge(self):
+        snap = self._python_bump_snapshot(
+            publication_evidence={"error": "annotations-api:0"},
+        )
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "annotations-api:0")
+
+    def test_digest_mismatch_fails_through_decide_merge(self):
+        evidence = self._ok_publication(digest="aaa")
+        evidence["proposal_digests"] = {".python-version": "bbb"}
+        snap = self._python_bump_snapshot(publication_evidence=evidence)
+        decision = maintenance.decide_merge(snap)
+        self.assertEqual(decision.action, "fail")
+        self.assertEqual(decision.reason, "validation-digest-mismatch:.python-version")
 
 
 if __name__ == "__main__":

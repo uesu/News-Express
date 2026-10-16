@@ -46,15 +46,17 @@ tree; a commit cannot embed its own final self-hash), Reddit #2 `d123c0d`
 `26b84ff` — not deployed `main`.
 
 News now ships `.github/scripts/maintenance_common.py` (producer binding,
-security evidence, publication gate, python.org soak dates, compiler pins)
-wired through `decide_merge` / `build_live_snapshot` / `python_version_bump`
-/ lock-consistency, with a profile seam in `.github/maintenance.json`.
-That candidate is **not** approved for blind adoption and does **not** prove
-Game / Reddit / Twitter compatibility. Shared helpers across the four PRs
-are **not** identical. The master identical-helper requirement is **unmet**
-and **not excepted**; four PRs are **not fully aligned**. The explicit
-“unmet” note is inventory, not completion. Helper-only fixtures are not live
-merges.
+security evidence, publication gate + live annotation collector, python.org
+soak dates, compiler pins) wired through `decide_merge` / `build_live_snapshot`
+/ `python_version_bump` / lock-consistency, with a profile seam in
+`.github/maintenance.json`. Python-bump auto-merge requires bound
+validation/publication notices (`mode=required`); `disabled` blocks that
+lane. That candidate is **not** approved for blind adoption and does **not**
+prove Game / Reddit / Twitter compatibility. Shared helpers across the four
+PRs are **not** identical. The master identical-helper requirement is
+**unmet** and **not excepted**; four PRs are **not fully aligned**. The
+explicit “unmet” note is inventory, not completion. Helper-only fixtures are
+not live merges.
 
 ## N3 — coverage vs remaining limits
 

@@ -14,7 +14,7 @@
       "pr": 66,
       "sha": null,
       "ancestor_implementation_bytes": "be4bacaa0e4a1688517549c99915d93d0227024e",
-      "note": "News #66 N2 Part A common-helper candidate working tree. A commit cannot embed its own final self-hash. Ancestor helper/engine/lock implementation-byte head is be4bacaa0e4a1688517549c99915d93d0227024e. Candidate is not approved for blind adoption and does not prove Game/Reddit/Twitter compatibility. Recheck file SHA-256s after this commit."
+      "note": "News #66 N2 Part A candidate plus N4 publication integration working tree. A commit cannot embed its own final self-hash. Ancestor helper/engine/lock implementation-byte head is be4bacaa0e4a1688517549c99915d93d0227024e. Candidate is not approved for blind adoption and does not prove Game/Reddit/Twitter compatibility. Recheck file SHA-256s after this commit."
     },
     "reddit": {
       "repo": "uesu/7jkxmy9nvbc",
@@ -66,7 +66,7 @@
       "game": "367a33838aeaea6ba002240df310cf1d13ab59d2b2ddcf630dde9d43eedbc776"
     },
     ".github/maintenance.json": {
-      "news": "e4985ac8912a7e315121507ee73c1bea2a74dc8e782bf5229c38e19f0c794567",
+      "news": "d4e481d960e47b00a75897f68f45e62235481346049569840ac9f996d8afbad3",
       "reddit": "7e2983403a26623e04c5736445cb18695b4bebc194c86c2377591faa9d7b0fc8",
       "twitter": "e632a062314486c463005e4c8030bb0e9eb1d551a1f254d37672a5afb35bb86d",
       "game": "eba443c8a66310d56bd55bbc110eb422336ba36c7082bd7b924347c86fc25efa"
@@ -78,13 +78,13 @@
       "game": "5530132b5be2a870d162121fc2b2da6771a6f584dd78571b097c94ef5831f654"
     },
     ".github/scripts/maintenance.py": {
-      "news": "1954d82d3bb1d6ca336fd3bcf52a1829124f7ddfee1e0d8147e0682954d18348",
+      "news": "cce2cdbd41b9a02120f6ea9b3be6b4d5e0ec4019c1aeb3f91bc8fbe0819f3167",
       "reddit": "ed7dd1ef5e5264547c3909dbc7599b09d47c9a0f17494d92bf49671785a69a34",
       "twitter": "766548226b019a0254ed4bac48c30c5b3e46ff9dd21c24fdb0c08dfdcf76c91e",
       "game": "5e2dfb595cd1b5a2c3ebaad7346274e4a5f80925b8e5d9828aa7e32c87f5e2ac"
     },
     ".github/scripts/python_version_bump.py": {
-      "news": "efc4e350cf7d78f6fe8dfecae02abeb5f9672709e78eb9cf3d12987a68471dd5",
+      "news": "dcdd28c0c314558419c73e0da030415ea09e48410b0893a93c0a2f87fb52c52c",
       "reddit": "a3011aba88dca0554850c0715cc6571f1f8effcc6f696aac793c14fa27ac2f85",
       "twitter": "01f087f4f568ebaee1273fa6d75bab920f7bf5e3bbb3614cb0c7944d9f88d480",
       "game": "b9c9ae1db623a799f3868bc39d4af71254de4b957960f40cd8f6586cbb57595b"
@@ -108,7 +108,7 @@
       "game": "b8383aa1192f2753f6481a49aa1792a502b719458b1e7b338964c6dcee2d7592"
     },
     ".github/workflows/python_version_bump.yml": {
-      "news": "89c81727310f6e85445f375993be35bdcd16a04e93c8479e00c2de1318cc0d97",
+      "news": "ceacfb6bc2870befee4d03efdd98ed76c3574caa412dd91b7ae486ef39645414",
       "reddit": "078e213e732b7e9a9849e33dc08562ed25da34f5b5eac1c63612061cd9fccaae",
       "twitter": "29f4d0d604e2b00f411511242a59d63948b26e0165168289f3d9adc694566554",
       "game": "db0e7aa6482040606a5ddd74ef40b9390e6c37d9a338269e94fd51c783b80097"
@@ -180,7 +180,7 @@
       "game": null
     },
     "tests/test_maintenance.py": {
-      "news": "86aa054b47f7e04e9e9e09ea264b816804e8a45c608accfba6f7ded8ed1b2954",
+      "news": "ba64cdac8361544c96ce600ff8ea2408bc5cb50e33de4a0e6d7c9dadb72fb523",
       "reddit": "ee0ce3cec735768da65e9233e33f86a44ee57913f94f9488b713ed965a0b35a4",
       "twitter": "c6884a0ad788e5477b687344661ff9039ae073d566a47251f6015a32523a485d",
       "game": "074822c89d75c00da7aa5dab6d693b46d014b2f0f56dcff2ff0cafbdab1885bf"
@@ -216,13 +216,13 @@
       "game": null
     },
     ".github/scripts/maintenance_common.py": {
-      "news": "6649f0c0e533bfd8df77c3724945155eeeac56f13dec8b32a66664560c38efd2",
+      "news": "4e9c57ad337b65ede8565d9293a0966f41c33ee20ad3f6823fca07d3031f865f",
       "reddit": null,
       "twitter": null,
       "game": null
     },
     "tests/test_maintenance_common.py": {
-      "news": "ef7d0f37c652b8811b88c5b5caa755be97544d5a3ad0508ea544544bd250ca0d",
+      "news": "4d5a6aca6cd6f6693bfe4aec6e455d0fdba11dc01b85eacf91eea5b5d64a310c",
       "reddit": null,
       "twitter": null,
       "game": null

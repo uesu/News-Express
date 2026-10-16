@@ -61,10 +61,11 @@
     "note": "mode=disabled is a deliberate recorded decision, not an empty list standing in for one: with no kinds named the controller reports security-evidence-not-required, and an omitted or unrecognised mode fails closed as security-evidence-unconfigured. This repository runs no code or secret scanning (no CodeQL workflow, no default setup) and the merge workflow token does not hold security-events. Requiring a scan that is not running would defer every auto-merge with no way to satisfy it. Retrieval, pagination, head-scope and fail-closed behaviour are implemented in maintenance_common.py; move a name from candidates to required (and add security-events: read) to enforce it."
   },
   "publication_evidence": {
-    "mode": "disabled",
+    "mode": "required",
     "proposer_workflow": ".github/workflows/python_version_bump.yml",
     "proposal_files": [".python-version"],
-    "note": "mode=disabled is a recorded decision: this repository's python_version_bump adapter does not yet emit bound validation/publication records. The verifier in maintenance_common.py is implemented; set mode=required after the proposer emits those records. An omitted mode fails closed as publication-evidence-unconfigured for python_bump PRs."
+    "commit_identity": "github-actions[bot]",
+    "note": "Python-bump auto-merge requires bound validation and publication notices from the trusted proposer run. mode=disabled blocks that lane rather than reading as satisfied. PR title/body are not evidence. Actor, PAT author, and commit identity stay distinct."
   },
   "test_commands": {
     "compile": ["python", "-m", "compileall", "-q", "testing area", "tests", ".github/scripts"],

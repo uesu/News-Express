@@ -7,6 +7,8 @@ merge controller.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import sys
 import tempfile
@@ -242,7 +244,8 @@ class PublicationTests(unittest.TestCase):
         disabled = maintenance_common.verify_publication_gate(
             mode="disabled", kind="python_bump", evidence={}, pr=pr
         )
-        self.assertEqual(disabled["reason"], "publication-evidence-not-required")
+        self.assertEqual(disabled["reason"], "publication-lane-blocked")
+        self.assertEqual(disabled["state"], "failed")
 
     def test_required_mode_rejects_missing_run_and_digest_mismatch(self):
         pr = {
@@ -308,6 +311,199 @@ class PublicationTests(unittest.TestCase):
             repository=REPO,
         )
         self.assertEqual(mismatch["reason"], "publication-digest-mismatch:.python-version")
+
+    def test_notice_round_trip_with_and_without_prefix(self):
+        record = {"run_id": 1, "candidate_version": "3.14.9"}
+        rendered = maintenance_common.notice("proposal-validation", record)
+        self.assertTrue(rendered.startswith("::notice::proposal-validation "))
+        self.assertEqual(
+            maintenance_common.parse_notice(rendered, "proposal-validation"),
+            record,
+        )
+        stripped = rendered[len("::notice::"):]
+        self.assertEqual(
+            maintenance_common.parse_notice(stripped, "proposal-validation"),
+            record,
+        )
+        self.assertIsNone(maintenance_common.parse_notice("not json", "proposal-validation"))
+
+    def test_candidate_version_comes_from_pin_patch_not_title(self):
+        files = [{"filename": ".python-version", "patch": "-3.14.8\n+3.14.9\n"}]
+        self.assertEqual(maintenance_common.candidate_version_from_files(files), "3.14.9")
+        self.assertIsNone(maintenance_common.candidate_version_from_files([
+            {"filename": "README.md", "patch": "+chore: bump CPython pin 3.14.8 -> 3.14.9\n"},
+        ]))
+        self.assertIsNone(maintenance_common.candidate_version_from_files([
+            {"filename": ".python-version", "patch": "-3.14.8\n+nope\n"},
+        ]))
+
+    def test_collect_binds_matching_publication_notice(self):
+        source = "c" * 40
+        pin = b"3.14.9\n"
+        digest = hashlib.sha256(pin).hexdigest()
+        validation = maintenance_common.build_validation_record(
+            source_head=source,
+            candidate="3.14.9",
+            interpreter="3.14.9",
+            pip_version=maintenance_common.PINNED_PIP,
+            pip_tools_version=maintenance_common.PINNED_PIP_TOOLS,
+            digests={".python-version": digest},
+            run_id=44,
+            run_attempt=1,
+        )
+        publication = maintenance_common.build_publication_record(
+            run_id=44,
+            run_attempt=1,
+            pull_number=12,
+            published_head=SHA,
+            branch="chore/python-3.14.9",
+            digests={".python-version": digest},
+            pr_author="github-actions[bot]",
+            commit_identity="github-actions[bot]",
+            run_actor="github-actions[bot]",
+        )
+        val_msg = maintenance_common.notice("proposal-validation", validation)
+        pub_msg = maintenance_common.notice("proposal-publication", publication)
+        self.assertIsNotNone(val_msg)
+        self.assertIsNotNone(pub_msg)
+        val_msg = val_msg[len("::notice::"):]
+        pub_msg = pub_msg[len("::notice::"):]
+        pr = {
+            "number": 12,
+            "user": {"login": "github-actions[bot]"},
+            "head": {"sha": SHA, "ref": "chore/python-3.14.9", "repo": {"full_name": REPO}},
+        }
+        files = [{"filename": ".python-version", "patch": "-3.14.8\n+3.14.9\n"}]
+
+        def get_json(url: str) -> tuple[int, Any]:
+            if "/contents/" in url:
+                return 200, {
+                    "encoding": "base64",
+                    "content": base64.b64encode(pin).decode("ascii"),
+                }
+            if "/commits/" in url:
+                return 200, {"sha": SHA}
+            if "/attempts/" in url:
+                return 200, {
+                    "id": 44, "run_attempt": 1, "status": "completed",
+                    "conclusion": "success", "head_sha": source,
+                }
+            return 404, {}
+
+        def get_pages(url: str) -> tuple[int, Any]:
+            if "/runs?" in url:
+                return 200, [{
+                    "id": 44, "workflow_id": 7,
+                    "path": ".github/workflows/python_version_bump.yml",
+                    "status": "completed", "conclusion": "success",
+                    "run_attempt": 1, "head_sha": source,
+                    "actor": {"login": "github-actions[bot]"},
+                    "repository": {"full_name": REPO},
+                    "head_repository": {"full_name": REPO},
+                }]
+            if "/jobs" in url:
+                return 200, [{
+                    "id": 9, "name": "publish",
+                    "check_run_url": f"https://api.github.com/repos/{REPO}/check-runs/77",
+                }]
+            if "/annotations" in url:
+                return 200, [{"message": val_msg}, {"message": pub_msg}]
+            return 404, {}
+
+        evidence = maintenance_common.collect_publication_evidence(
+            "uesu", "News-Express", pr, files,
+            get_json=get_json, get_pages=get_pages,
+            trusted_proposer_path=".github/workflows/python_version_bump.yml",
+            proposal_files=[".python-version"],
+            expected_commit_identity="github-actions[bot]",
+        )
+        self.assertNotIn("error", evidence)
+        self.assertEqual(evidence["proposal_digests"][".python-version"], digest)
+        self.assertEqual(evidence["publication_record"]["pull_number"], 12)
+        verified = maintenance_common.verify_publication_gate(
+            mode="required",
+            kind="python_bump",
+            evidence=evidence,
+            pr=pr,
+            candidate_version="3.14.9",
+            proposal_files=[".python-version"],
+            repository=REPO,
+        )
+        self.assertEqual(verified["state"], "ready")
+
+    def test_collect_truncated_annotations_fail_closed(self):
+        pr = {
+            "number": 12,
+            "head": {"sha": SHA, "ref": "chore/python-3.14.9"},
+        }
+        files = [{"filename": ".python-version", "patch": "-3.14.8\n+3.14.9\n"}]
+
+        def get_json(url: str) -> tuple[int, Any]:
+            if "/contents/" in url:
+                return 200, {
+                    "encoding": "base64",
+                    "content": base64.b64encode(b"3.14.9\n").decode("ascii"),
+                }
+            if "/commits/" in url:
+                return 200, {"sha": SHA}
+            if "/attempts/" in url:
+                return 200, {
+                    "id": 44, "run_attempt": 1, "status": "completed",
+                    "conclusion": "success", "head_sha": "c" * 40,
+                }
+            return 404, {}
+
+        def get_pages(url: str) -> tuple[int, Any]:
+            if "/runs?" in url:
+                return 200, [{
+                    "id": 44, "workflow_id": 7,
+                    "path": ".github/workflows/python_version_bump.yml",
+                    "status": "completed", "conclusion": "success",
+                    "run_attempt": 1, "head_sha": "c" * 40,
+                }]
+            if "/jobs" in url:
+                return 200, [{
+                    "id": 9,
+                    "check_run_url": f"https://api.github.com/repos/{REPO}/check-runs/77",
+                }]
+            if "/annotations" in url:
+                return 0, {"message": "pagination-truncated"}
+            return 404, {}
+
+        evidence = maintenance_common.collect_publication_evidence(
+            "uesu", "News-Express", pr, files,
+            get_json=get_json, get_pages=get_pages,
+            trusted_proposer_path=".github/workflows/python_version_bump.yml",
+            proposal_files=[".python-version"],
+        )
+        self.assertEqual(evidence["error"], "annotations-api:0")
+
+    def test_collect_missing_publication_is_not_a_pass(self):
+        pr = {"number": 12, "head": {"sha": SHA, "ref": "chore/python-3.14.9"}}
+        files = [{"filename": ".python-version", "patch": "-3.14.8\n+3.14.9\n"}]
+
+        def get_json(url: str) -> tuple[int, Any]:
+            if "/contents/" in url:
+                return 200, {
+                    "encoding": "base64",
+                    "content": base64.b64encode(b"3.14.9\n").decode("ascii"),
+                }
+            if "/commits/" in url:
+                return 200, {"sha": SHA}
+            return 404, {}
+
+        def get_pages(url: str) -> tuple[int, Any]:
+            if "/runs?" in url:
+                return 200, []
+            return 404, {}
+
+        evidence = maintenance_common.collect_publication_evidence(
+            "uesu", "News-Express", pr, files,
+            get_json=get_json, get_pages=get_pages,
+            trusted_proposer_path=".github/workflows/python_version_bump.yml",
+            proposal_files=[".python-version"],
+        )
+        self.assertEqual(evidence["error"], "no-matching-publication-record")
 
 
 class ReleaseDateTests(unittest.TestCase):

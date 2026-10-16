@@ -16,6 +16,14 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-16 — N4 publication integration (PR #66).** The python-bump
+  proposer emits bound validation and publication notices. The live merge
+  controller collects them from check-run annotations, derives the candidate
+  from the `.python-version` patch (never the title), and hashes published
+  bytes via the contents API. `publication_evidence.mode=required`.
+  `mode=disabled` blocks the python-bump auto-merge lane rather than reading
+  as satisfied. Other three PRs are unchanged; N2 remains unmet.
+
 * **2026-10-16 — N2 Part A common-helper candidate (PR #66).** Add
   `.github/scripts/maintenance_common.py` (producer identity, security
   evidence, publication gate, python.org soak dates, pinned compiler) and

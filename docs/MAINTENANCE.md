@@ -20,7 +20,7 @@ dedup caches**.
 | `.github/maintenance.json` | Project profile (checks, compile commands, identities) |
 | `.github/scripts/maintenance.py` | Pure policy + explicit `apply-live` adapter |
 | `.github/scripts/maintenance_common.py` | Portable producer / security / publication / soak / compiler pins |
-| `.github/scripts/python_version_bump.py` | Pin proposer (no merge, no GitHub writes without flags) |
+| `.github/scripts/python_version_bump.py` | Pin proposer; emits bound validation/publication notices (no self-merge) |
 | `.github/scripts/ci.py` | Command registry; every `tests/test_*.py` must be listed |
 | `.github/scripts/render_run_summary.py` | Markdown footer from a structured report |
 | `.github/workflows/ci.yml` | Hashed install + fail-closed `maintenance-ci` |

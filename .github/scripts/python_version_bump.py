@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,29 @@ def rewrite_pin(path: Path, new_version: str) -> None:
 def optional_docs_present(profile: dict, root: Path) -> bool:
     docs = profile.get("optional_docs") or []
     return all((root / rel).exists() for rel in docs)
+
+
+def _positive_int(value: str) -> int | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def _toolchain_versions() -> tuple[str, str, str]:
+    interpreter = ".".join(str(part) for part in sys.version_info[:3])
+    try:
+        import pip  # type: ignore
+        pip_version = str(getattr(pip, "__version__", "") or "")
+    except Exception:
+        pip_version = ""
+    try:
+        import piptools  # type: ignore
+        tools_version = str(getattr(piptools, "__version__", "") or "")
+    except Exception:
+        tools_version = ""
+    return interpreter, pip_version, tools_version
 
 
 def fetch_manifest_release_date(entry: dict) -> str | None:
@@ -68,12 +92,108 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", default=str(REPO_ROOT))
     parser.add_argument("--write-pin", action="store_true", help="rewrite .python-version only")
     parser.add_argument("--candidate", default="", help="with --write-pin, the version to write")
+    parser.add_argument("--emit-validation", action="store_true", help="print a bound validation notice")
+    parser.add_argument("--emit-publication", action="store_true", help="print a bound publication notice")
+    parser.add_argument("--source-head", default="", help="validation source head SHA")
+    parser.add_argument("--run-id", default="", help="workflow run id")
+    parser.add_argument("--run-attempt", default="", help="workflow run attempt")
+    parser.add_argument("--pull-number", default="", help="published PR number")
+    parser.add_argument("--published-head", default="", help="published PR head SHA")
+    parser.add_argument("--branch", default="", help="published branch")
+    parser.add_argument("--pr-author", default="", help="PAT publisher login")
+    parser.add_argument("--commit-identity", default="", help="configured commit bot login")
+    parser.add_argument("--run-actor", default="", help="workflow run actor login")
+    parser.add_argument("--interpreter", default="", help="override reported interpreter")
+    parser.add_argument("--pip", default="", help="override reported pip version")
+    parser.add_argument("--pip-tools", default="", help="override reported pip-tools version")
     args = parser.parse_args(argv)
 
     profile = maintenance.load_profile(args.profile)
     root = Path(args.root)
     pin_rel = str(profile.get("python", {}).get("pin_file") or ".python-version")
     pin_path = root / pin_rel
+
+    pub_block = profile.get("publication_evidence") if isinstance(profile.get("publication_evidence"), dict) else {}
+    proposal_files = [str(f) for f in (pub_block.get("proposal_files") or []) if f]
+    if not proposal_files:
+        proposal_files = list(maintenance_common.DEFAULT_PROPOSAL_FILES)
+
+    if args.emit_validation or args.emit_publication:
+        candidate = args.candidate or ""
+        try:
+            maintenance.parse_version(candidate)
+        except ValueError:
+            print("emit requires a valid --candidate", file=sys.stderr)
+            return 2
+        run_id = _positive_int(args.run_id or os.environ.get("GITHUB_RUN_ID") or "")
+        run_attempt = _positive_int(args.run_attempt or os.environ.get("GITHUB_RUN_ATTEMPT") or "")
+        digests = maintenance_common.digest_files(root, proposal_files)
+        if args.emit_validation:
+            source_head = (args.source_head or os.environ.get("GITHUB_SHA") or "").strip().lower()
+            if not maintenance_common.SHA_RE.fullmatch(source_head):
+                print("emit-validation requires --source-head or GITHUB_SHA", file=sys.stderr)
+                return 2
+            interpreter, pip_version, tools_version = _toolchain_versions()
+            interpreter = args.interpreter or interpreter
+            pip_version = args.pip or pip_version
+            tools_version = args.pip_tools or tools_version
+            if not interpreter or not pip_version or not tools_version:
+                print("emit-validation requires the pinned compiler on sys.path", file=sys.stderr)
+                return 2
+            record = maintenance_common.build_validation_record(
+                source_head=source_head,
+                candidate=candidate,
+                interpreter=interpreter,
+                pip_version=pip_version,
+                pip_tools_version=tools_version,
+                digests=digests,
+                run_id=run_id,
+                run_attempt=run_attempt,
+            )
+            rendered = maintenance_common.notice(maintenance_common.VALIDATION_NOTICE, record)
+            if not rendered:
+                print("validation notice exceeds bound", file=sys.stderr)
+                return 2
+            print(rendered)
+            return 0
+        published_head = (args.published_head or "").strip().lower()
+        if not maintenance_common.SHA_RE.fullmatch(published_head):
+            print("emit-publication requires --published-head", file=sys.stderr)
+            return 2
+        pull_number = _positive_int(args.pull_number)
+        if pull_number is None:
+            print("emit-publication requires --pull-number", file=sys.stderr)
+            return 2
+        branch = args.branch or ""
+        if not branch:
+            print("emit-publication requires --branch", file=sys.stderr)
+            return 2
+        pr_author = args.pr_author or ""
+        commit_identity = args.commit_identity or str(
+            ((profile.get("publication_evidence") or {}) if isinstance(profile.get("publication_evidence"), dict) else {}).get("commit_identity")
+            or "github-actions[bot]"
+        )
+        run_actor = args.run_actor or os.environ.get("GITHUB_ACTOR") or ""
+        if not pr_author or not commit_identity or not run_actor:
+            print("emit-publication requires distinct actor/author/commit identities", file=sys.stderr)
+            return 2
+        record = maintenance_common.build_publication_record(
+            run_id=run_id,
+            run_attempt=run_attempt,
+            pull_number=pull_number,
+            published_head=published_head,
+            branch=branch,
+            digests=digests,
+            pr_author=pr_author,
+            commit_identity=commit_identity,
+            run_actor=run_actor,
+        )
+        rendered = maintenance_common.notice(maintenance_common.PUBLICATION_NOTICE, record)
+        if not rendered:
+            print("publication notice exceeds bound", file=sys.stderr)
+            return 2
+        print(rendered)
+        return 0
 
     if args.write_pin:
         version = args.candidate or (json.loads(Path(args.fixture).read_text(encoding="utf-8")).get("candidate") if args.fixture else "")

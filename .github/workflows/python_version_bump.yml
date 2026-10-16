@@ -160,6 +160,13 @@ jobs:
           python .github/scripts/ci.py --profile production --group lock-consistency
           python .github/scripts/ci.py --profile production --group workflow-security
 
+      - name: Emit bound validation record
+        if: steps.wheels.outputs.ok == 'yes'
+        env:
+          CANDIDATE: ${{ needs.select.outputs.candidate }}
+        run: |
+          python .github/scripts/python_version_bump.py --emit-validation --candidate "$CANDIDATE"
+
   publish:
     needs: [select, validate]
     if: ${{ needs.validate.outputs.wheels == 'yes' && (needs.select.outputs.status == 'proposed' || needs.select.outputs.status == 'review-required') }}
@@ -190,6 +197,7 @@ jobs:
           python-version-file: .python-version
 
       - name: Apply the validated pin and open or update the proposal
+        id: publish
         env:
           GH_TOKEN: ${{ secrets.BUMP_PAT }}
           CURRENT: ${{ needs.select.outputs.current }}
@@ -223,17 +231,43 @@ jobs:
           Pre-PR validation ran under \`${LATEST}\` with the frozen hashed graph
           (\`pip install --require-hashes --only-binary=:all:\`) and the CI adapter
           (\`ci.py --profile production\`). Ordinary PR CI on this head is still
-          required; this workflow does not merge.
+          required; this workflow does not merge. Bound validation and publication
+          notices from this run are the merge-controller evidence, not this body.
           EOF
           )
           EXISTING="$(gh pr list --head "$BRANCH" --base main --json number --jq '.[0].number' || true)"
           if [ -n "$EXISTING" ]; then
             gh pr edit "$EXISTING" --title "chore: bump CPython pin ${CURRENT} -> ${LATEST} (${KIND})" --body "$BODY"
+            NUM="$EXISTING"
           else
             gh pr create --base main --head "$BRANCH" \
               --title "chore: bump CPython pin ${CURRENT} -> ${LATEST} (${KIND})" \
               --body "$BODY"
+            NUM="$(gh pr list --head "$BRANCH" --base main --json number --jq '.[0].number')"
           fi
+          AUTHOR="$(gh api user --jq .login)"
+          echo "pull_number=${NUM}" >> "$GITHUB_OUTPUT"
+          echo "published_head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "pr_author=${AUTHOR}" >> "$GITHUB_OUTPUT"
+
+      - name: Emit bound publication record
+        if: steps.publish.outputs.pull_number != ''
+        env:
+          CANDIDATE: ${{ needs.select.outputs.candidate }}
+          PULL_NUMBER: ${{ steps.publish.outputs.pull_number }}
+          PUBLISHED_HEAD: ${{ steps.publish.outputs.published_head }}
+          BRANCH: ${{ steps.publish.outputs.branch }}
+          PR_AUTHOR: ${{ steps.publish.outputs.pr_author }}
+        run: |
+          python .github/scripts/python_version_bump.py --emit-publication \
+            --candidate "$CANDIDATE" \
+            --pull-number "$PULL_NUMBER" \
+            --published-head "$PUBLISHED_HEAD" \
+            --branch "$BRANCH" \
+            --pr-author "$PR_AUTHOR" \
+            --commit-identity "github-actions[bot]" \
+            --run-actor "${GITHUB_ACTOR}"
 
   summary:
     if: always()

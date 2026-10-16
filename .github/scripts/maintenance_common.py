@@ -11,6 +11,8 @@ producer, or publication.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import os
 import re
@@ -477,26 +479,29 @@ def verify_publication_gate(
 ) -> dict[str, Any]:
     """Profile-gated publication binding.
 
-    Dependabot PRs do not emit proposer records. Python-bump PRs require an
-    explicit mode: ``disabled`` is a recorded decision; an omitted mode is a
-    configuration gap, not a pass.
+    Dependabot PRs do not emit proposer records. Python-bump auto-merge
+    requires ``mode=required`` plus bound records. ``disabled`` blocks that
+    lane rather than reading as satisfied; an omitted mode is a configuration
+    gap, not a pass.
     """
     if kind != "python_bump":
         return {"state": "ready", "reason": "publication-not-applicable"}
+    if str(mode) == "required":
+        return verify_publication_record(
+            evidence or {},
+            pr,
+            candidate_version=candidate_version,
+            trusted_proposer_path=trusted_proposer_path,
+            proposal_files=proposal_files,
+            pinned_pip=pinned_pip,
+            pinned_pip_tools=pinned_pip_tools,
+            repository=repository,
+        )
     if str(mode) == "disabled":
-        return {"state": "ready", "reason": "publication-evidence-not-required"}
-    if str(mode) != "required":
-        return {"state": "failed", "reason": "publication-evidence-unconfigured"}
-    return verify_publication_record(
-        evidence or {},
-        pr,
-        candidate_version=candidate_version,
-        trusted_proposer_path=trusted_proposer_path,
-        proposal_files=proposal_files,
-        pinned_pip=pinned_pip,
-        pinned_pip_tools=pinned_pip_tools,
-        repository=repository,
-    )
+        # Absence of an adapter is not an approved exception: the python-bump
+        # auto-merge lane stays blocked rather than reading as satisfied.
+        return {"state": "failed", "reason": "publication-lane-blocked"}
+    return {"state": "failed", "reason": "publication-evidence-unconfigured"}
 
 
 def verify_publication_record(
@@ -624,6 +629,300 @@ def verify_publication_record(
     if not isinstance(commit, dict) or commit.get("sha") != head:
         return {"state": "failed", "reason": "published-head-not-a-commit"}
     return {"state": "ready", "reason": "publication-verified"}
+
+
+VALIDATION_NOTICE = "proposal-validation"
+PUBLICATION_NOTICE = "proposal-publication"
+NOTICE_LIMIT = 3000
+_PIN_LINE = re.compile(r"^(\d+\.\d+\.\d+)$")
+_CHECK_RUN_ID_RE = re.compile(
+    r"^https://api\.github\.com/repos/[^/\s]+/[^/\s]+/check-runs/(\d+)/?$"
+)
+
+
+def candidate_version_from_files(files: Sequence[Mapping[str, Any]]) -> str | None:
+    """Parse the candidate pin from a ``.python-version`` patch. Never from a title."""
+    for item in files or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("filename") or item.get("path") or "") != ".python-version":
+            continue
+        found: list[str] = []
+        for line in str(item.get("patch") or "").splitlines():
+            if not line.startswith("+") or line.startswith("+++"):
+                continue
+            body = line[1:].strip()
+            if _PIN_LINE.fullmatch(body):
+                found.append(body)
+        if len(found) == 1:
+            return found[0]
+        return None
+    return None
+
+
+def digest_files(root: Path, names: Sequence[str]) -> dict[str, str | None]:
+    """SHA-256 of each proposal file as bytes on disk; missing files are None."""
+    out: dict[str, str | None] = {}
+    for name in names:
+        path = Path(root) / name
+        if path.is_file():
+            out[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        else:
+            out[name] = None
+    return out
+
+
+def digest_contents_payload(payload: Mapping[str, Any]) -> str | None:
+    """SHA-256 of a GitHub contents API blob. Missing/malformed is None."""
+    if not isinstance(payload, Mapping):
+        return None
+    encoding = str(payload.get("encoding") or "")
+    raw = payload.get("content")
+    if encoding != "base64" or not isinstance(raw, str) or not raw:
+        return None
+    try:
+        data = base64.b64decode(raw)
+    except (ValueError, TypeError):
+        return None
+    return hashlib.sha256(data).hexdigest()
+
+
+def build_validation_record(
+    *,
+    source_head: str,
+    candidate: str,
+    interpreter: str,
+    pip_version: str,
+    pip_tools_version: str,
+    digests: Mapping[str, str | None],
+    run_id: int | None,
+    run_attempt: int | None,
+) -> dict[str, Any]:
+    return {
+        "source_head": source_head,
+        "candidate_version": candidate,
+        "interpreter": interpreter,
+        "pip": pip_version,
+        "pip_tools": pip_tools_version,
+        "digests": dict(digests),
+        "run_id": run_id,
+        "run_attempt": run_attempt,
+    }
+
+
+def build_publication_record(
+    *,
+    run_id: int | None,
+    run_attempt: int | None,
+    pull_number: int | None,
+    published_head: str,
+    branch: str,
+    digests: Mapping[str, str | None],
+    pr_author: str | None,
+    commit_identity: str | None,
+    run_actor: str | None,
+) -> dict[str, Any]:
+    return {
+        "run_id": run_id,
+        "run_attempt": run_attempt,
+        "pull_number": pull_number,
+        "published_head": published_head,
+        "branch": branch,
+        "digests": dict(digests),
+        "pr_author": pr_author,
+        "commit_identity": commit_identity,
+        "run_actor": run_actor,
+    }
+
+
+def notice(kind: str, record: Mapping[str, Any], *, limit: int = NOTICE_LIMIT) -> str | None:
+    """Render a record as a bounded workflow notice, or None when it would not fit."""
+    payload = json.dumps(record, sort_keys=True, separators=(",", ":"))
+    if len(payload) > limit:
+        return None
+    safe = payload.replace("%", "%25").replace("\r", " ").replace("\n", " ")
+    return f"::notice::{kind} {safe}"
+
+
+def parse_notice(message: str, kind: str) -> dict[str, Any] | None:
+    """Recover a record from a notice; malformed input yields None.
+
+    The Checks API reports ``message`` with the workflow-command prefix already
+    stripped; a raw log line still carries it. Requiring the prefix would make
+    every real annotation unparseable.
+    """
+    if not isinstance(message, str):
+        return None
+    text = message.strip()
+    if text.startswith("::notice::"):
+        text = text[len("::notice::"):]
+    prefix = f"{kind} "
+    if not text.startswith(prefix):
+        return None
+    payload = text[len(prefix):].strip()
+    try:
+        record = json.loads(payload)
+    except ValueError:
+        return None
+    return record if isinstance(record, dict) else None
+
+
+def _check_run_id_from_job(job: Mapping[str, Any]) -> int | None:
+    match = _CHECK_RUN_ID_RE.match(str(job.get("check_run_url") or "").strip())
+    return int(match.group(1)) if match else None
+
+
+def collect_publication_evidence(
+    owner: str,
+    name: str,
+    pr: Mapping[str, Any],
+    files: Sequence[Mapping[str, Any]],
+    *,
+    get_json: JsonGetter,
+    get_pages: PagesGetter,
+    trusted_proposer_path: str,
+    proposal_files: Sequence[str],
+    expected_commit_identity: str = "",
+) -> dict[str, Any]:
+    """Bind a python-bump PR to the proposer run that validated and published it.
+
+    Proposer runs live on the default branch, so they cannot be found by the
+    proposal head SHA. The publication notice names the PR number; that is the
+    join. Digests are computed from contents at the published head, so a
+    proposal cannot vouch for itself. Title/body are never evidence.
+    """
+    repository = f"{owner}/{name}"
+    candidate = candidate_version_from_files(files)
+    head_sha = str((pr.get("head") or {}).get("sha") or "")
+    number = pr.get("number")
+    evidence: dict[str, Any] = {
+        "repository": repository,
+        "candidate_version": candidate,
+        "expected_commit_identity": expected_commit_identity,
+        "proposal_digests": {},
+    }
+    if not SHA_RE.fullmatch(head_sha.lower()):
+        evidence["error"] = "proposal-head-unavailable"
+        return evidence
+    if not isinstance(number, int) or number <= 0:
+        evidence["error"] = "publication-pr-unavailable"
+        return evidence
+
+    digests: dict[str, str | None] = {}
+    for rel in proposal_files:
+        status, payload = get_json(
+            f"https://api.github.com/repos/{owner}/{name}/contents/{urllib.parse.quote(rel)}"
+            f"?ref={head_sha}"
+        )
+        if status != 200 or not isinstance(payload, dict):
+            evidence["error"] = f"contents-api:{rel}:{status}"
+            return evidence
+        digested = digest_contents_payload(payload)
+        if not digested:
+            evidence["error"] = f"contents-malformed:{rel}"
+            return evidence
+        digests[rel] = digested
+    evidence["proposal_digests"] = digests
+
+    status, commit = get_json(
+        f"https://api.github.com/repos/{owner}/{name}/commits/{head_sha}"
+    )
+    if status != 200 or not isinstance(commit, dict):
+        evidence["error"] = f"commit-api:{status}"
+        return evidence
+    evidence["published_commit"] = commit
+
+    workflow_file = Path(trusted_proposer_path).name
+    runs_url = (
+        f"https://api.github.com/repos/{owner}/{name}/actions/workflows/"
+        f"{urllib.parse.quote(workflow_file)}/runs?status=completed&per_page=100"
+    )
+    status, runs = get_pages(runs_url)
+    if status != 200:
+        evidence["error"] = f"proposer-runs-api:{status}"
+        return evidence
+    if not isinstance(runs, list):
+        evidence["error"] = "proposer-runs-malformed"
+        return evidence
+
+    matched_run: Mapping[str, Any] | None = None
+    matched_attempt: Mapping[str, Any] | None = None
+    matched_validation: dict[str, Any] | None = None
+    matched_publication: dict[str, Any] | None = None
+    for run in runs:
+        if not isinstance(run, dict):
+            evidence["error"] = "malformed-proposer-run"
+            return evidence
+        if str(run.get("path") or "") != trusted_proposer_path:
+            continue
+        if str(run.get("conclusion") or "") != "success":
+            continue
+        try:
+            run_id = int(run.get("id") or 0)
+            attempt_n = int(run.get("run_attempt") or 0)
+        except (TypeError, ValueError):
+            continue
+        if run_id <= 0 or attempt_n <= 0:
+            continue
+        status, attempt = get_json(
+            f"https://api.github.com/repos/{owner}/{name}/actions/runs/{run_id}/attempts/{attempt_n}"
+        )
+        if status != 200 or not isinstance(attempt, dict):
+            evidence["error"] = f"proposer-attempt-api:{status}"
+            return evidence
+        status, jobs = get_pages(
+            f"https://api.github.com/repos/{owner}/{name}/actions/runs/{run_id}/jobs?per_page=100"
+        )
+        if status != 200:
+            evidence["error"] = f"proposer-jobs-api:{status}"
+            return evidence
+        if not isinstance(jobs, list):
+            evidence["error"] = "proposer-jobs-malformed"
+            return evidence
+        validation = None
+        publication = None
+        for job in jobs:
+            if not isinstance(job, dict):
+                evidence["error"] = "malformed-proposer-job"
+                return evidence
+            check_id = _check_run_id_from_job(job)
+            if check_id is None:
+                continue
+            status, anns = get_pages(
+                f"https://api.github.com/repos/{owner}/{name}/check-runs/{check_id}/annotations?per_page=100"
+            )
+            if status != 200:
+                evidence["error"] = f"annotations-api:{status}"
+                return evidence
+            if not isinstance(anns, list):
+                evidence["error"] = "annotations-malformed"
+                return evidence
+            for ann in anns:
+                if not isinstance(ann, dict):
+                    evidence["error"] = "malformed-annotation"
+                    return evidence
+                message = str(ann.get("message") or "")
+                parsed_v = parse_notice(message, VALIDATION_NOTICE)
+                if parsed_v:
+                    validation = parsed_v
+                parsed_p = parse_notice(message, PUBLICATION_NOTICE)
+                if parsed_p:
+                    publication = parsed_p
+        if publication and publication.get("pull_number") == number:
+            matched_run = run
+            matched_attempt = attempt
+            matched_validation = validation
+            matched_publication = publication
+            break
+
+    if matched_run is None:
+        evidence["error"] = "no-matching-publication-record"
+        return evidence
+    evidence["proposer_run"] = matched_run
+    evidence["proposer_attempt"] = matched_attempt
+    evidence["validation_record"] = matched_validation
+    evidence["publication_record"] = matched_publication
+    return evidence
 
 
 # --- python.org release-age authority ---------------------------------------

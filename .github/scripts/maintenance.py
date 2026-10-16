@@ -932,12 +932,41 @@ def decide_merge(snapshot: Mapping[str, Any]) -> Decision:
                 checks=classified.get("checks") or {},
             )
 
+    derived_candidate = maintenance_common.candidate_version_from_files(
+        snapshot.get("files") if isinstance(snapshot.get("files"), list) else []
+    )
+    supplied_candidate = str(snapshot.get("candidate_version") or "") or None
+    candidate_version = derived_candidate
+    if kind == "python_bump":
+        if not derived_candidate:
+            return Decision(
+                "fail",
+                "candidate-version-unparsed",
+                risk="blocked",
+                checks=classified.get("checks") or {},
+            )
+        if supplied_candidate and supplied_candidate != derived_candidate:
+            return Decision(
+                "fail",
+                "candidate-version-mismatch",
+                risk="blocked",
+                checks=classified.get("checks") or {},
+            )
+
+    pub_evidence = snapshot.get("publication_evidence") if isinstance(snapshot.get("publication_evidence"), dict) else {}
+    if kind == "python_bump" and isinstance(pub_evidence, dict) and pub_evidence.get("error"):
+        return Decision(
+            "fail",
+            str(pub_evidence.get("error") or "publication-collection-failed"),
+            risk="blocked",
+            checks=classified.get("checks") or {},
+        )
     publication = maintenance_common.verify_publication_gate(
         mode=str(policy.get("publication_evidence_mode") or ""),
         kind=kind,
-        evidence=snapshot.get("publication_evidence") if isinstance(snapshot.get("publication_evidence"), dict) else {},
+        evidence=pub_evidence,
         pr=pr,
-        candidate_version=str(snapshot.get("candidate_version") or "") or None,
+        candidate_version=candidate_version,
         trusted_proposer_path=str(policy.get("publication_proposer_workflow") or maintenance_common.DEFAULT_PROPOSER_PATH),
         proposal_files=list(policy.get("publication_proposal_files") or maintenance_common.DEFAULT_PROPOSAL_FILES),
         pinned_pip=str(policy.get("pinned_pip") or maintenance_common.PINNED_PIP),
@@ -1284,6 +1313,24 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
     else:
         allowed = list(profile.get("dependabot_allowed_files") or DEFAULT_DEPENDABOT_ALLOWED)
     pinned_pip, pinned_tools = maintenance_common.compiler_pins(profile)
+    publication_block = profile.get("publication_evidence") if isinstance(profile.get("publication_evidence"), dict) else {}
+    expected_commit = str(publication_block.get("commit_identity") or "")
+    publication_evidence: dict[str, Any] = {}
+    candidate_version = maintenance_common.candidate_version_from_files(files if isinstance(files, list) else [])
+    if kind == "python_bump" and pub_mode == "required":
+        publication_evidence = maintenance_common.collect_publication_evidence(
+            owner,
+            name,
+            pr,
+            files if isinstance(files, list) else [],
+            get_json=_get_json,
+            get_pages=_get_pages,
+            trusted_proposer_path=pub_path,
+            proposal_files=pub_files,
+            expected_commit_identity=expected_commit,
+        )
+        if not candidate_version:
+            candidate_version = publication_evidence.get("candidate_version")
     return {
         "repository": full_name,
         "head_sha": head_sha,
@@ -1291,6 +1338,8 @@ def build_live_snapshot(event: Mapping[str, Any], token: str, profile: Mapping[s
         "checks": check_runs,
         "producer_evidence": producer_evidence,
         "security_evidence": security_evidence,
+        "publication_evidence": publication_evidence,
+        "candidate_version": candidate_version,
         "files": files,
         "reviews": reviews,
         "legacy_statuses": legacy,
