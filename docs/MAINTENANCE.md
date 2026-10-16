@@ -47,13 +47,16 @@ required check must come from the trusted CI workflow id/path/run **and** a
 matching successful job in that run on the exact head; a same-name job from
 another workflow is not enough, a familiar github-actions app/name is not
 enough, and a missing SHA or app cannot pass. Legacy Combined Status rows
-cannot satisfy a required check. Newest *decision* review per user is the
+cannot satisfy a required check, but a SHA-bound pending/failed/error status
+for a required context still blocks. Newest *decision* review per user is the
 effective state — `COMMENTED` and `PENDING` never clear `CHANGES_REQUESTED`.
 Dependabot allowed paths come from the trusted profile, never from the PR's
 own file list. Grouped lock updates classify **every** significant
 requirements line (pins, extras, markers, index/constraint/VCS/direct-URL
-directives, hash-only and unparsed lines); the highest-risk member wins, and
-hash-only or truncated patches are review-required. File content is
+directives, hash-only and unparsed lines) and associate hash edits with their
+package block; an unchanged-version hash mutation requires review even when
+another pin is a safe patch. The highest-risk member wins, and hash-only or
+truncated patches are review-required. File content is
 reconciled against snapshot metadata so a routine label cannot hide an
 index-url mutation. A Python bump PR must use
 the `chore/python-` prefix; `github-actions[bot]` as commit author alone is

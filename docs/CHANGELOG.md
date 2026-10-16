@@ -33,7 +33,10 @@ rewritten when that happens, only relocated.
   cannot pass. Grouped Dependabot lock diffs classify every significant
   requirements line (index/constraint/marker/extras/VCS/unparsed), and file
   content is reconciled against snapshot metadata. `COMMENTED`/`PENDING`
-  reviews do not clear `CHANGES_REQUESTED`. `actionlint` must actually run
+  reviews do not clear `CHANGES_REQUESTED`. Hash edits on an unchanged
+  package version require review even when another pin is a safe patch.
+  SHA-bound failed/pending legacy statuses still block in expected-workflow
+  mode; they cannot satisfy a gate. `actionlint` must actually run
   (`SKIP_ACTIONLINT` is not green).
 
 * **2026-10-15 — Maintenance: unify safe updates and summaries; fix crosspost

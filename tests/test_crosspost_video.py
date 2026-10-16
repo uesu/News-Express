@@ -279,5 +279,86 @@ class ChildIdentityTests(unittest.TestCase):
         self.assertTrue(v3.is_same_reddit_post(child, "/r/Beta/comments/child011/"))
 
 
+class NativeAndQualityTests(unittest.TestCase):
+    def test_arctic_native_path_resolves_structured_parent(self):
+        source = v3.resolve_crosspost_source(
+            own_path="/r/Beta/comments/child014/",
+            base={},
+            arctic={
+                "crosspost_parent_list": [{
+                    "id": "parent14",
+                    "permalink": "/r/Alpha/comments/parent14/orig/",
+                    "media": {"reddit_video": {
+                        "fallback_url": "https://v.redd.it/origvid14/DASH_1080.mp4",
+                    }},
+                }],
+            },
+        )
+        self.assertEqual(source.get("id"), "parent14")
+        self.assertEqual(source.get("vred_id"), "origvid14")
+        self.assertNotEqual(source.get("id"), "child014")
+        self.assertEqual(source.get("provenance"), "structured-archive")
+
+    def test_poster_only_proxy_does_not_replace_parent_video_id(self):
+        source = v3.resolve_crosspost_source(
+            own_path="/r/Beta/comments/child015/",
+            base={},
+            post_json={
+                "crosspost_parent_list": [{
+                    "id": "parent15",
+                    "permalink": "/r/Alpha/comments/parent15/orig/",
+                    "media": {"reddit_video": {
+                        "fallback_url": "https://v.redd.it/origvid15/DASH_1080.mp4",
+                    }},
+                }],
+            },
+        )
+        poster = {"media": [{"kind": "image", "url": "https://i.redd.it/poster.jpg"}]}
+        self.assertFalse(v3._proxy_result_usable(poster, True))
+        self.assertEqual(source.get("vred_id"), "origvid15")
+        self.assertNotEqual(source.get("vred_id"), "child015")
+
+    def test_validated_1080_beats_720_base(self):
+        quality = {"url": "ez1080", "width": 1920, "height": 1080, "has_audio": True}
+        base = {"url": "vx720", "width": 1280, "height": 720, "has_audio": True}
+        self.assertIs(v3.prefer_quality_candidate(quality, base), quality)
+
+    def test_default_720_cannot_displace_healthy_higher_vx(self):
+        quality = {"url": "ez720", "width": 1280, "height": 720, "has_audio": True}
+        base = {"url": "vx1080", "width": 1920, "height": 1080, "has_audio": True}
+        self.assertIs(v3.prefer_quality_candidate(quality, base), base)
+
+    def test_failed_quality_keeps_base(self):
+        base = {"url": "vx720", "width": 1280, "height": 720, "has_audio": True}
+        self.assertIs(v3.prefer_quality_candidate(None, base), base)
+
+    def test_audio_loss_keeps_vxreddit_base(self):
+        quality = {"url": "ez1080", "width": 1920, "height": 1080, "has_audio": False}
+        base = {"url": "vx720", "width": 1280, "height": 720, "has_audio": True}
+        self.assertIs(v3.prefer_quality_candidate(quality, base), base)
+
+    def test_encoded_1080_pairing_keeps_original_id_not_child(self):
+        video = "22e7ve17smvh1"
+        child = "1x6lgak"
+        encoded = (
+            "https://proxy.embedez.com/render/video.mp4?"
+            f"videoUrl=https%3A%2F%2Fv.redd.it%2F{video}%2FCMAF_1080.mp4"
+            f"&audioUrl=https%3A%2F%2Fv.redd.it%2F{video}%2FCMAF_AUDIO_128.mp4"
+        )
+        self.assertEqual(v3.extract_vreddit_id_from_media_url(encoded), video)
+        self.assertNotEqual(v3.extract_vreddit_id_from_media_url(encoded), child)
+        self.assertIsNone(v3.extract_vreddit_id_from_media_url(
+            "https://proxy.embedez.com/render/audio?cover=https://i.redd.it/x.jpg"))
+
+    def test_gallery_order_preserved_through_filter(self):
+        media = [
+            {"kind": "image", "url": "https://i.redd.it/a.jpg"},
+            {"kind": "gif", "url": "https://i.redd.it/b.gif"},
+            {"kind": "image", "url": "https://i.redd.it/c.jpg"},
+        ]
+        filtered = proxy.filter_proxy_media(media)
+        self.assertEqual([item["url"] for item in filtered], [item["url"] for item in media])
+
+
 if __name__ == "__main__":
     unittest.main()

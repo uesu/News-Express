@@ -479,9 +479,11 @@ def classify_checks(
     trusted workflow's run on this head (name/path/id) *and* a matching
     successful job in that run. A familiar github-actions app/name or a
     separate green run does not authenticate every gate. Legacy Combined
-    Status rows cannot satisfy a required check; they can only fail it
-    when SHA-bound and no expected workflow is in force. Missing or
-    truncated job evidence fails closed.
+    Status rows cannot satisfy a required check (never treated as success),
+    but a SHA-bound pending/failed/error status for a required context
+    still blocks even when expected-workflow jobs are green. Untrusted or
+    stale status rows are ignored. Missing or truncated job evidence fails
+    closed.
     """
     expected = [name for name in expected_names if name]
     if not expected:
@@ -618,18 +620,28 @@ def classify_checks(
         else:
             outcomes[name] = conclusion or "unknown"
 
-    if legacy_statuses and not expected_workflow:
+    if legacy_statuses:
         for status in legacy_statuses:
             if not isinstance(status, dict):
                 return {"state": "failed", "reason": "malformed-legacy-status"}
             name = str(status.get("context") or status.get("name") or "")
             if name not in expected:
                 continue
-            state = str(status.get("state") or "")
             sha = str(status.get("sha") or status.get("head_sha") or "")
             if sha != head_sha:
                 continue
-            if state != "success":
+            creator = status.get("creator") if isinstance(status.get("creator"), dict) else {}
+            creator_login = str(
+                creator.get("login") or status.get("creator_login") or status.get("app_slug") or ""
+            )
+            if creator_login and trusted_apps and creator_login not in trusted_apps:
+                continue
+            state = str(status.get("state") or "").lower()
+            if state in {"success", "ok"}:
+                continue
+            if state in {"pending", "expected"}:
+                outcomes[name] = "pending"
+            else:
                 outcomes[name] = state or "failed"
 
     if any(v == "missing" for v in outcomes.values()):
@@ -1291,6 +1303,75 @@ def requirement_policy_members(patch: str) -> list[dict[str, Any]]:
     return members
 
 
+def requirement_hash_members(patch: str) -> list[dict[str, Any]]:
+    """Associate +/- hash lines with the current package block.
+
+    Hash regeneration on a version change is expected. Hash edits on a
+    package whose version did not change, reordered hash lists, and hash
+    lines with no package context require review.
+    """
+    current: str | None = None
+    versions: dict[str, dict[str, str]] = {}
+    hashes_old: dict[str, list[str]] = {}
+    hashes_new: dict[str, list[str]] = {}
+    unassociated = False
+    for raw in patch.splitlines():
+        if raw.startswith("+++") or raw.startswith("---"):
+            continue
+        if raw.startswith("@@"):
+            current = None
+            continue
+        if not raw or raw[0] not in "+- ":
+            continue
+        kind = raw[0]
+        body = raw[1:].strip().rstrip("\\").strip()
+        if not body or body.startswith("#"):
+            continue
+        if body.startswith("--hash="):
+            if current is None:
+                if kind in "+-":
+                    unassociated = True
+                continue
+            if kind == "-":
+                hashes_old.setdefault(current, []).append(body)
+            elif kind == "+":
+                hashes_new.setdefault(current, []).append(body)
+            continue
+        match = _REQ_EQ.match(body)
+        if not match:
+            continue
+        current = _norm_pkg(match.group(1))
+        ver = match.group(2)
+        slot = versions.setdefault(current, {})
+        if kind == "-":
+            slot["old"] = ver
+        elif kind == "+":
+            slot["new"] = ver
+        else:
+            slot.setdefault("old", ver)
+            slot.setdefault("new", ver)
+    members: list[dict[str, Any]] = []
+    if unassociated:
+        members.append({
+            "risk": "review-required",
+            "auto_eligible": False,
+            "reason": "hash-only",
+        })
+    for pkg in sorted(set(hashes_old) | set(hashes_new)):
+        vers = versions.get(pkg) or {}
+        old_v, new_v = vers.get("old"), vers.get("new")
+        if old_v and new_v and old_v != new_v:
+            continue
+        if hashes_old.get(pkg) != hashes_new.get(pkg):
+            members.append({
+                "risk": "review-required",
+                "auto_eligible": False,
+                "reason": "unchanged-version-hash-mutation",
+                "name": pkg,
+            })
+    return members
+
+
 def parse_requirement_version_maps(patch: str) -> tuple[dict[str, str], dict[str, str], bool, bool]:
     """Map every package old/new version in a unified diff. Last-pair overwrite is forbidden."""
     old: dict[str, str] = {}
@@ -1383,10 +1464,12 @@ def snapshot_risk_from_files(files: Sequence[Mapping[str, Any]], kind_hint: str 
                 continue
             policy_members = requirement_policy_members(patch)
             members.extend(policy_members)
+            hash_members = requirement_hash_members(patch)
+            members.extend(hash_members)
             old_map, new_map, saw_hash, saw_pkg = parse_requirement_version_maps(patch)
             names = set(old_map) | set(new_map)
             if not names:
-                if policy_members:
+                if policy_members or hash_members:
                     continue
                 reason = "hash-only" if saw_hash else (
                     "unparsed-requirement-diff" if saw_pkg else "truncated-or-missing-patch"

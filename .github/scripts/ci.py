@@ -100,6 +100,30 @@ def _normalize_lock(path: Path) -> str:
     return maintenance.normalize_compile_header(path.read_text(encoding="utf-8"))
 
 
+def _github_error(title: str, message: str) -> None:
+    safe = message.replace("\n", " ").replace("\r", " ")[:240]
+    print(f"::error title={title}::{safe}", flush=True)
+
+
+def _lock_fingerprint(text: str) -> str:
+    lines = text.splitlines()
+    pkgs = sum(1 for ln in lines if re.match(r"^[A-Za-z0-9_.-]+==", ln))
+    hashes = sum(1 for ln in lines if "--hash=" in ln)
+    directives = sum(1 for ln in lines if ln.startswith("--") or ln.startswith("-c "))
+    return f"lines={len(lines)} pkgs={pkgs} hashes={hashes} dirs={directives}"
+
+
+def _first_diff_line(before: str, after: str) -> str:
+    a, b = before.splitlines(), after.splitlines()
+    for index, (left, right) in enumerate(zip(a, b), start=1):
+        if left != right:
+            snippet = right[:80] if right else left[:80]
+            return f"line {index}: {snippet}"
+    if len(a) != len(b):
+        return f"length {len(a)}->{len(b)}"
+    return "no-line-delta"
+
+
 def _lock_diff(before: str, after: str, name: str) -> None:
     lines = list(
         difflib.unified_diff(
@@ -114,6 +138,10 @@ def _lock_diff(before: str, after: str, name: str) -> None:
         sys.stderr.write(line if line.endswith("\n") else line + "\n")
     if len(lines) > 120:
         print(f"... diff truncated ({len(lines)} lines)", file=sys.stderr)
+    _github_error(
+        "lock-not-byte-stable",
+        f"{name} {_lock_fingerprint(before)} vs {_lock_fingerprint(after)}; {_first_diff_line(before, after)}",
+    )
 
 
 def _print_lock_toolchain() -> None:
@@ -153,8 +181,12 @@ def group_lock_consistency(root: Path, profile: dict) -> int:
         print("compile_command missing from profile", file=sys.stderr)
         return 1
     env["CUSTOM_COMPILE_COMMAND"] = " ".join(compile_cmd)
-    code = run_cmd(compile_cmd, cwd=root, env=env)
+    argv = list(compile_cmd)
+    if argv and argv[0] == "python":
+        argv[0] = sys.executable
+    code = run_cmd(argv, cwd=root, env=env)
     if code:
+        _github_error("pip-compile-failed", f"runtime compile exit {code} argv={' '.join(argv[:6])}")
         return code
     after_runtime = _normalize_lock(runtime)
     if after_runtime != before_runtime:
@@ -167,8 +199,12 @@ def group_lock_consistency(root: Path, profile: dict) -> int:
     dev_cmd = list(profile.get("dev_compile_command") or [])
     if dev_cmd and (root / "requirements-dev.in").is_file():
         env["CUSTOM_COMPILE_COMMAND"] = " ".join(dev_cmd)
-        code = run_cmd(dev_cmd, cwd=root, env=env)
+        dev_argv = list(dev_cmd)
+        if dev_argv and dev_argv[0] == "python":
+            dev_argv[0] = sys.executable
+        code = run_cmd(dev_argv, cwd=root, env=env)
         if code:
+            _github_error("pip-compile-failed", f"dev compile exit {code}")
             return code
         after_dev = _normalize_lock(dev)
         if after_dev != before_dev:

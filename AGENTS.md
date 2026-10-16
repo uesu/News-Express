@@ -118,9 +118,10 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    fallback on API errors). Each required check is bound to the trusted
    workflow id/path/run/head and a matching successful job in that run.
    Pinned `actionlint` must run. Grouped lock risk classifies every
-   significant requirements line. Lock regeneration is byte-stable after
-   compiler-header normalization only. `COMMENTED`/`PENDING` reviews do not
-   clear `CHANGES_REQUESTED`.
+   significant requirements line, including unchanged-version hash mutation.
+   Lock regeneration is byte-stable after compiler-header normalization only.
+   `COMMENTED`/`PENDING` reviews do not clear `CHANGES_REQUESTED`. SHA-bound
+   failed/pending legacy statuses still block.
 8. Heal eligibility is classified by **URL**, never by response
    `content_type` (it is empty exactly when unresolved — round 56).
    `heal_eligible_items` reads module-global `MEDIA_HEAL_SCOPE` at call
