@@ -16,6 +16,14 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-16 — Proposal-head hash manifest (PR #66).** Compare News #66
+  `be4baca`, Reddit #2 `8435662`, and Twitter #29 `2f879fa` — not deployed
+  `main`. SHA-256 file bytes are in `docs/proposal_head_hashes.json` (that
+  artifact does not hash itself). Shared helpers remain materially different;
+  the identical-helper requirement is unmet and the four PRs are not fully
+  aligned. This PR does not copy another tree. Coverage map cites hosted run
+  38837001161 and does not treat helper tests as live proof.
+
 * **2026-10-16 — Exact-head copy inventory (PR #66).** `docs/COPY_MANIFEST.md`
   now records production SHAs `3691cc88b2ef…` / `58547a93c866…` against this
   development branch: hashed lock, pin, and maintenance helpers are missing

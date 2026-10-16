@@ -31,10 +31,12 @@ onboarding files into production unless a task explicitly asks for that.
 
 Both prod repos intentionally contain BOTH monitors' files. They are NOT
 leftovers. Never advise deleting the "other" platform's files. The reviewed
-shared list is `docs/COPY_MANIFEST.md` (development-side; `runtime_files` in
-`.github/maintenance.json` is the machine list). The three heads are not
-equivalent copies. Game-Express helpers are not byte-identical at the
-reviewed heads; do not copy either helper tree onto the other.
+shared list is `docs/COPY_MANIFEST.md` (development-side; SHA-256 table in
+`docs/proposal_head_hashes.json`; `runtime_files` in
+`.github/maintenance.json` is the machine list). The News-family proposal
+heads are not equivalent copies and the four PRs are not fully aligned.
+Game-Express helpers are not byte-identical; do not copy either helper tree
+onto the other.
 
 ## File map
 

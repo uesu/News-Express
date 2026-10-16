@@ -118,7 +118,8 @@ See `production_copy_exclude` in `.github/maintenance.json` and the
 development-side [`COPY_MANIFEST.md`](COPY_MANIFEST.md). Caches listed
 there must not be overwritten when copying this repo onto a production
 checkout. Both engines and both monitor workflows remain `runtime_files`.
-The three heads are not equivalent copies; green development checks do not
-prove production parity. Game helpers are not byte-identical at the reviewed
-heads — see the convergence plan in that manifest. Coverage limits:
-[`ACCEPTANCE_COVERAGE.md`](ACCEPTANCE_COVERAGE.md).
+The News-family **proposal** heads (News #66, Reddit #2, Twitter #29) are not
+equivalent copies; deployed production `main` is a different snapshot. Game
+helpers are not byte-identical. The identical-helper requirement is unmet;
+four PRs are not fully aligned — see the explicit disposition in that
+manifest. Coverage limits: [`ACCEPTANCE_COVERAGE.md`](ACCEPTANCE_COVERAGE.md).

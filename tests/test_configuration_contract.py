@@ -1,6 +1,8 @@
 """Pin, lock, workflow, and documentation-free production contract."""
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import sys
 import unittest
@@ -135,21 +137,51 @@ class ProductionCopyTests(unittest.TestCase):
         self.assertNotIn("NEWS_EXPRESS_UPDATE.md", runtime)
         self.assertNotIn("docs/COPY_MANIFEST.md", runtime)
         self.assertNotIn("docs/ACCEPTANCE_COVERAGE.md", runtime)
+        self.assertNotIn("docs/proposal_head_hashes.json", runtime)
         self.assertTrue((ROOT / "docs" / "COPY_MANIFEST.md").is_file())
         self.assertTrue((ROOT / "docs" / "ACCEPTANCE_COVERAGE.md").is_file())
+        self.assertTrue((ROOT / "docs" / "proposal_head_hashes.json").is_file())
 
     def test_copy_manifest_does_not_claim_parity_or_identical_helpers(self):
         text = (ROOT / "docs" / "COPY_MANIFEST.md").read_text(encoding="utf-8")
         self.assertIn("not equivalent copies", text)
-        self.assertIn("uesu/7jkxmy9nvbc", text)
-        self.assertIn("uesu/wvkhabh2s22", text)
-        self.assertIn("materially different", text)
-        self.assertIn("dependabot_auto_merge.yml", text)
-        self.assertIn("unhashed", text)
+        self.assertIn("not fully aligned", text)
+        self.assertIn("open acceptance item", text)
+        self.assertIn("be4bacaa0e4a1688517549c99915d93d0227024e", text)
+        self.assertIn("84356621636607dbd455b60de4d4a7a60c20d3d0", text)
+        self.assertIn("2f879fae99147137b4f8635739e0d1115c043cca", text)
+        self.assertIn("171925850552", text)
+        self.assertIn("5f0435c56cd7", text)
         self.assertIn("do **not** claim the helpers are identical", text)
+        self.assertNotIn("After both implementation PRs are accepted", text)
         coverage = (ROOT / "docs" / "ACCEPTANCE_COVERAGE.md").read_text(encoding="utf-8")
         self.assertIn("not production parity", coverage)
         self.assertIn("Local 3.11.2 is not the gate", coverage)
+        self.assertIn("38837001161", coverage)
+        self.assertIn("Helper-only fixtures", coverage)
+
+    def test_news_helper_bytes_match_frozen_proposal_hashes(self):
+        artifact = json.loads(
+            (ROOT / "docs" / "proposal_head_hashes.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            artifact["heads"]["news"]["sha"],
+            "be4bacaa0e4a1688517549c99915d93d0227024e",
+        )
+        helpers = (
+            ".github/scripts/ci.py",
+            ".github/scripts/maintenance.py",
+            ".github/scripts/python_version_bump.py",
+            ".github/scripts/render_run_summary.py",
+            "testing area/reddit_main_v3.py",
+            "testing area/twitter_v3.py",
+            "requirements.txt",
+            ".python-version",
+        )
+        files = artifact["files"]
+        for rel in helpers:
+            digest = hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
+            self.assertEqual(digest, files[rel]["news"], rel)
 
     def test_gitignore_covers_reports(self):
         text = (ROOT / ".gitignore").read_text(encoding="utf-8")

@@ -1,120 +1,157 @@
-# Shared file manifest — News-Express development vs production copies
+# Shared file manifest — News-Express proposal heads
 
 This is a **development-side** review document. It is not a runtime input.
 `production_copy_exclude` lists `docs/`, so production copies must not require
 this file. Correction handoffs and `NEWS_EXPRESS_UPDATE.md` are development-side
 only and must not become required runtime inputs.
 
-The machine-readable lists live in `.github/maintenance.json`:
+Machine-readable SHA-256 values for the **immutable proposal commits** live in
+[`proposal_head_hashes.json`](proposal_head_hashes.json). That artifact hashes
+file bytes at those commits. It does **not** hash itself, this document, or a
+later docs-only commit. A commit cannot embed its own final self-hash.
+
+The runtime file lists live in `.github/maintenance.json`:
 
 * `runtime_files` — files a documentation-free production copy still needs
 * `production_copy_exclude` — docs, onboarding, and **caches that must never
   be overwritten**
 * `optional_docs` — present in this development tree; omitted in production
 
-Copying to `uesu/7jkxmy9nvbc` / `uesu/wvkhabh2s22` is maintainer-only and later.
-Do not blindly copy either production variant back into development.
+Do not blindly copy another instance's state, secrets, or caches. Do not force
+Game's runtime layout onto News or vice versa.
 
-## Exact heads reviewed 2026-10-16 (Asia/Manila)
+## Exact proposal heads reviewed 2026-10-16 (Asia/Manila)
 
-| Role | Repository | Head SHA | Note |
+These are the implementation PRs under acceptance, **not** deployed `main`
+cache snapshots.
+
+| Role | Repository | PR | Git SHA |
 |---|---|---|---|
-| Development (this PR) | `uesu/News-Express` `arena/51e180af-news-express` | see git HEAD of this branch | PR #66 OPEN, unmerged |
-| Reddit production | `uesu/7jkxmy9nvbc` `main` | `3691cc88b2ef446bcc11b25ad6360309aa63a68d` | last commit: auto cache update 2026-10-15 |
-| Twitter production | `uesu/wvkhabh2s22` `main` | `58547a93c8668b005a5bce7d583ee52e6520580c` | last commit: auto cache update 2026-10-16 |
-| Game (not a News copy) | `uesu/Game-Express` `main` | `e8588ac01dc5102bd221a556d04bb0593b1db984` | independent application |
-| Game PR #49 helpers | `uesu/Game-Express` | `5837ce4c9eef9ad80bb1d2b8c154652b1836d1de` | helper blobs differ from News |
+| News development | `uesu/News-Express` | [#66](https://github.com/uesu/News-Express/pull/66) | `be4bacaa0e4a1688517549c99915d93d0227024e` |
+| Reddit production proposal | `uesu/7jkxmy9nvbc` | [#2](https://github.com/uesu/7jkxmy9nvbc/pull/2) | `84356621636607dbd455b60de4d4a7a60c20d3d0` |
+| Twitter production proposal | `uesu/wvkhabh2s22` | [#29](https://github.com/uesu/wvkhabh2s22/pull/29) | `2f879fae99147137b4f8635739e0d1115c043cca` |
+| Game (independent app) | `uesu/Game-Express` | [#49](https://github.com/uesu/Game-Express/pull/49) | `5837ce4c9eef9ad80bb1d2b8c154652b1836d1de` |
 
-These three News-family heads are **not equivalent copies**. Green development
-checks do **not** prove that production already contains these repairs.
+A later docs-only commit on News #66 does not replace the News git SHA above
+for helper/engine/lock hashes. If those files change, recompute.
 
-## Must remain in every production copy
+Deployed `main` on the production copies (`3691cc88b2ef…` / `58547a93c866…`)
+is a **different** snapshot (live caches, unhashed `requirements.txt`, no
+maintenance helpers). It is not a substitute for the proposal-head review.
 
-Both **engines** and **both monitor workflows** stay present in each production
-copy even when that copy only posts one network. Shared helpers
-(`maintenance.py`, `ci.py`, `python_version_bump.py`, `render_run_summary.py`),
-hashed runtime + constrained development locks, and `.python-version` go with
-them.
+These News-family proposal heads are **not equivalent copies**. Hash difference
+alone is not a defect. Four PRs are **not fully aligned**.
+
+## SHA-256 prefixes (News / Reddit / Twitter)
+
+Computed from file bytes at the git SHAs above (full digests in the JSON
+artifact). Game is omitted from this table; see the helper disposition.
+
+| Shared file | News | Reddit | Twitter |
+|---|---|---|---|
+| `.python-version` | `5abd4dc1efa0` | `5abd4dc1efa0` | `5abd4dc1efa0` |
+| `.github/scripts/ci.py` | `171925850552` | `605207595f82` | `495979e1f7d5` |
+| `.github/scripts/maintenance.py` | `5f0435c56cd7` | `c06559dcc766` | `3b32723efc87` |
+| `.github/scripts/python_version_bump.py` | `913221935f13` | `a3011aba88dc` | `132d47c01045` |
+| `.github/scripts/render_run_summary.py` | `97eedb3160cc` | `97eedb3160cc` | `7fe2a96696f9` |
+| `.github/scripts/merge_monitor_caches.py` | `0e53a8c1a450` | `0e53a8c1a450` | `0e53a8c1a450` |
+| `.github/workflows/maintenance_merge.yml` | `dc7669138d8a` | `dc7669138d8a` | `33a223d81978` |
+| `.github/workflows/reddit_monitor.yml` | `a41eb60add7a` | `a41eb60add7a` | `2554d344d348` |
+| `.github/workflows/twitter_monitor.yml` | `d1d9b3c3124d` | `d1d9b3c3124d` | `d74f6ad7cdac` |
+| `testing area/reddit_main_v3.py` | `b31ec6a46080` | `345d4edf772d` | `d22764b8b86f` |
+| `testing area/twitter_v3.py` | `9dfb4841b62d` | `afaeb716a614` | `a631640c7733` |
+| `testing area/reddit_proxy.py` | `082aa9a2e4dc` | `06b7894e9dc7` | `c7e02d9531d0` |
+| `testing area/twitter_proxy.py` | `ff911daa1289` | `ff911daa1289` | `ff911daa1289` |
+| `testing area/reddit_signals.py` | `4b7a77f5bd56` | `4b7a77f5bd56` | `4b7a77f5bd56` |
+| `testing area/run_report.py` | `aaa3138a4e95` | `76528e639b58` | *absent* |
+| `tests/test_crosspost_video.py` | `ba04e4fc1595` | `259c9f22b4f8` | *absent* |
+
+## Content review (not filename inference)
+
+**Byte-identical across all three News-family proposals (authorized to share):**
+`.python-version` (`3.14.8`), `merge_monitor_caches.py`, `twitter_proxy.py`,
+`reddit_signals.py`. News and Reddit also share `render_run_summary.py`,
+`maintenance_merge.yml`, both monitor workflows, and `.github/dependabot.yml`.
+
+**Authorized repository / profile differences:**
+
+* `.github/maintenance.json` — project identity, check names, `runtime_files`.
+  News and Reddit share `project: news-express` and the same mandatory check
+  set; Reddit adds `check_producers` / `security_evidence`. Twitter's profile
+  is a different schema (`checks` / `risk_rules` / `update_policy`) and is not
+  a drop-in News profile.
+* Application engines — News vs Game are independent apps. Twitter #29 has a
+  **different reporting implementation** (`run_report.py` absent; no engine
+  `_close_report` / `RunReport` in `reddit_main_v3.py` / `twitter_v3.py`;
+  `render_run_summary.py` SHA-256 `7fe2a96696f9` vs News/Reddit `97eedb3160cc`).
+  Do not infer missing coverage from that filename gap.
+* `tests/test_crosspost_video.py` is absent on Twitter #29. Crosspost/media
+  assertions may live in `tests/test_smoke.py` there. Do not infer either
+  equivalence or missing coverage solely from the missing file.
+* Package graphs (`requirements.in` / hashed locks) differ by application
+  (Game) and by which compiler extra landed in each lock. The pin is shared.
+
+**Required News maintenance / media / report fixes at `be4baca` (this PR):**
+
+* Hash-package association (`requirement_hash_members`,
+  `unchanged-version-hash-mutation`) and SHA-bound failed legacy overlay
+  (`mandatory-check-not-success`) — present in News `maintenance.py`;
+  Reddit's helper has producer/security collectors News does not; Twitter's
+  helper is a 17-function different module (`decision_from_fixture`,
+  `resolve_check_provenance`).
+* Crosspost structured parent + original-post markup, audio-cover skip,
+  original media-ID inheritance, round-67 quality, HTTP-200 error body,
+  child card snapshot, child dedup keys — News `reddit_main_v3.py` +
+  `tests/test_crosspost_video.py`. Reddit's engine has the same named
+  resolver/quality helpers; Twitter's engine uses different names
+  (`resolve_crosspost_source` count 0) so compare fixtures/results, not
+  filenames.
+* Reporting: News engines call `_close_report` / `RunReport`. Reddit engines
+  import `RunReport` but have no `_close_report`. Twitter engines have
+  neither in those files.
+
+**Not authorized as "the same helper":** copying any one `maintenance.py` /
+`ci.py` / `python_version_bump.py` over another. They are materially
+different implementations of related policy.
+
+## Shared-helper requirement — explicit disposition (unmet)
+
+The master spec requires **identical helpers + a project-specific profile**.
+At the four proposal heads above that requirement is **not met**.
+
+This News PR will **not**:
+
+* blindly copy Reddit #2, Twitter #29, or Game #49 helper trees onto News
+* force Game's runtime layout onto News, or News's layout onto Game
+* call the four PRs fully aligned
+* treat a post-acceptance cleanup as if it already satisfied the requirement
+
+**Disposition for this PR:** keep the News helpers that hosted 3.14.8 CI
+already exercises (`be4baca` hashes above). Document the SHA-256 and content
+differences. Shared-helper identity remains an **open acceptance item** across
+the four PRs. Full alignment needs a maintainer choice of one helper source
+(or an explicit exception) and a separate exact-head review. Until then,
+do **not** claim the helpers are identical.
+
+Game #49 `maintenance.py` is 180 887 bytes (`5e2dfb595cd1…`) vs News 66 524
+bytes (`5f0435c56cd7…`) with disjoint function sets. Game `main` still lacks
+those helpers (they live on PR #49). That is Game's state, not a News CI
+blocker.
+
+## Must remain in every production copy (when copied later)
+
+Both **engines** and **both monitor workflows**, hashed locks, `.python-version`,
+and the News helpers listed in `runtime_files`. Copying to production is
+maintainer-only and later. Never overwrite caches.
 
 ## Must not be copied onto production caches or required at runtime
 
-* Dedup / pending / health JSON listed in `production_copy_exclude`
-* README, AGENTS, PRIVACY/TERMS, and `docs/`
+* Dedup / pending / health JSON in `production_copy_exclude`
+* README, AGENTS, PRIVACY/TERMS, and `docs/` (this file included)
 * Correction handoffs and `NEWS_EXPRESS_UPDATE.md`
-
-## Reviewed difference list (blob comparison, 2026-10-16)
-
-**Identical on both production copies, and matching this development tree**
-(authorized to leave as-is until a later copy): `testing area/twitter_proxy.py`,
-`testing area/reddit_signals.py`, `testing area/reddit_main.py`,
-`testing area/reddit_main_v2_embedez.py`, `testing area/twitter_v1.py`,
-`testing area/twitter_v2_button_outside.py`, `testing area/video_diag.py`,
-`tests/fixtures/posted_cards.py`, `.github/scripts/merge_monitor_caches.py`.
-
-**Identical on both production copies, different from this development tree**
-(not yet copied; **not** authorized production behavior differences):
-
-* `testing area/reddit_main_v3.py`, `testing area/twitter_v3.py`,
-  `testing area/reddit_proxy.py`
-* `.github/workflows/ci.yml`, `reddit_monitor.yml`, `twitter_monitor.yml`,
-  `python_version_bump.yml`, `.github/dependabot.yml`
-* `tests/test_smoke.py`, `tests/test_twitter_media.py`,
-  `tests/test_reddit_signals.py`
-* `requirements.txt` — production is a 65-byte unhashed range file
-  (`feedparser`/`aiohttp`/`python-dotenv` lower bounds). Development is the
-  3.14.8 hashed lock (12 packages / 752 hashes). Do not copy the unhashed
-  production file back into development.
-
-**Missing on both production copies, present here as `runtime_files`**
-(required for documentation-free production once copied; **not** present today):
-`.python-version`, `requirements.in`, `requirements-dev.in`,
-`requirements-dev.txt`, `.github/maintenance.json`,
-`.github/scripts/maintenance.py`, `python_version_bump.py`, `ci.py`,
-`render_run_summary.py`, `.github/workflows/maintenance_merge.yml`,
-`testing area/run_report.py`, `tests/test_maintenance.py`,
-`tests/test_run_summary.py`, `tests/test_configuration_contract.py`,
-`tests/test_crosspost_video.py`.
-
-**Present on production, absent here (do not copy back):**
-`.github/workflows/dependabot_auto_merge.yml` — legacy self-merge path. This
-development tree retired it in favor of `maintenance_merge.yml`.
-
-**Authorized production differences:** omitted documentation (`docs/`, README,
-AGENTS, PRIVACY/TERMS), independent caches (`posted_reddit.json`,
-`posted_tweets.json`, `pending_reddit.json`, `proxy_health.json`), and
-repository-identity / webhook configuration. Cache files differ between the
-two production copies by design; never overwrite them.
-
-**Justified `.env.example` / `.gitignore` drift:** production copies omit
-development-only report ignores and some later env examples. Unrelated posting
-behavior is not an authorized difference.
-
-## Game helper disposition (not byte-identical)
-
-Game-Express shares helper *semantics* via identical helpers + a project
-profile. The applications stay independent; do not force either runtime layout
-onto the other.
-
-At the heads above, the helpers are **materially different**:
-
-| File | News PR #66 blob | Game PR #49 blob |
-|---|---|---|
-| `.github/scripts/maintenance.py` | `64ce7258f279…` (66 524 bytes) | `d8d69edf9b56…` (180 887 bytes) |
-| `.github/scripts/ci.py` | `80e3e29191d7…` | `26d50f9eeca8…` |
-| `.github/scripts/python_version_bump.py` | `cd90014f1520…` | `3148b1bcf05f…` |
-| `.github/scripts/render_run_summary.py` | `ec5c73aa9a3a…` | `e0623e71876d…` |
-| `.python-version` | `9b8fe2fbb856` (`3.14.8`) | same pin blob |
-
-**Convergence plan:** keep News helpers on this PR. Do not overwrite them with
-Game's files or vice versa. After both implementation PRs are accepted, a
-separate shared-maintenance task can reconcile helper bytes against the master
-spec. Until then, do **not** claim the helpers are identical.
-
-Game `main` currently lacks `maintenance.py` / `ci.py` / `render_run_summary.py`
-entirely (helpers live on PR #49). That is Game's copy state, not a News defect.
 
 ## Current review limitation
 
-This inventory is an exact-head **difference list**, not a completed
-content/parity review and not proof that production contains News's fixes.
-Production copies do not inherit repairs automatically.
+This is an exact-head **proposal** difference list plus an unmet shared-helper
+disposition. It is not production parity, not four-PR alignment, and not
+proof that deployed `main` contains these repairs.

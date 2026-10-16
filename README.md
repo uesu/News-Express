@@ -511,8 +511,9 @@ path — the folder name contains a space).
 * **Production scope:** this development repository does not copy its docs or
   historical audit records into production. The Reddit and X production repos
   have separate production-only workflow updates and caches. See
-  [`docs/COPY_MANIFEST.md`](docs/COPY_MANIFEST.md) — the three heads are not
-  equivalent copies, and Game helpers are not byte-identical.
+  [`docs/COPY_MANIFEST.md`](docs/COPY_MANIFEST.md) — the News-family proposal
+  heads are not equivalent copies, Game helpers are not byte-identical, and
+  the four PRs are not fully aligned.
 
 See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
 [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) for dependency automation.

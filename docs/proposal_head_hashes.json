@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "generated": "2026-10-16",
+  "algorithm": "SHA-256 of git file bytes at the listed commits",
+  "excludes": [
+    "this artifact",
+    "docs/COPY_MANIFEST.md",
+    "docs/ACCEPTANCE_COVERAGE.md",
+    "any later docs-only commit"
+  ],
+  "heads": {
+    "news": {
+      "repo": "uesu/News-Express",
+      "pr": 66,
+      "sha": "be4bacaa0e4a1688517549c99915d93d0227024e",
+      "note": "News #66 reviewed implementation head. Later docs-only commits must not be treated as this SHA."
+    },
+    "reddit": {
+      "repo": "uesu/7jkxmy9nvbc",
+      "pr": 2,
+      "sha": "84356621636607dbd455b60de4d4a7a60c20d3d0"
+    },
+    "twitter": {
+      "repo": "uesu/wvkhabh2s22",
+      "pr": 29,
+      "sha": "2f879fae99147137b4f8635739e0d1115c043cca"
+    },
+    "game": {
+      "repo": "uesu/Game-Express",
+      "pr": 49,
+      "sha": "5837ce4c9eef9ad80bb1d2b8c154652b1836d1de",
+      "note": "Not a News copy. Included only for helper comparison."
+    }
+  },
+  "files": {
+    ".python-version": {
+      "news": "5abd4dc1efa09469b88916c8e4e027a8c266a9b6d06f43ac9da3e30cd00b4ab5",
+      "reddit": "5abd4dc1efa09469b88916c8e4e027a8c266a9b6d06f43ac9da3e30cd00b4ab5",
+      "twitter": "5abd4dc1efa09469b88916c8e4e027a8c266a9b6d06f43ac9da3e30cd00b4ab5",
+      "game": "5abd4dc1efa09469b88916c8e4e027a8c266a9b6d06f43ac9da3e30cd00b4ab5"
+    },
+    "requirements.in": {
+      "news": "7a297bb3fe0b7d61329aa646ed614c5dafdbc7a0421b25372171f7dc277caac3",
+      "reddit": "7bf7b2e81e600b80d1169d4a0f273b383f188773024a4d6e4acb55da33aaf746",
+      "twitter": "c2137e8c91114030c5f3d41520fc64e5fc95d0552ac72f6a0315c7bd4af5a668",
+      "game": "a53a3dfaa6505110ff763486046033f6b639fe3fde4c94bd0a8c83aea7d463bb"
+    },
+    "requirements.txt": {
+      "news": "158dbb673db509190dd3a035c1651bbc5dcd8cdc22c8c5706015eb5583fb8217",
+      "reddit": "23d317d19377c2dccfab143576e03e4c9a56b241706fc0c4b991d9bc352d1711",
+      "twitter": "f856d9a346b7b99d158d1635e51c6e1f5daae6c0a2c61e80dc7b0e31e55476fa",
+      "game": "85af47a268e22dac8396156ee1cf272b36dc340302debe04c2c3ec14f7879c73"
+    },
+    "requirements-dev.in": {
+      "news": "4246c6e6e122482a8bb539119e33f688bbef4e0b64dda6fa7096ccb7abcb048d",
+      "reddit": "4246c6e6e122482a8bb539119e33f688bbef4e0b64dda6fa7096ccb7abcb048d",
+      "twitter": "c6be8a945f72b52773c4fd0d2d01432b1c24f4813ec5405b0dd73c5d4e5ccd5f",
+      "game": "a57c45a9442461087037fe4aae99f6e626b5f1a2f753c454ee3a7f5fbdd495c1"
+    },
+    "requirements-dev.txt": {
+      "news": "e13a219d3b4a0d5d1b2e61ca738effd2d31bc68074c400c48823c4c823c7b3b2",
+      "reddit": "ac730c7f8d7c66c0645589796799deee0d1876ed9266c4947f65617c4620fac4",
+      "twitter": "67f73398f6c7b8d5f2349eb99c824c35eeb5d821f0ad7d6851876d1115b704df",
+      "game": "367a33838aeaea6ba002240df310cf1d13ab59d2b2ddcf630dde9d43eedbc776"
+    },
+    ".github/maintenance.json": {
+      "news": "45978437fc27797a8f922f5f92591ccdcb2ec8c6b01d4d93ac551c75f4cecc53",
+      "reddit": "7e2983403a26623e04c5736445cb18695b4bebc194c86c2377591faa9d7b0fc8",
+      "twitter": "945967ccb02f43ff13e7d5d2ece940aafff1389cf1b3cf5ac12aaaccb4becefd",
+      "game": "eba443c8a66310d56bd55bbc110eb422336ba36c7082bd7b924347c86fc25efa"
+    },
+    ".github/scripts/ci.py": {
+      "news": "171925850552885b2c5bcc74a88ed8f718464c8d3003005045f31ce834d7b82f",
+      "reddit": "605207595f82c9e25b4a8dd0f0acf2fee08ff23f7c96aa7a7ae6b8cd908c6db0",
+      "twitter": "495979e1f7d53f6d10390f4e7499b6ba1911add29091a06a4e7cc1a84d7cbd42",
+      "game": "5530132b5be2a870d162121fc2b2da6771a6f584dd78571b097c94ef5831f654"
+    },
+    ".github/scripts/maintenance.py": {
+      "news": "5f0435c56cd7e84909e7569825cbb4c5846dfec0131f76cff5596031053bc679",
+      "reddit": "c06559dcc7667f75a2d24a389ccb27982b5d9ca3658c8eebc6f8452323471a10",
+      "twitter": "3b32723efc872ab34347b3f7b492bd563f2118508daf99bc6754865eaee27bbd",
+      "game": "5e2dfb595cd1b5a2c3ebaad7346274e4a5f80925b8e5d9828aa7e32c87f5e2ac"
+    },
+    ".github/scripts/python_version_bump.py": {
+      "news": "913221935f131813f900b3bf1707ca3d000fe10c5d7d9655dcf7ac7f3a408836",
+      "reddit": "a3011aba88dca0554850c0715cc6571f1f8effcc6f696aac793c14fa27ac2f85",
+      "twitter": "132d47c01045afc2230fdb55c856dadf2b03096f47d4448c221f26838c47a74c",
+      "game": "b9c9ae1db623a799f3868bc39d4af71254de4b957960f40cd8f6586cbb57595b"
+    },
+    ".github/scripts/render_run_summary.py": {
+      "news": "97eedb3160ccc1b207f7eb48d72d338841132d3d11ba9ac34893717f1b489a0a",
+      "reddit": "97eedb3160ccc1b207f7eb48d72d338841132d3d11ba9ac34893717f1b489a0a",
+      "twitter": "7fe2a96696f977a1883e7dcaf0d196bf6302be22828e087a8a4bbd6fdacade24",
+      "game": "f2e6888f69e5fa3af874c9b80e1bcf74e8505f9b344134215498a1686ca7b3e2"
+    },
+    ".github/scripts/merge_monitor_caches.py": {
+      "news": "0e53a8c1a450531003e4490ed6706055911e2c85eef883252808c87ca286491b",
+      "reddit": "0e53a8c1a450531003e4490ed6706055911e2c85eef883252808c87ca286491b",
+      "twitter": "0e53a8c1a450531003e4490ed6706055911e2c85eef883252808c87ca286491b",
+      "game": null
+    },
+    ".github/workflows/ci.yml": {
+      "news": "4b043c1fc6bea2a379974f7a638ab1be169b1737895be96bf2aab2298da25371",
+      "reddit": "7beff2e38a3494ced08a53d59026bd05959e389acf12cd5f07018c87f52d7629",
+      "twitter": "8b30011dc7ecd019b6765f2ab62f1bf7cedd96791f43d1a7b28e8625e98dc6b4",
+      "game": "b8383aa1192f2753f6481a49aa1792a502b719458b1e7b338964c6dcee2d7592"
+    },
+    ".github/workflows/python_version_bump.yml": {
+      "news": "89c81727310f6e85445f375993be35bdcd16a04e93c8479e00c2de1318cc0d97",
+      "reddit": "078e213e732b7e9a9849e33dc08562ed25da34f5b5eac1c63612061cd9fccaae",
+      "twitter": "50df033247d22aff62b0f81eb821dba081de1e84df17e8d1cdee3122f6e493a2",
+      "game": "db0e7aa6482040606a5ddd74ef40b9390e6c37d9a338269e94fd51c783b80097"
+    },
+    ".github/workflows/maintenance_merge.yml": {
+      "news": "dc7669138d8a391dfc068f5f40986b66ee6392a6b5fbf34eb2a51e48bb69bbbf",
+      "reddit": "dc7669138d8a391dfc068f5f40986b66ee6392a6b5fbf34eb2a51e48bb69bbbf",
+      "twitter": "33a223d819783a7a0235cb4c14fd84587ccd33c5a48a65ba76ac2181d417bb09",
+      "game": "49b9d33616aa860a8b3ca0d84ac26b64fdd9d426cd615f3d94b7a7edfbe91bd7"
+    },
+    ".github/workflows/reddit_monitor.yml": {
+      "news": "a41eb60add7ae27d621685eda5770c54f62b03ced24df99b4618e38166aa788f",
+      "reddit": "a41eb60add7ae27d621685eda5770c54f62b03ced24df99b4618e38166aa788f",
+      "twitter": "2554d344d348a3fbea4224c064ed34e5f4f403eb48e98ea059670bb5342f4fa3",
+      "game": null
+    },
+    ".github/workflows/twitter_monitor.yml": {
+      "news": "d1d9b3c3124d7a67c6e467f17b09c27ddec2ed27cd258b02e4ac269b505a48a6",
+      "reddit": "d1d9b3c3124d7a67c6e467f17b09c27ddec2ed27cd258b02e4ac269b505a48a6",
+      "twitter": "d74f6ad7cdacee6e2bcc26ec5ee47a356bdae5811e46ac21a7fc2aea1145cfd3",
+      "game": null
+    },
+    ".github/dependabot.yml": {
+      "news": "c11cbaf9f6d0e44d089e7e49720037a1f81c47c3baa669631104769e59de10eb",
+      "reddit": "c11cbaf9f6d0e44d089e7e49720037a1f81c47c3baa669631104769e59de10eb",
+      "twitter": "19d38fbfa3684ff8a31ff3a1609abd65b6d268d0ac4cdef48efabd9350f7d017",
+      "game": "61b6e57cc9de93906c94b5e59b52d16aa5a354082754145c6af359c0764f795c"
+    },
+    "testing area/run_report.py": {
+      "news": "aaa3138a4e952360e1098cffc522efb412d059382d3dbef693cd64620ffb2f4f",
+      "reddit": "76528e639b58dd6a7517efb40b35809bf9ad386a5479bf3968f26a11485e245b",
+      "twitter": null,
+      "game": null
+    },
+    "testing area/reddit_main_v3.py": {
+      "news": "b31ec6a460808318b3f1876d9bf1b739d02b2bd51a55c8763cfb09631a97f0dd",
+      "reddit": "345d4edf772da755b09ada6df812d5364916e8c0f56a51f0476801270f817b40",
+      "twitter": "d22764b8b86f296cc5b616982d09d614de68c175b2f67b3a2f3d23bef78c39f9",
+      "game": null
+    },
+    "testing area/twitter_v3.py": {
+      "news": "9dfb4841b62dcaaf39eac29fae4c53e05a63448beb03f625c1d8497a748b218a",
+      "reddit": "afaeb716a614a2f5f90d4a32550aeebe01a68e69bcaad46826299e6007860281",
+      "twitter": "a631640c7733e3c416c8a9c12c44f73911279ac6357b8f5d2408292ac8e89b22",
+      "game": null
+    },
+    "testing area/reddit_proxy.py": {
+      "news": "082aa9a2e4dc5c8ff8b8d3701a3d0cfe8c518df1f314bb6920f9506939e08af9",
+      "reddit": "06b7894e9dc71efe36a2b8477af453be20f2f3d5a9fe235ce302ebf8149fa39f",
+      "twitter": "c7e02d9531d0e12198995dc7236fd8fe4173ec851e71296a0fc0f3361b684e27",
+      "game": null
+    },
+    "testing area/twitter_proxy.py": {
+      "news": "ff911daa1289f1705a9674b24ab0628fce792c6ac90d2d3b6a6e3c435c66b642",
+      "reddit": "ff911daa1289f1705a9674b24ab0628fce792c6ac90d2d3b6a6e3c435c66b642",
+      "twitter": "ff911daa1289f1705a9674b24ab0628fce792c6ac90d2d3b6a6e3c435c66b642",
+      "game": null
+    },
+    "testing area/reddit_signals.py": {
+      "news": "4b7a77f5bd567df02a94e48fef35d22f569c56ed84e4b5ccd8fe1ad659f9a99a",
+      "reddit": "4b7a77f5bd567df02a94e48fef35d22f569c56ed84e4b5ccd8fe1ad659f9a99a",
+      "twitter": "4b7a77f5bd567df02a94e48fef35d22f569c56ed84e4b5ccd8fe1ad659f9a99a",
+      "game": null
+    },
+    "tests/test_crosspost_video.py": {
+      "news": "ba04e4fc15953a730e52d9abc2d1382b71717a2ac9c2bedb5768f76e7da61d80",
+      "reddit": "259c9f22b4f8274a1cdea779b514729115e93651087bd7c2e5e8f5f63651f10f",
+      "twitter": null,
+      "game": null
+    },
+    "tests/test_maintenance.py": {
+      "news": "89114b7177ad96a182b0dda37ab0c0ee79b9460705ba013b80b670427b020fef",
+      "reddit": "03473ff4c89793a2cce64b2b0809e906ddffd28fde2b39d0d58d2cb6fce9b21e",
+      "twitter": "46b59ef44910e3a02f9835777a5bb8d1b0ada95f762419b51fc9141fb1702ac8",
+      "game": "074822c89d75c00da7aa5dab6d693b46d014b2f0f56dcff2ff0cafbdab1885bf"
+    },
+    "tests/test_run_summary.py": {
+      "news": "cd445bd88a684a3c1e40e74691ab08d46ed7ff896f2bbb6b0ecd59f2bfcf58a5",
+      "reddit": "a61f2693fd6921762816e7d1ab465acfd0b3796c2776a386c933f55e05f85e96",
+      "twitter": "125225200511fd2eca467c76ce8db53f2c1e40c8d47bf6e7ee041f33d857064d",
+      "game": "e2ae7e98e05f1cde37892f84ed8feb235ed0b90104c75daafcc771ce8c1780e9"
+    },
+    "tests/test_configuration_contract.py": {
+      "news": "54d2511837990100cabbfb6c370ecce400aeaf73e08d2d8c7669040c4c231d96",
+      "reddit": "3e10e87c34410acdf52db13131227bf6604aaa2315837e8bd67803eb059354db",
+      "twitter": "d7805afc949a823bc90a197a402f70efba9678eb630acd343ac4d06583ebca93",
+      "game": "cf80f384b6b57684eae916be83090866cb25efbd26b977976d41d41a5cb2378e"
+    },
+    "tests/test_smoke.py": {
+      "news": "0eb1dd9eaf2cc600eaefafa06115938221b26ca2a3a5b32b73c34271cc5c42ce",
+      "reddit": "ec4cc6e167977e02dcd64b5858d7d4e250d4ac91ffdd3996d915fe5f8b35f228",
+      "twitter": "6f6d1f1a6b22aa7465a829a6827c3fb6f2c291108b57ff4c8daf6bd5dae8cf38",
+      "game": "f2e80030dcf1ebf0cef19ae2eb73e8576ee89f11528c82524dca30a1e3b57134"
+    },
+    "tests/test_twitter_media.py": {
+      "news": "5104fd35cf714bd34a35f5e6501e8e4616d78cf6872e8ca2cc22d6667fbb4567",
+      "reddit": "5104fd35cf714bd34a35f5e6501e8e4616d78cf6872e8ca2cc22d6667fbb4567",
+      "twitter": "b9537c6be4642b598f002009383393895b8ca6007620db1e32790bca83fd70bc",
+      "game": null
+    },
+    "tests/test_reddit_signals.py": {
+      "news": "9d89f8ca1777e3a7121067fb6ff2c865d1fdc054b73e0b833015a9cbe6a9e7bd",
+      "reddit": "9d89f8ca1777e3a7121067fb6ff2c865d1fdc054b73e0b833015a9cbe6a9e7bd",
+      "twitter": "a12d44df8f9847d8097015b95104cc0afe23f191bf04306913444771f50a1b90",
+      "game": null
+    }
+  }
+}
