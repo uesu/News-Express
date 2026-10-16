@@ -36,7 +36,9 @@ rewritten when that happens, only relocated.
   reviews do not clear `CHANGES_REQUESTED`. Hash edits on an unchanged
   package version require review even when another pin is a safe patch.
   SHA-bound failed/pending legacy statuses still block in expected-workflow
-  mode; they cannot satisfy a gate. `actionlint` must actually run
+  mode; they cannot satisfy a gate. The hashed runtime lock is the 3.14.8
+  resolution (no `typing-extensions`; aiohttp/aiosignal only need it on
+  `python_version < "3.13"`). `actionlint` must actually run
   (`SKIP_ACTIONLINT` is not green).
 
 * **2026-10-15 — Maintenance: unify safe updates and summaries; fix crosspost

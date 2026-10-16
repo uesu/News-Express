@@ -15,6 +15,10 @@ with:
 
 The pin file `.python-version` currently contains `3.14.8`. Workflows install
 the frozen hashed graph with `pip install --require-hashes --only-binary=:all:`.
+`lock-consistency` regenerates that graph on the pinned 3.14.8 interpreter.
+Transitive extras gated on `python_version < "3.13"` (today:
+`typing-extensions` from aiohttp/aiosignal) are not part of the 3.14.8 lock.
+A 3.11 local recompile is not that gate.
 
 This file is the current operational policy for the exact runtime pin, the
 validation gates around it, and what the automation is allowed to change.

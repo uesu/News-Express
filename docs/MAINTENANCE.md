@@ -79,8 +79,11 @@ CPython python.org release date — a rebuilt archive must not silently
 redefine soak age. Forced overrides validate numeric direction, a stable
 linux-x64 archive, and review policy; a lower patch is not auto-eligible.
 Lock regeneration must be byte-stable after compiler-header normalization
-only (`--reuse-hashes --newline=lf --no-emit-index-url`); changing an
-index/constraint/marker/via-comment without a pin change still fails. Pre- and post-rewrite validation runs the full CI registry, including
+only (`--reuse-hashes --newline=lf --no-emit-index-url`) on the pinned
+3.14.8 interpreter; changing an index/constraint/marker/via-comment without
+a pin change still fails. The runtime lock is the 3.14.8 resolution
+(`typing-extensions` is not frozen; aiohttp/aiosignal only need it on
+`python_version < "3.13"`). Pre- and post-rewrite validation runs the full CI registry, including
 `lock-consistency` and `workflow-security`. Pinned `actionlint` is required;
 download failure or `SKIP_ACTIONLINT=1` is not a green gate.
 
