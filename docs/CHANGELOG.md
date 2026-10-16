@@ -22,7 +22,9 @@ rewritten when that happens, only relocated.
   from the `.python-version` patch (never the title), and hashes published
   bytes via the contents API. `publication_evidence.mode=required`.
   `mode=disabled` blocks the python-bump auto-merge lane rather than reading
-  as satisfied. Other three PRs are unchanged; N2 remains unmet.
+  as satisfied. The publish job groups `GITHUB_OUTPUT` writes and keeps
+  `[bot]` out of the emit script so pinned `actionlint`/shellcheck can pass.
+  Other three PRs are unchanged; N2 remains unmet.
 
 * **2026-10-16 — N2 Part A common-helper candidate (PR #66).** Add
   `.github/scripts/maintenance_common.py` (producer identity, security

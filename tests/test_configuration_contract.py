@@ -90,6 +90,11 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("gh pr merge", text)
         self.assertGreaterEqual(text.count("--group lock-consistency"), 2)
         self.assertGreaterEqual(text.count("--group workflow-security"), 2)
+        self.assertIn("--emit-validation", text)
+        self.assertIn("--emit-publication", text)
+        self.assertIn('} >> "$GITHUB_OUTPUT"', text)
+        self.assertIn("COMMIT_IDENTITY:", text)
+        self.assertNotIn('--commit-identity "github-actions[bot]"', text)
 
     def test_action_pins_are_shas(self):
         for path in (ROOT / ".github" / "workflows").glob("*.yml"):
