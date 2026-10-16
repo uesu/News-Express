@@ -114,6 +114,9 @@ guess from a thumbnail.
 
 ## Production copy exclude
 
-See `production_copy_exclude` in `.github/maintenance.json`. Caches listed
+See `production_copy_exclude` in `.github/maintenance.json` and the
+development-side [`COPY_MANIFEST.md`](COPY_MANIFEST.md). Caches listed
 there must not be overwritten when copying this repo onto a production
-checkout.
+checkout. Both engines and both monitor workflows remain `runtime_files`.
+The three heads are not equivalent copies; green development checks do not
+prove production parity.

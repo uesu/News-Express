@@ -1,6 +1,7 @@
 """General crosspost-video discovery — no hard-coded incident IDs required."""
 from __future__ import annotations
 
+import json
 import sys
 import types
 import unittest
@@ -245,6 +246,14 @@ class NewsIncidentMediaFixtures(unittest.TestCase):
                 self.assertFalse(v3.is_same_reddit_post(
                     source.get("path"), f"/r/NewsSub/comments/{child}/"))
 
+    def test_incident_dedup_keys_are_child_not_parent(self):
+        for child, parent, _video in self.CASES:
+            with self.subTest(child=child):
+                path = f"/r/NewsSub/comments/{child}/slug/"
+                key = f"NewsSub_{v3.extract_post_id(path)}"
+                self.assertEqual(key, f"NewsSub_{child}")
+                self.assertNotIn(parent, key)
+
     def test_html_labeled_original_and_og_motion_for_both_incidents(self):
         for child, parent, video in self.CASES:
             with self.subTest(child=child):
@@ -358,6 +367,57 @@ class NativeAndQualityTests(unittest.TestCase):
         ]
         filtered = proxy.filter_proxy_media(media)
         self.assertEqual([item["url"] for item in filtered], [item["url"] for item in media])
+
+    def test_audio_cover_failure_keeps_proxy_images(self):
+        mixed = [
+            {"kind": "image", "url": "https://i.redd.it/keep-a.jpg"},
+            {"kind": "video", "url": "https://proxy.embedez.com/render/audio?cover=https://i.redd.it/x.jpg"},
+            {"kind": "image", "url": "https://i.redd.it/keep-b.jpg"},
+        ]
+        filtered = proxy.filter_proxy_media(mixed)
+        self.assertEqual([item["kind"] for item in filtered], ["image", "image"])
+        self.assertTrue(v3._proxy_result_usable({"media": filtered}, False))
+        self.assertFalse(any(proxy.is_audio_cover_url(item.get("url")) for item in filtered))
+
+    def test_malformed_parent_id_is_not_a_source(self):
+        source = v3.resolve_crosspost_source(
+            own_path="/r/Beta/comments/child016/",
+            base={},
+            post_json={"crosspost_parent": "not a t3 id"},
+        )
+        self.assertEqual(source, {})
+
+    def test_child_card_keeps_identity_with_five_image_gallery(self):
+        child_url = "https://www.reddit.com/r/NewsSub/comments/1x6lgak/yacht/"
+        data = {
+            "title": "Child title stays",
+            "author": "child_author",
+            "body": "child body text",
+            "media": [{"kind": "image", "url": f"https://i.redd.it/g{i}.jpg"} for i in range(5)],
+            "stats": {"comments": 4, "ups": 8},
+            "crosspost": {
+                "path": "/user/orig/comments/1x6lbhb/",
+                "url": "https://www.reddit.com/user/orig/comments/1x6lbhb/",
+            },
+            "op_comment": None,
+            "youtube_url": None,
+        }
+        payload = v3.build_v3_payload("NewsSub", data, child_url, 1700000000)
+        blob = json.dumps(payload)
+        self.assertIn("Child title stays", blob)
+        self.assertIn("child_author", blob)
+        self.assertIn("r/NewsSub", blob)
+        self.assertIn("child body text", blob)
+        self.assertIn("Crosspost of", blob)
+        self.assertIn("u/orig", blob)
+        row = [c for c in payload["components"][0]["components"] if c.get("type") == 1][0]
+        read_post = row["components"][0]
+        self.assertEqual(read_post["label"], "Read Post")
+        self.assertEqual(read_post["url"], child_url)
+        self.assertNotIn("1x6lbhb", read_post["url"])
+        galleries = [c for c in payload["components"][0]["components"] if c.get("type") == 12]
+        urls = [item["media"]["url"] for g in galleries for item in g["items"]]
+        self.assertEqual(urls, [f"https://i.redd.it/g{i}.jpg" for i in range(5)])
 
 
 if __name__ == "__main__":

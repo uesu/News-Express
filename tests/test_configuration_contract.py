@@ -109,6 +109,32 @@ class ProductionCopyTests(unittest.TestCase):
         self.assertIn("posted_reddit.json", excluded)
         self.assertIn("posted_tweets.json", excluded)
 
+    def test_both_engines_and_monitors_are_runtime_files(self):
+        profile = maintenance.load_profile()
+        runtime = set(profile.get("runtime_files") or [])
+        excluded = set(profile.get("production_copy_exclude") or [])
+        for rel in (
+            "testing area/reddit_main_v3.py",
+            "testing area/twitter_v3.py",
+            ".github/workflows/reddit_monitor.yml",
+            ".github/workflows/twitter_monitor.yml",
+            ".github/scripts/maintenance.py",
+            ".github/scripts/ci.py",
+            ".python-version",
+            "requirements.txt",
+            "requirements-dev.txt",
+        ):
+            self.assertIn(rel, runtime)
+            self.assertNotIn(rel, excluded)
+        for cache in (
+            "posted_reddit.json", "posted_tweets.json",
+            "pending_reddit.json", "posted_messages.json", "proxy_health.json",
+        ):
+            self.assertIn(cache, excluded)
+            self.assertNotIn(cache, runtime)
+        self.assertNotIn("NEWS_EXPRESS_UPDATE.md", runtime)
+        self.assertTrue((ROOT / "docs" / "COPY_MANIFEST.md").is_file())
+
     def test_gitignore_covers_reports(self):
         text = (ROOT / ".gitignore").read_text(encoding="utf-8")
         self.assertIn(".reports/", text)

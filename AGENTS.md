@@ -30,7 +30,10 @@ repository's development documentation, historical audit records, or agent
 onboarding files into production unless a task explicitly asks for that.
 
 Both prod repos intentionally contain BOTH monitors' files. They are NOT
-leftovers. Never advise deleting the "other" platform's files.
+leftovers. Never advise deleting the "other" platform's files. The reviewed
+shared list is `docs/COPY_MANIFEST.md` (development-side; `runtime_files` in
+`.github/maintenance.json` is the machine list). The three heads are not
+equivalent copies.
 
 ## File map
 

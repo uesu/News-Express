@@ -16,6 +16,16 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-16 — Acceptance evidence (PR #66): copy manifest, card identity,
+  reporting states.** Development-side `docs/COPY_MANIFEST.md` records the
+  shared runtime-file list and that production copies are not equivalent
+  heads. Crosspost tests snapshot child title/byline/Read Post URL and a
+  five-image gallery, keep incident dedup keys on the child, and retain
+  proxy images when an audio-cover tile is dropped. Run summaries distinguish
+  a real empty completed run from a missing report, and persistence
+  save/commit/push states stay independent. Hosted lock/final-gate green on
+  `a828015` is preserved; listed-defect fixes are not production parity.
+
 * **2026-10-16 — Maintenance correction (PR #66): lock bytes, forced pins,
   structured crosspost parents, selection telemetry, bound checks.** Hashed
   lock regeneration is byte-stable after compiler-header normalization only

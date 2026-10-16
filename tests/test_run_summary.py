@@ -211,6 +211,45 @@ class RunReportTests(unittest.TestCase):
         report.mark_failed("unhandled-exception")
         self.assertEqual(report.result, "failed")
 
+    def test_empty_completed_run_reports_real_zeros_missing_is_unavailable(self):
+        report = RunReport("reddit_monitor", "v3")
+        report.start_monitor()
+        report.end_monitor("completed")
+        payload = report.as_dict()
+        self.assertEqual(payload["execution"]["result"], "completed")
+        self.assertEqual(payload["outcomes"]["posted"], 0)
+        self.assertEqual(payload["feeds"]["entries"], 0)
+        self.assertEqual(payload["persistence"]["commit"], "not-run")
+        self.assertEqual(payload["persistence"]["remote_push"], "not-run")
+        markdown = render_run_summary.render(payload, payload["persistence"])
+        self.assertIn("- posted: 0", markdown)
+        missing = render_run_summary.render(None, None)
+        self.assertIn("unavailable", missing)
+        self.assertNotIn("- posted: 0", missing)
+
+    def test_persistence_failure_states_are_independent(self):
+        failed_save = render_run_summary.render(
+            {"workflow": "reddit_monitor", "mode": "v3",
+             "execution": {"result": "failed"}},
+            {"local_save": "failed", "commit": "not-run", "remote_push": "not-run"},
+        )
+        self.assertIn("local save: failed", failed_save)
+        self.assertIn("commit: not-run", failed_save)
+        self.assertIn("remote push: not-run", failed_save)
+        failed_commit = render_run_summary.render(
+            {"workflow": "reddit_monitor", "mode": "v3",
+             "execution": {"result": "completed"}},
+            {"local_save": "saved", "commit": "failed", "remote_push": "not-run"},
+        )
+        self.assertIn("commit: failed", failed_commit)
+        self.assertIn("local save: saved", failed_commit)
+        unchanged = render_run_summary.render(
+            {"workflow": "reddit_monitor", "mode": "v3",
+             "execution": {"result": "completed"}},
+            {"local_save": "saved", "commit": "unchanged", "remote_push": "not-run"},
+        )
+        self.assertIn("commit: unchanged", unchanged)
+
     def test_write_failure_does_not_raise(self):
         report = RunReport("reddit_monitor", "v3")
         report.start_monitor()
