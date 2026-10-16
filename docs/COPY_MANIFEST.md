@@ -58,10 +58,10 @@ artifact). Game is omitted from this table; see the helper disposition.
 | `.python-version` | `5abd4dc1efa0` | `5abd4dc1efa0` | `5abd4dc1efa0` | `5abd4dc1efa0` |
 | `.github/scripts/ci.py` | `171925850552` | `e25144fff3e6` | `605207595f82` | `3fe705cc1f02` |
 | `.github/scripts/maintenance.py` | `5f0435c56cd7` | `bdc9a5b767ea` | `ed7dd1ef5e52` | `766548226b01` |
-| `.github/scripts/maintenance_common.py` | *absent* | `67e5b379c5de` | *absent* | *absent* |
+| `.github/scripts/maintenance_common.py` | *absent* | `9e04a5150c40` | *absent* | *absent* |
 | `.github/scripts/python_version_bump.py` | `913221935f13` | `2983fb5c81d5` | `a3011aba88dc` | `01f087f4f568` |
 | `.github/scripts/render_run_summary.py` | `97eedb3160cc` | `97eedb3160cc` | `97eedb3160cc` | `7fe2a96696f9` |
-| `.github/scripts/merge_monitor_caches.py` | `0e53a8c1a450` | `0e53a8c1a450` | `0e53a8c1a450` | `0e53a8c1a450` |
+| `.github/scripts/merge_monitor_caches.py` | `0e53a8c1a450` | `7b116a7c6fcc` | `0e53a8c1a450` | `0e53a8c1a450` |
 | `.github/workflows/ci.yml` | `4b043c1fc6be` | `4b043c1fc6be` | `4b043c1fc6be` | `8b30011dc7ec` |
 | `.github/workflows/maintenance_merge.yml` | `dc7669138d8a` | `dc7669138d8a` | `dc7669138d8a` | `1911ab367463` |
 | `.github/workflows/reddit_monitor.yml` | `a41eb60add7a` | `a41eb60add7a` | `a41eb60add7a` | `2554d344d348` |
@@ -90,8 +90,10 @@ engine/lock bytes are still `be4baca`; helper adapters plus
 ## Content review (not filename inference)
 
 **Byte-identical across all three News-family proposals (authorized to share):**
-`.python-version` (`3.14.8`), `merge_monitor_caches.py`, `twitter_proxy.py`,
-`reddit_signals.py`. News and Reddit also share `reddit_proxy.py`,
+`.python-version` (`3.14.8`), `twitter_proxy.py`,
+`reddit_signals.py`. News P2 moved `merge_monitor_caches.py` off the shared
+`0e53a8c1a450` digest; Reddit/Twitter still carry the pre-P2 bytes. News and
+Reddit also share `reddit_proxy.py`,
 `tests/test_smoke.py`, `ci.yml`, `render_run_summary.py`,
 `maintenance_merge.yml`, both monitor workflows, `.github/dependabot.yml`,
 and the twitter-media / reddit-signals test files.

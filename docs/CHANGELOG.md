@@ -16,6 +16,19 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-17 — P1/P2/P3 reviewed-shared bytes (PR #66).** News
+  `maintenance_common.py` is the P1 candidate
+  (`9e04a5150c407d75e62bfb83cdbab2b386e49f6b1ef4c42710da679d3b1593f3`):
+  drop the unused shebang, import `Callable`/`Mapping`/`Sequence` from
+  `collections.abc`, use `datetime.UTC`, `str.removeprefix` for notice
+  recovery, and a BLE001 noqa at the injected-opener boundary. News
+  `merge_monitor_caches.py` is the P2 candidate
+  (`7b116a7c6fcc720f900510bde42809950137f0dadd143d4a417e8c018761b6b3`):
+  drop the unused shebang, `max(best, ts)` with `best` first, keep
+  fail-loud CLI. `ReviewedSharedBytesTests` pins the P1 digest. Game,
+  Reddit, and Twitter must apply the same candidate themselves; N2
+  remains unmet.
+
 * **2026-10-16 — N4 publication integration (PR #66).** The python-bump
   proposer emits bound validation and publication notices. The live merge
   controller collects them from check-run annotations, derives the candidate

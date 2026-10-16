@@ -14,7 +14,7 @@
       "pr": 66,
       "sha": null,
       "ancestor_implementation_bytes": "be4bacaa0e4a1688517549c99915d93d0227024e",
-      "note": "News #66 N2 Part A candidate plus N4 publication integration working tree. A commit cannot embed its own final self-hash. Ancestor helper/engine/lock implementation-byte head is be4bacaa0e4a1688517549c99915d93d0227024e. Candidate is not approved for blind adoption and does not prove Game/Reddit/Twitter compatibility. Recheck file SHA-256s after this commit."
+      "note": "News #66 P1 common-helper candidate (digest 9e04a5150c407d75e62bfb83cdbab2b386e49f6b1ef4c42710da679d3b1593f3) plus P2 cache-merger and N4 publication integration. A commit cannot embed its own final self-hash. Ancestor helper/engine/lock implementation-byte head is be4bacaa0e4a1688517549c99915d93d0227024e. Candidate is not approved for blind adoption and does not prove Game/Reddit/Twitter compatibility. Recheck file SHA-256s after this commit."
     },
     "reddit": {
       "repo": "uesu/7jkxmy9nvbc",
@@ -96,7 +96,7 @@
       "game": "f2e6888f69e5fa3af874c9b80e1bcf74e8505f9b344134215498a1686ca7b3e2"
     },
     ".github/scripts/merge_monitor_caches.py": {
-      "news": "0e53a8c1a450531003e4490ed6706055911e2c85eef883252808c87ca286491b",
+      "news": "7b116a7c6fcc720f900510bde42809950137f0dadd143d4a417e8c018761b6b3",
       "reddit": "0e53a8c1a450531003e4490ed6706055911e2c85eef883252808c87ca286491b",
       "twitter": "0e53a8c1a450531003e4490ed6706055911e2c85eef883252808c87ca286491b",
       "game": null
@@ -180,7 +180,7 @@
       "game": null
     },
     "tests/test_maintenance.py": {
-      "news": "1feb19485989d93194c2ad57c9c0b7d6b4292f7b993355dcf9d66672a1311cfb",
+      "news": "d1bcdb98c4226f8ec6fd7d85fec24b8d7cdcd60c9fcfe8e714e1e1fe9705bda9",
       "reddit": "ee0ce3cec735768da65e9233e33f86a44ee57913f94f9488b713ed965a0b35a4",
       "twitter": "c6884a0ad788e5477b687344661ff9039ae073d566a47251f6015a32523a485d",
       "game": "074822c89d75c00da7aa5dab6d693b46d014b2f0f56dcff2ff0cafbdab1885bf"
@@ -216,7 +216,7 @@
       "game": null
     },
     ".github/scripts/maintenance_common.py": {
-      "news": "67e5b379c5de0a4a86fa78a3af4a8389a39155c88d6f08679eb963ffe2ae1d2a",
+      "news": "9e04a5150c407d75e62bfb83cdbab2b386e49f6b1ef4c42710da679d3b1593f3",
       "reddit": null,
       "twitter": null,
       "game": null
