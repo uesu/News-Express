@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Effective date:** October 5, 2026 (last updated for the round-63 gate simplification and round-64 listing confirmation)
+**Effective date:** October 17, 2026
 **Applies to:** the *News Express* / *Citlali News* X (Twitter) + Reddit → Discord monitor
 ("the Service"), an open-source, self-hosted automation tool.
 
@@ -24,6 +24,13 @@ payload and delivery metadata in `posted_messages.json`, and may edit or delete 
 configured independent removal checks pass. You are responsible for choosing `RETRACT_MODE`, keeping
 that state file private when appropriate, and ensuring that any automated edit/delete behavior fits
 your Discord server's rules and moderation practice.
+
+Operational logs and completion summaries are best-effort diagnostics, not
+proof of healthy sources, successful delivery or committed/pushed state. Follow
+the workflow result and existing per-item logs, review output before sharing it,
+and apply the repository/Discord access and retention settings appropriate to
+your instance. See [Privacy Policy](PRIVACY_POLICY.md). No separate analytics
+service is introduced by completion reporting.
 
 ## 3. Acceptable Use
 

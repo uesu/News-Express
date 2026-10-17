@@ -1,5 +1,14 @@
 # AGENTS.md — onboarding for AI coding agents
 
+## Media recovery and workflow summaries
+
+Keep crosspost recovery one-hop and provenance-validated; preserve child identity,
+Read Post destination, gallery order and existing quality/audio checks. Reuse
+completed archive lookups, including misses/errors, and validated embedded parents.
+Reporting stays in the existing monitor summary steps, not engine wrappers or a
+new module. Treat counts as log observations; missing measurements are unavailable.
+Do not add reporting HTTP calls, reset dedup state or replay repaired messages.
+
 Read this first. It encodes the hard-won operational knowledge of 76 rounds
 of production fixes so you do not re-learn it the expensive way — or
 "fix" something that is deliberate.
