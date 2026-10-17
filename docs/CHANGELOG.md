@@ -16,6 +16,13 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-17 — N-FINAL-1 current-contract docs (PR #66).** Label older
+  proposal-head comparison tables as historical. Current copy contract is
+  `runtime_files` / `production_copy_exclude` in `.github/maintenance.json`.
+  `docs/DEPENDABOT.md` now matches `lockfile-only`, hashed wheels-only
+  installs, and `python-routine` / `actions-routine` grouping. P1–P6 code
+  stays closed. Production publication/rollout remain separate.
+
 * **2026-10-17 — P1/P2/P3 reviewed-shared bytes (PR #66).** News
   `maintenance_common.py` is the P1 candidate
   (`9e04a5150c407d75e62bfb83cdbab2b386e49f6b1ef4c42710da679d3b1593f3`):

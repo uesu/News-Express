@@ -1,3 +1,96 @@
+# News production-copy manifest — current contract and historical record
+
+## Current copy contract — 2026-10-17
+
+Implementation baseline: News #66 `db6c2831e923d5ad202192f073d5c80cc24890ee`.
+There are two main projects. Reddit and Twitter production repositories are
+News deployments, not additional application architectures. They retain their
+own state, secrets and repository-specific settings.
+
+The authoritative machine-readable copy lists are `runtime_files` and
+`production_copy_exclude` in `.github/maintenance.json`. Check the lists at the
+actual final source head before copying; do not treat this historical baseline
+or an older proposal hash as the final deployed tree.
+
+Current required-file inventory at this baseline:
+
+```text
+.python-version
+requirements.in
+requirements.txt
+requirements-dev.in
+requirements-dev.txt
+.github/maintenance.json
+.github/scripts/maintenance.py
+.github/scripts/maintenance_common.py
+.github/scripts/python_version_bump.py
+.github/scripts/ci.py
+.github/scripts/render_run_summary.py
+.github/scripts/merge_monitor_caches.py
+.github/workflows/ci.yml
+.github/workflows/python_version_bump.yml
+.github/workflows/maintenance_merge.yml
+.github/workflows/reddit_monitor.yml
+.github/workflows/twitter_monitor.yml
+.github/dependabot.yml
+.env.example
+.gitignore
+testing area/run_report.py
+testing area/reddit_main.py
+testing area/reddit_main_v2_embedez.py
+testing area/reddit_main_v3.py
+testing area/reddit_proxy.py
+testing area/reddit_signals.py
+testing area/twitter_v1.py
+testing area/twitter_v2_button_outside.py
+testing area/twitter_v3.py
+testing area/twitter_proxy.py
+testing area/video_diag.py
+tests/test_smoke.py
+tests/test_reddit_signals.py
+tests/test_twitter_media.py
+tests/test_maintenance.py
+tests/test_maintenance_common.py
+tests/test_run_summary.py
+tests/test_configuration_contract.py
+tests/test_crosspost_video.py
+tests/fixtures/posted_cards.py
+```
+
+Current exclusions at this baseline:
+
+```text
+README.md
+AGENTS.md
+PRIVACY_POLICY.md
+TERMS_OF_SERVICE.md
+docs
+posted_reddit.json
+posted_tweets.json
+pending_reddit.json
+proxy_health.json
+posted_messages.json
+```
+
+Do not copy state/dedup/pending/proxy-health files from development or another
+instance. Preserve environment files, webhook configuration and credentials.
+Do not delete existing state merely because an exclusion omits it. Development
+Markdown/docs/handoffs are not required production runtime inputs. Required
+registered tests and maintenance support files must remain available in each
+production copy. Run the production profile in a scratch copy with excluded
+Markdown/docs absent before rollout; a missing required file must fail CI.
+
+Compare any existing production-specific implementation changes before replacing
+files. Copy only reviewed implementation changes and their required companions;
+never overwrite secrets or state to force byte equality. Record the final
+source/destination heads and hashes without claiming a live deployment here.
+
+## Historical proposal comparison — superseded, not a rollout instruction
+
+The tables/statements below refer only to their explicitly listed old commits.
+Claims below about missing helpers or incomplete alignment are historical.
+`proposal_head_hashes.json` is an immutable old snapshot, not the current manifest.
+
 # Shared file manifest — News-Express proposal heads
 
 This is a **development-side** review document. It is not a runtime input.

@@ -16,7 +16,7 @@ Dependabot is **not** a bot you host, install, or pay for. It is a service
 **built into GitHub** that runs on GitHub's own infrastructure:
 
 1. **Scans** your repository's dependency files — here that means
-   `requirements.txt` (pip) and the `uses: actions/...@v7` lines in
+   the pip input/lock files and SHA-pinned `uses:` lines in
    `.github/workflows/*.yml` (GitHub Actions).
 2. **Watches** the package registries (PyPI, the GitHub Actions marketplace)
    for new versions and published security advisories.
@@ -53,14 +53,15 @@ With the config in this repo (`.github/dependabot.yml`):
   * **github-actions**: every workflow's `actions/checkout@v7`,
     `actions/setup-python@v7`, … (the old v4/v5 pins were auto-bumped to
     v7 by Dependabot itself — see the Node 20→24 FAQ below)
-* For pip, `versioning-strategy: increase-if-necessary` means ordinary releases
-  already allowed by the ranges (for example an `aiohttp` 3.x release below
-  `<4`) do not create noisy PRs; the workflows install the newest allowed
-  versions on each run. Dependabot opens a PR when the requirement itself must
-  change, such as a security lower-bound update or a release outside the
-  current range.
-* For GitHub Actions, pinned action references are checked weekly and grouped
-  into a single `github-actions` PR when updates are available.
+* For pip, `versioning-strategy: lockfile-only` updates the committed compiled
+  lock within the input constraints. Monitor workflows install the committed
+  exact graph with hash verification and wheels only; they do not resolve the
+  newest allowed release on every run. Constraint changes require a separate
+  reviewed change. Routine patch/minor updates use the `python-routine` group;
+  major updates stay outside that routine group.
+* GitHub Actions SHA pins are checked weekly. Routine patch/minor updates use
+  `actions-routine`; major updates stay outside that routine group. No Actions
+  lockfile is used. The maintenance controller still validates the actual diff.
 * Security-update PRs are opened whenever a published vulnerability affects the
   configured dependency requirement.
 * If a PR is left open and a newer applicable version lands, Dependabot updates

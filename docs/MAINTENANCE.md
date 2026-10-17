@@ -1,10 +1,11 @@
 # Maintenance contract — safe updates, merge control, run summaries
 
 News-Express and Game-Express share this helper layout and a project-specific
-`.github/maintenance.json` profile. The applications stay independent; only
-the policy helpers are meant to stay identical. That requirement is still
-unmet across the four proposal heads. `.github/scripts/maintenance_common.py`
-is the News-local candidate (not approved for blind adoption).
+`.github/maintenance.json` profile. The applications stay independent. The
+designated common helper is `.github/scripts/maintenance_common.py`. Project
+profiles supply test commands and file lists. Older proposal-head comparison
+tables in [`COPY_MANIFEST.md`](COPY_MANIFEST.md) are historical snapshots,
+not current open work.
 
 Production copies may omit README/docs. Runtime, CI, the merge controller, and
 the runtime proposer must still work. Do not copy development docs into
@@ -123,8 +124,7 @@ See `production_copy_exclude` in `.github/maintenance.json` and the
 development-side [`COPY_MANIFEST.md`](COPY_MANIFEST.md). Caches listed
 there must not be overwritten when copying this repo onto a production
 checkout. Both engines and both monitor workflows remain `runtime_files`.
-The News-family **proposal** heads (News #66, Reddit #2, Twitter #29) are not
-equivalent copies; deployed production `main` is a different snapshot. Game
-helpers are not byte-identical. The identical-helper requirement is unmet;
-four PRs are not fully aligned — see the explicit disposition in that
-manifest. Coverage limits: [`ACCEPTANCE_COVERAGE.md`](ACCEPTANCE_COVERAGE.md).
+Deployed production `main` is a different snapshot from this development PR.
+Do not overwrite production caches. Coverage limits:
+[`ACCEPTANCE_COVERAGE.md`](ACCEPTANCE_COVERAGE.md). Older proposal-head
+alignment statements in that file are historical.

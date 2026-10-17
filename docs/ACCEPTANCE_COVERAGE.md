@@ -1,3 +1,27 @@
+# Acceptance evidence — current closeout and historical record
+
+## Current closeout baseline — 2026-10-17
+
+News PR #66 implementation baseline: `db6c2831e923d5ad202192f073d5c80cc24890ee`.
+News CI run 38975735476 passes application, maintenance, lock-consistency,
+workflow-security and maintenance-ci. That run predates this documentation
+refresh; report the real new head/run after landing it, never reuse the old run
+as proof of subsequently changed code.
+
+The designated common helper is now identical across the four reviewed PR
+heads: SHA-256 `9e04a5150c407d75e62bfb83cdbab2b386e49f6b1ef4c42710da679d3b1593f3`.
+News/Twitter cache merger SHA-256 is
+`7b116a7c6fcc720f900510bde42809950137f0dadd143d4a417e8c018761b6b3`.
+Earlier statements below that helper adoption/alignment was unmet describe
+those older snapshots only. They are not current open work.
+
+Registered regressions cover the crosspost-parent/video enhancement; they are
+not live Discord or historical-message repair evidence. Production publication,
+repository configuration and rollout remain separate acceptance steps. Refer
+to the final code/test mapping and copy manifest, not old commit tables below.
+
+## Historical evidence — superseded snapshots, not current instructions
+
 # Acceptance evidence map — News-Express PR #66
 
 Development-side only (`docs/` is in `production_copy_exclude`). This maps

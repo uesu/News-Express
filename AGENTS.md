@@ -30,13 +30,12 @@ repository's development documentation, historical audit records, or agent
 onboarding files into production unless a task explicitly asks for that.
 
 Both prod repos intentionally contain BOTH monitors' files. They are NOT
-leftovers. Never advise deleting the "other" platform's files. The reviewed
-shared list is `docs/COPY_MANIFEST.md` (development-side; SHA-256 table in
-`docs/proposal_head_hashes.json`; `runtime_files` in
-`.github/maintenance.json` is the machine list). The News-family proposal
-heads are not equivalent copies and the four PRs are not fully aligned.
-Game-Express helpers are not byte-identical; do not copy either helper tree
-onto the other.
+leftovers. Never advise deleting the "other" platform's files. The current
+copy contract is `docs/COPY_MANIFEST.md` (development-side). The machine list
+is `runtime_files` in `.github/maintenance.json`.
+`docs/proposal_head_hashes.json` is an immutable old proposal snapshot, not
+the current deployed tree. Game-Express is a separate application; do not
+copy Game engines into News or vice versa.
 
 ## File map
 

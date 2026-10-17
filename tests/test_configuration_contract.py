@@ -24,6 +24,15 @@ PIN = (ROOT / ".python-version").read_text(encoding="utf-8").strip()
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
+def _fenced_block_after(text: str, heading: str) -> list[str]:
+    after = text.split(heading, 1)[1]
+    fence = after.split("```", 2)[1]
+    lines = fence.splitlines()
+    if lines and (not lines[0].strip() or lines[0].strip().isalpha()):
+        lines = lines[1:]
+    return [line.strip() for line in lines if line.strip()]
+
+
 class PinAndLockTests(unittest.TestCase):
     def test_exact_pin(self):
         self.assertEqual(PIN, "3.14.8")
@@ -153,6 +162,51 @@ class ProductionCopyTests(unittest.TestCase):
         self.assertTrue((ROOT / "docs" / "COPY_MANIFEST.md").is_file())
         self.assertTrue((ROOT / "docs" / "ACCEPTANCE_COVERAGE.md").is_file())
         self.assertTrue((ROOT / "docs" / "proposal_head_hashes.json").is_file())
+
+    def test_current_docs_match_dependabot_and_copy_contract(self):
+        dependabot_doc = (ROOT / "docs" / "DEPENDABOT.md").read_text(encoding="utf-8")
+        self.assertIn("versioning-strategy: lockfile-only", dependabot_doc)
+        self.assertIn("python-routine", dependabot_doc)
+        self.assertIn("actions-routine", dependabot_doc)
+        self.assertNotIn("increase-if-necessary", dependabot_doc)
+        self.assertIn("they do not resolve the", dependabot_doc)
+        self.assertIn("newest allowed release on every run", dependabot_doc)
+        yml = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        self.assertIn("versioning-strategy: lockfile-only", yml)
+        self.assertIn("python-routine", yml)
+        self.assertIn("actions-routine", yml)
+
+        manifest = (ROOT / "docs" / "COPY_MANIFEST.md").read_text(encoding="utf-8")
+        self.assertIn("Current copy contract — 2026-10-17", manifest)
+        self.assertIn("Historical proposal comparison — superseded", manifest)
+        self.assertIn(
+            "`proposal_head_hashes.json` is an immutable old snapshot, not the current manifest.",
+            manifest,
+        )
+        profile = json.loads((ROOT / ".github" / "maintenance.json").read_text(encoding="utf-8"))
+        listed = _fenced_block_after(manifest, "Current required-file inventory at this baseline:")
+        self.assertEqual(listed, list(profile["runtime_files"]))
+        excluded = _fenced_block_after(manifest, "Current exclusions at this baseline:")
+        self.assertEqual(excluded, list(profile["production_copy_exclude"]))
+
+        coverage = (ROOT / "docs" / "ACCEPTANCE_COVERAGE.md").read_text(encoding="utf-8")
+        self.assertIn("Current closeout baseline — 2026-10-17", coverage)
+        self.assertIn(
+            "Historical evidence — superseded snapshots, not current instructions",
+            coverage,
+        )
+        self.assertIn(
+            "9e04a5150c407d75e62bfb83cdbab2b386e49f6b1ef4c42710da679d3b1593f3",
+            coverage,
+        )
+        self.assertIn(
+            "7b116a7c6fcc720f900510bde42809950137f0dadd143d4a417e8c018761b6b3",
+            coverage,
+        )
+
+        for rel in ("AGENTS.md", "README.md", "docs/MAINTENANCE.md"):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertNotIn("four PRs are not fully aligned", text, rel)
 
     def test_copy_manifest_does_not_claim_parity_or_identical_helpers(self):
         text = (ROOT / "docs" / "COPY_MANIFEST.md").read_text(encoding="utf-8")
