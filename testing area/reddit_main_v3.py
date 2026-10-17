@@ -1321,15 +1321,15 @@ REDDIT_HOSTS = frozenset({
     "new.reddit.com", "m.reddit.com",
 })
 _LABELED_ORIGINAL_RE = re.compile(
-    r"(?is)(?:\[original(?:\s+| )*post\]\((https?://[^)\s]+|/[^)\s]+)\)"
+    r"(?is)(?:\[original(?:\s+|\x26nbsp;)*post\]\((https?://[^)\s]+|/[^)\s]+)\)"
     r"|<a\b[^>]*href=[\"'](https?://[^\"'\s]+|/[^\"'\s]+)[\"'][^>]*>\s*"
-    r"original(?:\s+| )*post\s*</a>"
-    r"|original(?:\s+| )*post[^\]\[\n]{0,80}"
+    r"original(?:\s+|\x26nbsp;)*post\s*</a>"
+    r"|original(?:\s+|\x26nbsp;)*post[^\]\[\n]{0,80}"
     r"(https?://(?:www\.|old\.|np\.|new\.|m\.)?reddit\.com/"
     r"(?:r/(?:u_)?[^/\s?<>]+|u(?:ser)?/[^/\s?<>]+)/comments/[a-zA-Z0-9]+/?)"
     r"|(https?://(?:www\.|old\.|np\.|new\.|m\.)?reddit\.com/"
     r"(?:r/(?:u_)?[^/\s?<>]+|u(?:ser)?/[^/\s?<>]+)/comments/[a-zA-Z0-9]+/?)"
-    r"[^\]\[\n]{0,80}original(?:\s+| )*post)",
+    r"[^\]\[\n]{0,80}original(?:\s+|\x26nbsp;)*post)",
 )
 _CROSSPOST_REL_RE = re.compile(
     r"(?is)crosspost(?:ed)?(?:\s+this)?(?:\s+from|\s+of)\b"
