@@ -1,5 +1,18 @@
 # AGENTS.md — onboarding for AI coding agents
 
+## Fast, exact incremental PR updates
+
+- Continue the specified existing PR; implement only the newest requested delta.
+- Use concise unified diffs: `-` removes old code, `+` adds replacement code.
+  Do not replay full historical patches or add unrelated cleanup/new files.
+- Reuse relevant prior evidence. Inspect affected code and run targeted checks;
+  do not repeat a full audit/benchmark unless drift, failures or risk justify it.
+- Let normal CI validate the resulting head. Inspect advisory findings too;
+  never hide/suppress failures or remove safeguards to save time.
+- Update existing AGENTS/README/docs/changelog/privacy/terms only where affected.
+- Write an accurate PR title/body; report head, changes, checks and blockers briefly.
+- No extra audit MD, production posting, state reset or merge without approval.
+
 ## Media recovery and workflow summaries
 
 Keep crosspost recovery one-hop and provenance-validated; preserve child identity,

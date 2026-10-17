@@ -6839,7 +6839,6 @@ _app_media_suite = unittest.TestSuite(
 _app_media_result = unittest.TextTestRunner(verbosity=1).run(_app_media_suite)
 check("application crosspost media regressions", _app_media_result.wasSuccessful())
 
-
 if failures:
     print(f"SMOKE TEST FAILURES ({len(failures)}): {failures}")
     sys.exit(1)
