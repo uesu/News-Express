@@ -630,6 +630,15 @@ feed, entry, delivery, runtime, and cache status. Summary generation is
 local-only and does not add feed, provider, media, Discord, retry, scheduling,
 or cache-selection work to the monitor path.
 
+Account/failure counting accepts timestamped logger prefixes. Counts describe
+observed records, not an independent health/delivery audit: missing measurements
+stay unavailable and this log format does not separately measure new candidates.
+Provider labels can also match image cards; they are not video-only or HTTP totals.
+
+Reddit crosspost recovery follows validated one-hop originals for media while
+preserving the child identity and Read Post link. Completed archive misses/errors
+and validated embedded originals are reused instead of fetched a second time.
+
 The Twitter workflow supports these post-delivery media-heal controls:
 
 - `MEDIA_HEAL` — enables or disables healing; default: enabled.

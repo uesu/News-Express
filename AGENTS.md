@@ -1,5 +1,31 @@
 # AGENTS.md — onboarding for AI coding agents
 
+## Fast, exact incremental PR updates
+
+- Continue the specified existing PR; implement only the newest requested delta.
+- Use concise unified diffs: `-` removes old code, `+` adds replacement code.
+  Do not replay full historical patches or add unrelated cleanup/new files.
+- Reuse relevant prior evidence. Inspect affected code and run targeted checks;
+  do not repeat a full audit/benchmark unless drift, failures or risk justify it.
+- For routine PR handoffs, do not require per-file checksums or exact commit-head
+  matching. Use normal diff review, targeted checks and CI results/annotations;
+  investigate material drift or failures as needed. Preserve required security
+  verification; do not weaken existing checks merely to save time.
+- Let normal CI validate the resulting head. Inspect advisory findings too;
+  never hide/suppress failures or remove safeguards to save time.
+- Update existing AGENTS/README/docs/changelog/privacy/terms only where affected.
+- Write an accurate PR title/body; report head, changes, checks and blockers briefly.
+- No extra audit MD, production posting, state reset or merge without approval.
+
+## Media recovery and workflow summaries
+
+Keep crosspost recovery one-hop and provenance-validated; preserve child identity,
+Read Post destination, gallery order and existing quality/audio checks. Reuse
+completed archive lookups, including misses/errors, and validated embedded parents.
+Reporting stays in the existing monitor summary steps, not engine wrappers or a
+new module. Treat counts as log observations; missing measurements are unavailable.
+Do not add reporting HTTP calls, reset dedup state or replay repaired messages.
+
 Read this first. It encodes the hard-won operational knowledge of 76 rounds
 of production fixes so you do not re-learn it the expensive way — or
 "fix" something that is deliberate.
