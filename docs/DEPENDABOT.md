@@ -1,5 +1,15 @@
 # 🤖 Dependabot — dependency automation and runtime-boundary policy
 
+## Attended workflow updates
+
+Eligible package-only Dependabot PRs retain opt-in auto-merge. Any PR changing
+`.github/workflows/` (including a rename from that directory) waits for manual
+review/merge. All Python update PRs are also attended; the legacy
+`AUTO_MERGE_PYTHON_BUMP` variable is ignored. Do not auto-approve GitHub security
+holds. After a live-workflow update, confirm a real monitor run starts/completes;
+a successful dispatch or PR CI is not proof of live execution. A hold can still
+occur: this policy reduces unattended exposure, not the security gate itself.
+
 > **TL;DR:** Dependabot is a **free, built-in GitHub feature** that watches
 > `requirements.txt` and GitHub Actions references and opens dependency/action
 > pull requests when the configured ranges or action pins need an update. It
@@ -85,10 +95,10 @@ The repository uses an exact CPython pin and changes it through
 is:
 
 * patch updates within the current series may be automatically proposed and,
-  when all validation passes, auto-merged only if `AUTO_MERGE_PYTHON_BUMP=yes`;
+  when all validation passes, left open for attended review/merge;
 * a new minor series such as Python 3.15 requires a PR and manual review;
 * a major version such as Python 4 requires deliberate manual migration; and
-* `AUTO_MERGE_PYTHON_BUMP` has no `all` mode.
+* `AUTO_MERGE_PYTHON_BUMP` is legacy/ignored; no value enables Python auto-merge.
 
 See [Python runtime policy](PYTHON_RUNTIME.md) for the current official version
 assessment, wheel-only validation, soak period, rewrite allowlist, and rollback
@@ -134,7 +144,7 @@ want **automatic merge to main once checks are green**, pick ONE of:
 
 1. Repo → **Settings → General → Pull requests** → enable **Auto-merge
    pull requests**.
-2. On any green Dependabot PR, click **Enable auto-merge** → GitHub merges
+2. On an eligible package-only Dependabot PR, click **Enable auto-merge** → GitHub merges
    the moment checks pass (it also waits out required reviews if you have
    any). You can scope it in the same place.
 
@@ -164,7 +174,7 @@ change.
 
 | Gate | Check |
 |---|---|
-| 0 | variable `AUTO_MERGE_DEPENDABOT` is exactly `yes` |
+| 0 | variable `AUTO_MERGE_DEPENDABOT` is exactly `yes`; no current or previous PR path is under `.github/workflows/` |
 | 1 | trusted PR event and API response agree on one PR, its default-branch target, and its exact event head SHA |
 | 2 | API reports author `dependabot[bot]`, state `open`, and `draft=false` — human, closed, and draft PRs are skipped |
 | 3 | **at least one** Check Run exists for that exact SHA; pending or absent checks are polled, and every completed Check Run must conclude `success`, `skipped`, or `neutral` |

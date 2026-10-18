@@ -1,5 +1,14 @@
 # 🧪 CI + smoke test — full explanation (optional or required?)
 
+## Crosspost and summary regressions
+
+The existing `tests/test_smoke.py` includes crosspost/media cases and executes the
+actual final-summary Bash from the two monitor YAMLs with local fixture logs.
+It covers timestamped account/failure counting, missing measurements, measured
+zero candidates, deliveries/cache results and reuse of archive misses/errors or
+validated parent records. Run this script plus the existing Reddit signal and
+Twitter media runners. No new test file, live webhook or cache reset is needed.
+
 > **TL;DR:** `.github/workflows/ci.yml`, `tests/test_smoke.py`,
 > `tests/test_reddit_signals.py`, and `tests/test_twitter_media.py` are
 > **REQUIRED for this repo's setup** — not

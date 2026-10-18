@@ -44,7 +44,7 @@ News-Express uses the normal `MAJOR.MINOR.PATCH` terminology:
 
 | Example | Classification | Repository policy |
 |---|---|---|
-| `3.14.7 -> 3.14.8` | **PATCH** update inside the same `3.14` series | eligible for automated proposal and, when every gate passes, optional patch auto-merge |
+| `3.14.7 -> 3.14.8` | **PATCH** update inside the same `3.14` series | eligible for automated proposal and, when every gate passes, attended manual merge |
 | `3.14.8 -> 3.15.0` | new **MINOR** series | PR only; manual review required even if validation passes |
 | `3.x -> 4.x` | **MAJOR** update | deliberate manual migration; never handled as an ordinary patch/minor bump |
 
@@ -144,25 +144,17 @@ current runtime documentation, README runtime references, and the smoke-test
 pin guard. `docs/history/` is checked separately and fails the workflow if it
 changes. Unexpected files also fail closed.
 
-## Auto-merge policy and authentication
+## Attended merge policy and authentication
 
-`AUTO_MERGE_PYTHON_BUMP` is a repository **Variable** with one supported
-auto-merge value:
+Every verified Python patch/minor PR waits for manual review and merge.
+AUTO_MERGE_PYTHON_BUMP is a legacy variable; yes/all/unset no longer enable merging.
+Detection, the existing new-minor soak, candidate validation and PR creation remain
+automatic. Major migrations remain manual work. This does not approve or bypass a
+GitHub workflow-security hold; confirm the next real run after a live update.
 
-| Variable value | Behavior |
-|---|---|
-| unset, empty, or anything other than `yes` | open the verified PR and wait for manual review |
-| `yes` | auto-merge verified **patch** bumps only |
-
-There is intentionally no `all` mode. A new minor series such as Python 3.15
-must remain a manual-review PR, and a major version such as Python 4 requires a
-deliberate migration plan.
-
-The workflow uses `BUMP_PAT` only through GitHub Actions secret references
-(`secrets.BUMP_PAT`) for checkout, PR creation, and the optional patch merge.
-No token value belongs in the repository, logs, docs, or workflow inputs. If the
-secret is missing or invalid, the job fails safely rather than falling back to a
-direct push to `main`.
+BUMP_PAT remains an Actions secret for checkout and PR publication. Never commit
+or print its value. Missing/invalid credentials fail safely; there is no direct
+push-to-main fallback. Existing settings and branch protections still apply.
 
 ## Safe manual update procedure
 

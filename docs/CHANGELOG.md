@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased — attended workflow updates (2026-10-18)
+
+- Keep eligible package-only Dependabot auto-merge; require attended merges for
+  workflow-path updates, including renamed/deleted files. Fetch all PR file pages.
+- Continue Python detection/validation/publication but remove Python auto-merging;
+  the legacy AUTO_MERGE_PYTHON_BUMP variable is no longer consulted.
+- Preserve News exact pins, current validation and new-minor soak period.
+- GitHub security approval can still be required; check real live execution
+  after an attended update. No posting/state/scheduler or dependency-range change.
+
+## Unreleased — application-only scope (2026-10-17)
+
+- Improve existing summary output in place; no new reporting module or runtime
+  file. Keep unmeasured values unavailable and preserve real cache-push status.
+- Clarify privacy/terms disclosures for retained logs/summaries and repository
+  access; preserve attribution and warranty provisions.
+- Recover crosspost motion media from validated one-hop originals; reuse
+  completed archive lookups (including misses/errors) and embedded parent data.
+- Correct timestamp-prefixed Twitter feed counters in the existing workflow.
+- Leave dependency/Python/Dependabot/update automation and posting/state rules
+  unchanged. Proposed code, not a claim of production deployment.
+
 Current, in-progress release notes for News-Express. This file covers
 **round 63 onward** (2026-10-05 and later) — the state after "The Great
 Simplification" rewrote the Reddit engine's delivery pipeline.

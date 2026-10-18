@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective date:** October 5, 2026 (last updated for the round-63 gate simplification and round-64 listing confirmation)
+**Effective date:** October 17, 2026
 **Applies to:** the *News Express* / *Citlali News* X (Twitter) + Reddit → Discord monitor
 ("the Service"), an open-source, self-hosted automation tool.
 
@@ -23,7 +23,7 @@ operated by the author.
 |---|---|---|---|
 | Delivery-state records: post/tweet IDs (e.g. `TYPEII_EN_2098063866303504597`), pending reasons, and proxy health | `posted_tweets.json`, `posted_reddit.json`, `pending_reddit.json`, and `proxy_health.json` **inside your own repository**, committed by `github-actions[bot]` | Deduplication, safe re-checks, and proxy fallback health | GitHub and anyone who can access your repository; a public repository makes these records public. They do not contain Discord member data or webhook URLs. |
 | Optional retraction records: Reddit post path, Discord message ID, delivery/publish timestamps, and the rendered card payload | `posted_messages.json` **inside your own repository**, created only when `RETRACT_DEAD_POSTS=1` and committed by `github-actions[bot]` | Lets the optional dead-post retraction pass edit or delete the exact Discord message; records are pruned after `RETRACT_WINDOW_SECONDS` and marked retracted records are removed | GitHub and anyone who can access your repository; a public repository makes these records public. The payload is the same public card sent to Discord and does not contain member data or webhook URLs. |
-| Webhook URLs, API keys & optional feed/RSS tokens | GitHub **encrypted repository secrets** in *your* repository | Authentication to Discord, EmbedEZ, Reddit, or a token-gated mirror | GitHub stores the secrets. A value is sent only to its intended service when needed (for example, a webhook to Discord, a Reddit feed token to Reddit, or the Nitter token to miningtcup); it is not written to workflow logs. |
+| Webhook URLs, API keys & optional feed/RSS tokens | GitHub **encrypted repository secrets** in *your* repository | Authentication to Discord, EmbedEZ, Reddit, or a token-gated mirror | GitHub stores the secrets. A value is sent only to its intended service when needed (for example, a webhook to Discord, a Reddit feed token to Reddit, or the Nitter token to miningtcup); the Service must not intentionally publish it. Output redaction and GitHub masking are safeguards, not guarantees; review logs before sharing them. |
 | Public post content (titles, text, author names/handles, media URLs, stats) | Processed **in memory** during a run; rendered content is retained by the Discord channel under your control | Rendering the Discord message | Discord receives the rendered public content through the webhook(s) you configure. Relevant source services receive the public URL/account/subreddit requested. |
 
 No analytics, no tracking, no cookies, no separate database, no telemetry, and no advertising are added by this project.
@@ -88,7 +88,11 @@ The Service never reads or sends these third parties Discord server-member data 
   and is pruned after each run. The default configuration does not create this file.
 * Rendered messages and public content are retained by Discord under the retention/moderation
   settings of the server you operate.
-* Workflow run logs are retained by GitHub according to your repository's log-retention settings.
+* GitHub retains workflow logs and step summaries according to its applicable
+  access and retention settings. They can include public source references,
+  operational outcomes, selected-feed counts and elapsed time. The existing summary
+  output adds no separate database, JSON report or analytics endpoint. Redaction
+  is best effort; operators should review output before publishing it.
 * The project adds no other database or telemetry store.
 
 ---
