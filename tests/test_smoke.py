@@ -6839,6 +6839,39 @@ _app_media_suite = unittest.TestSuite(
 _app_media_result = unittest.TextTestRunner(verbosity=1).run(_app_media_suite)
 check("application crosspost media regressions", _app_media_result.wasSuccessful())
 
+# Attended update policy: exercise the actual inline guard without GitHub calls.
+def _check_attended_workflow_update_policy():
+    with open(os.path.join(ROOT, ".github/workflows/dependabot_auto_merge.yml"), encoding="utf-8") as fh:
+        source = fh.read()
+    import json
+    import shutil
+    import subprocess
+
+    if shutil.which("node"):
+        start = source.index("const requiresWorkflowReview =")
+        helper = source[start:source.index(";", start) + 1]
+        fixtures = [
+            ([{"filename": "requirements.txt"}], False),
+            ([{"filename": ".github/workflows/monitor.yml"}], True),
+            ([{"filename": "renamed.txt", "previous_filename": ".github/workflows/old.yml"}], True),
+            ([{"filename": ".github/workflows/deleted.yml", "status": "removed"}], True),
+            ([{"filename": "README.md"}], False),
+            ([{"filename": "requirements.txt"}] * 110 + [{"filename": ".github/workflows/ci.yml"}], True),
+        ]
+        code = helper + "\nconst cases = " + json.dumps(fixtures) + ";\n"
+        code += "for (const [files, want] of cases) { if (requiresWorkflowReview(files) !== want) process.exit(1); }"
+        subprocess.run(["node", "-e", code], check=True, capture_output=True, text=True)
+    assert "github.paginate(github.rest.pulls.listFiles" in source
+    assert "file.previous_filename" in source
+    with open(os.path.join(ROOT, ".github/workflows/python_version_bump.yml"), encoding="utf-8") as fh:
+        bump = fh.read()
+    assert "gh pr merge" not in bump
+    assert "vars.AUTO_MERGE_PYTHON_BUMP" not in bump
+
+
+_check_attended_workflow_update_policy()
+check("attended workflow update policy and rename-aware package guard", True)
+
 if failures:
     print(f"SMOKE TEST FAILURES ({len(failures)}): {failures}")
     sys.exit(1)

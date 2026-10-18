@@ -493,10 +493,10 @@ path — the folder name contains a space).
   wheels-only dependency installation (`pip install --only-binary=:all:`), runs
   compileall + all three offline suites before and after the allowlisted rewrite, and
   opens a PR only after those gates pass.
-* **Auto-merge boundary:** `AUTO_MERGE_PYTHON_BUMP=yes` permits eligible patch
-  auto-merges only. Python 3.15 remains a manual-review minor-series PR, and
-  Python 4 or any other major update requires deliberate migration. There is no
-  direct-to-main fallback and no `all` auto-merge mode.
+* **Attended runtime updates:** verified Python patch/minor PRs always wait for
+  manual merging; AUTO_MERGE_PYTHON_BUMP is legacy/ignored. Major migrations
+  remain manual. Eligible package-only Dependabot auto-merge stays available;
+  workflow-file updates wait for review and a subsequent live-run check.
 * **Authentication:** runtime bump publication uses `BUMP_PAT` only through
   GitHub Actions secret references (`secrets.BUMP_PAT`). Secret values and
   personal tokens must never be committed.
@@ -513,7 +513,7 @@ See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
 |---|---|---|
 | **Discohook** | after each Reddit post, a share-link preview of the exact card is logged (keyless public API, no webhook URL ever leaves the repo; disable with `DISCOHOOK_PREVIEW=0`) | [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) |
 | **Dependabot** | weekly dependency/action checks; grouped PRs when requirements need updates; optional opt-in auto-merge (`AUTO_MERGE_DEPENDABOT=yes`) | [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) |
-| **Python runtime** | CPython pinned to exact stable **3.14.8**; patch bumps may auto-merge only with `AUTO_MERGE_PYTHON_BUMP=yes`, new minor series require manual review, major versions require manual migration | [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) |
+| **Python runtime** | CPython pinned to exact stable **3.14.8**; all patch/minor update PRs require attended merging, major versions require manual migration | [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) |
 | **CI** | every PR: `pip install` + `compileall` + smoke suite + Reddit signal suite + X media suite | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) |
 
 ---

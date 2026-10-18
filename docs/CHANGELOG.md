@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — attended workflow updates (2026-10-18)
+
+- Keep eligible package-only Dependabot auto-merge; require attended merges for
+  workflow-path updates, including renamed/deleted files. Fetch all PR file pages.
+- Continue Python detection/validation/publication but remove Python auto-merging;
+  the legacy AUTO_MERGE_PYTHON_BUMP variable is no longer consulted.
+- Preserve News exact pins, current validation and new-minor soak period.
+- GitHub security approval can still be required; check real live execution
+  after an attended update. No posting/state/scheduler or dependency-range change.
+
 ## Unreleased — application-only scope (2026-10-17)
 
 - Improve existing summary output in place; no new reporting module or runtime
