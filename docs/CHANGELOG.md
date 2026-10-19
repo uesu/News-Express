@@ -38,6 +38,12 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-19 — Table/continuation documentation housekeeping.**
+  Align README, `.env.example` comments and the CI guide with the merged generic
+  HTML/Markdown table renderer and removal of generated continuation labels.
+  Keep supported-shape limitations explicit. No runtime, workflow, settings,
+  cache, schedule or delivery changes; no new Variable or live test required.
+
 * **2026-10-19 — Remove generated Reddit continuation labels.**
 
   Follow-up body messages now start directly with the remaining source text,
