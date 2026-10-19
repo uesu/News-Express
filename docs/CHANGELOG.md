@@ -38,6 +38,29 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-19 — Remove generated Reddit continuation labels.**
+
+  Follow-up body messages now start directly with the remaining source text,
+  without the bot-added `(continued)` heading or a leading newline. Keep
+  the same accent, message count cap, 3800-character component limit,
+  safe Markdown splitting and overflow tail. Source-authored wording is
+  unchanged. Future deliveries only; no edits or reposts of existing messages.
+
+* **2026-10-19 — Reddit HTML table preservation (future posts).**
+
+  Run #8358 delivered WutheringWavesLeaks `1x9geq7`, but its RSS HTML
+  table became a flat list before the Markdown-only formatter could run.
+  Preserve innermost rectangular HTML tables with TH headers before tag
+  stripping and render them as bold row headings plus `- Column: value`
+  bullets, using the same formatter as Markdown tables across subreddits.
+  Decode entities, preserve literal dates, wording, links and pipes; leave
+  unsupported spans, layout tables and malformed widths to existing cleanup
+  rather than infer missing structure. No network, gates, state, media,
+  continuation limits or historical messages are changed. Regression input
+  for `1x9geq7` is a screenshot transcription, not a fetched raw capture.
+  Deploy the engine file after review; do not reset or replace production
+  caches. Already-flattened upstream text cannot safely be reconstructed.
+
 * **2026-10-15 — Round 76: the runner-clean head + the xcopy.uk verdict.**
   `xcopy.uk`'s round-75 seat-3 trial ended with a measured runner refusal:
   Game-Express's first four post-merge runs (#2662–#2665, 2026-10-14
