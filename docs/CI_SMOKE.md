@@ -1,5 +1,19 @@
 # 🧪 CI + smoke test — full explanation (optional or required?)
 
+## Reddit table and continuation regressions
+
+The same `tests/test_smoke.py` guards HTML-table preservation before RSS cleanup,
+parity with Markdown row blocks, bold row headings, literal dates/unknown wording,
+entity decoding, links and pipes, nested layout wrappers, sibling tables and
+conservative fallback for spans/malformed shapes. The `1x9geq7` example is a
+transcription from supplied screenshots, not a raw archive/API capture.
+
+Continuations start with the remaining source text, without a generated
+`(continued)` label or extra leading newline; source-authored wording is preserved.
+The existing message cap, 3800-character component budget, accent and overflow
+handling remain. These checks are offline, not a live-post certification.
+No cache reset, workflow edit or new configuration switch is required.
+
 ## Crosspost and summary regressions
 
 The existing `tests/test_smoke.py` includes crosspost/media cases and executes the

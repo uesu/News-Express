@@ -84,7 +84,7 @@ flowchart LR
 | **Video** | video posts show the **video only** (never a duplicate first-frame); quality-aware resolver — EmbedEZ 1080p when it validates, vxreddit as the reliable base, durable `v.redd.it` DASH as the floor — **never a silent video**, and signed/expiring URLs are never card media (see [video quality](docs/REDDIT_VIDEO_QUALITY.md)) |
 | **YouTube** | thumbnail + animated `starwardspark3` button; optional real playback with `YOUTUBE_MEDIA_EMBED=1` |
 | **Body text** | clean markdown body (links stay clickable, spoilers → Discord spoilers, empty-blockquote artifacts dropped, entities unescaped exactly once on every path) |
-| **Readable tables** | Markdown tables become compact, grouped row blocks — a `Patch 3.7` label plus `- Column: value` bullets, entities decoded, FAQ/section spacing preserved — because Discord renders no table markdown; malformed tables and ordinary prose containing a pipe stay byte-identical |
+| **Readable tables** | Valid Markdown pipe tables and rectangular HTML tables with TH headers become grouped row blocks: a bold first-column heading (for example **Patch 3.7**) and `- Column: value` bullets. Headers and wording are generic across subreddits; entities are decoded. HTML cell boundaries are preserved before RSS tag stripping. Merged-cell/malformed HTML tables retain existing cleanup; already-flattened text is not reconstructed. Ordinary pipe prose is not treated as a table |
 | **Proxy-video cold-start heal** | Video cards inspect Discord's returned media metadata; non-native video tiles queue only for a non-positive dimension or a Discord `proxy_url` with incomplete video metadata. Sparse responses without a proxy attempt remain unknown, and every candidate is revalidated before at most one same-message edit. Initially healthy videos receive no repair work; ordinary posts and native media never enter the repair path (see [Round 72](docs/history/ROUND_72.md) and [Round 74](docs/history/ROUND_74.md)) |
 | **Feeds** | one **combined RSS request** for all subreddits (fits Reddit's ~1 req/min datacenter limit) with automatic per-subreddit fallback; the optional `REDDIT_FEED_TOKEN` moves requests to the logged-in tier |
 | **FULL MODE** | with an optional Reddit script app: 💬/👍 stats, the OP's stickied comment, and true crosspost embeds |
@@ -203,13 +203,41 @@ Webhook → Copy URL.*
 what you need from the [Configuration](#-configuration) tables: `ACCOUNTS`,
 one `WEBHOOK_<ACCOUNT>` per X account, `SUBREDDITS`, one
 `WEBHOOK_REDDIT_<SUB>` per subreddit, plus the recommended
-`REDDIT_FEED_TOKEN` and optional `DISCORD_WEBHOOK_URL` fallback.
+`REDDIT_FEED_TOKEN`, optional `NITTER_RSS_TOKEN` and optional `DISCORD_WEBHOOK_URL`
+fallback. Create these separately on the production repository that runs each monitor;
+News-Express is the development home, not an additional live instance.
 
-### Step 3 — Reset the caches for a fresh start
+**Python maintenance, if installed on that repository:** add `BUMP_PAT` as an Actions
+**Secret**, not a Variable. Grant repository access plus Contents, Pull requests and
+Workflows write permissions appropriate to the token type; see
+[Python runtime setup](docs/PYTHON_RUNTIME.md#attended-merge-policy-and-authentication).
+A runtime-only production repository without the bump workflow does not need this secret.
+Do not confuse it with the cron-job.org dispatch token. GitHub supplies `GITHUB_TOKEN`
+automatically; do not copy it into settings.
 
-Set `posted_tweets.json` and `posted_reddit.json` to just `[]`. On the first
-run the bots post only the **single newest item** per account/subreddit (by
-design — no channel flooding).
+**Actions Variables:** defaults are listed in [Configuration](#-configuration). Configure
+only intentional overrides. Maintenance options: `PYTHON_BUMP_SOAK_DAYS=30` (default;
+new minor series only) and optional `AUTO_MERGE_DEPENDABOT=yes` for eligible package-only
+PRs. Workflow-path updates and all Python updates require attended review/merge.
+`AUTO_MERGE_PYTHON_BUMP` is legacy/ignored: remove an old Variable, do not recreate it.
+Runtime switches such as `REDDIT_VIDEO_QUALITY`, proxy/video healing, freshness/listing
+checks, cache caps and X media healing stay optional; use their documented defaults.
+The existing News workflows wire specific names, not Game-Express's JSON settings import;
+adding a new application option may need workflow wiring. Never put webhook/token values
+in Variables, Markdown, or tracked `.env` files.
+
+### Step 3 — Preserve state, or initialize a genuinely fresh installation
+
+For existing production repositories or a migration, **do not reset caches**. Pause the
+old scheduler, let its running job finish and persist caches, then retain the freshest
+`posted_tweets.json`, `posted_reddit.json`, `pending_reddit.json`, `proxy_health.json`
+and `posted_messages.json` where present. Keep each live repository's own state on later
+code uploads; development and production do not coordinate dedup state automatically.
+
+Only for a genuinely new installation with no delivery history, initialize its dedup
+files as `[]`. The initial empty-cache path posts the newest item per account/subreddit;
+this is not Game-Express's silent seeding behavior. Never empty existing production
+state to test a formatting change. Leave manual test IDs unset on routine scheduled runs.
 
 ### Step 4 — Reliable 10-minute automation (external trigger)
 

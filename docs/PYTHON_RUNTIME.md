@@ -152,7 +152,12 @@ Detection, the existing new-minor soak, candidate validation and PR creation rem
 automatic. Major migrations remain manual work. This does not approve or bypass a
 GitHub workflow-security hold; confirm the next real run after a live update.
 
-BUMP_PAT remains an Actions secret for checkout and PR publication. Never commit
+BUMP_PAT remains an Actions secret for checkout and PR publication. Create it on each
+repository that installs the Python bump workflow, with repository access plus Contents,
+Pull requests and Workflows write permissions appropriate to its token type and repository
+policy. It is not an Actions Variable or the cron-job.org dispatch token. Runtime-only
+production without that workflow does not require it. `GITHUB_TOKEN` is supplied by GitHub,
+not copied from a different repository. Never commit
 or print its value. Missing/invalid credentials fail safely; there is no direct
 push-to-main fallback. Existing settings and branch protections still apply.
 
