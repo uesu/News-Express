@@ -38,6 +38,16 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-20 — Plain-text profile crosspost attribution.**
+
+  The `🔁 Crosspost of u/<name> Profile` line for profile crossposts
+  (`/user/`, `/u/`, `/r/u_<name>/` permalinks) is now plain text — the
+  user-profile Markdown hyperlink is removed from this branch only. The
+  username and `Profile` wording stay; subreddit crosspost links, Read Post
+  destinations, crosspost resolution, source selection, media, statistics
+  and delivery/rate-limit behavior are unchanged. Future deliveries only —
+  no edits to already-posted Discord messages and no state reset.
+
 * **2026-10-19 — Table/continuation documentation housekeeping.**
   Align README, `.env.example` comments and the CI guide with the merged generic
   HTML/Markdown table renderer and removal of generated continuation labels.
