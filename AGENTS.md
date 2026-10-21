@@ -200,23 +200,31 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   completion (`completed` true only after required work including persistence;
   `normal`/`no-candidate`/`dry-run` completed vs `failed`/`interrupted`
   incomplete; not by JSON write/finally), local persistence
-  (`unchanged`/`saved`/`failed`/`not-reached`/`skipped_dry_run`) and
-  repository persistence (same set, observed commit/push, dry-run explicit;
-  local save ≠ repo push) are distinguished; preparation/staging/commit/
-  recovery/push failures all report `failed` (only never-started is
-  `not-reached`); error messages are sanitized (webhook/token/Auth redaction,
-  bounded 500 chars, preserves operation/type/category) and do not leak
-  secrets in JSON/summary/logs; provider diagnostics are retained locally
-  without extra network calls: proxy warmup (available/unavailable),
-  video quality mode (`balanced` default, `highest`/`compatibility`),
-  selected card-media provider per post, accepted optional quality upgrades
-  (Embedez 1080p validated), failed optional quality candidates/base-retention
-  fallbacks with reason (distinct from feed fallback); neither warmup nor
-  successful video validation proves audio inclusion; zero deliveries is not
-  a failure; missing data is reported as `unavailable`/`not-reached`; the
-  real workflow persistence shell is syntax-checked with `bash -n` and mocked
-  for unchanged/saved/recovered/failed/CACHE_RESULT in tests (no copied
-  test-only shell).
+  (`unchanged`/`saved`/`failed`/`not-reached`/`skipped_dry_run`, entered
+  defaults to `failed`, confirmed no-change `unchanged`, confirmed
+  successful `saved`, never-ran `not-reached`) and repository persistence
+  (same set, observed commit/push, dry-run explicit; local save ≠ repo push)
+  are distinguished; preparation/copying/recovery-reset/staging/commit/push
+  failures all report `failed` (only never-started is `not-reached`) and are
+  covered in tests of the actual workflow shell (`bash -n` + mock
+  `unchanged`/`saved`/`recovered`/`failed`); error messages are sanitized
+  (webhook/token/Auth redaction, bounded 500 chars, preserves
+  operation/type/category) and do not leak secrets in JSON/summary/logs;
+  provider diagnostics are retained locally without extra network calls and
+  reported separately when observed: proxy warmup
+  (available/unavailable with service map), video quality mode (`balanced`
+  default, `highest`/`compatibility`), media resolved via provider, final
+  media endpoint/hosting category, final card media kind and tile count,
+  optional quality candidate result, whether validated base was retained,
+  terminal media fallback (proxy→native, distinct from feed and quality
+  fallback), heal queued/edit-performed/skipped-after-revalidation; neither
+  warmup, HTTP validation, player controls nor “chain complete” proves audio
+  inclusion and Embeddit remains video-only; zero deliveries is not a failure;
+  missing data is `unavailable`/`not-reached`; production baselines #8982
+  (`1xbbdbs` video retained after EmbedEZ failure, #1 video tile, 3 buttons),
+  #8988 (`1xbby22` vxReddit image retained after Redlib enrichment failure)
+  and #8989 (`1xbc1mn` vxReddit 720p retained after EmbedEZ, heal skipped
+  after revalidation) are recorded as successful, not defects.
 - `MEDIA_HEAL_SCOPE` — `video` (default) | `on`/`all` | `off` (round 56/56b).
 - `RETRACT_DEAD_POSTS` — default OFF; `1` enables dead-post tombstoning
   (round 44; requires two independent proofs before touching a message).

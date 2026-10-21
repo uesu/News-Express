@@ -439,6 +439,17 @@ def _init_run_stats():
         "quality_fallbacks": 0,
         "quality_fallback_reasons": {},
         "media_provider_counts": {},
+        # Required diagnostic distinctions (when actually observed)
+        "media_resolved_via_provider": {},
+        "final_media_endpoint_category": {},
+        "final_card_media_kind_counts": {},
+        "final_card_media_tile_total": 0,
+        "optional_quality_candidate_result": {},  # accepted/fallback counts
+        "validated_base_retained": 0,
+        "terminal_media_fallbacks": 0,
+        "heal_queued": 0,
+        "heal_edit_performed": 0,
+        "heal_skipped_after_revalidation": 0,
     }
 
 def _inc_reason(counter_dict, reason, amount=1):
@@ -3568,6 +3579,8 @@ async def proxy_video_quality_upgrade(session: aiohttp.ClientSession, vid: str |
                 current_run_stats["quality_fallbacks"] = current_run_stats.get("quality_fallbacks", 0) + 1
                 reason = "quality_candidate_unavailable"
                 current_run_stats["quality_fallback_reasons"][reason] = current_run_stats["quality_fallback_reasons"].get(reason, 0) + 1
+                current_run_stats["optional_quality_candidate_result"]["fallback_unavailable"] = current_run_stats["optional_quality_candidate_result"].get("fallback_unavailable", 0) + 1
+                current_run_stats["validated_base_retained"] = current_run_stats.get("validated_base_retained", 0) + 1
         except Exception:
             pass
         return base_url
@@ -3587,6 +3600,7 @@ async def proxy_video_quality_upgrade(session: aiohttp.ClientSession, vid: str |
         try:
             if isinstance(current_run_stats, dict):
                 current_run_stats["quality_upgrades_accepted"] = current_run_stats.get("quality_upgrades_accepted", 0) + 1
+                current_run_stats["optional_quality_candidate_result"]["accepted"] = current_run_stats["optional_quality_candidate_result"].get("accepted", 0) + 1
         except Exception:
             pass
         return quality["url"]
@@ -3598,6 +3612,8 @@ async def proxy_video_quality_upgrade(session: aiohttp.ClientSession, vid: str |
             current_run_stats["quality_fallbacks"] = current_run_stats.get("quality_fallbacks", 0) + 1
             reason = "quality_candidate_not_superior_or_unvalidated"
             current_run_stats["quality_fallback_reasons"][reason] = current_run_stats["quality_fallback_reasons"].get(reason, 0) + 1
+            current_run_stats["optional_quality_candidate_result"]["fallback_not_superior"] = current_run_stats["optional_quality_candidate_result"].get("fallback_not_superior", 0) + 1
+            current_run_stats["validated_base_retained"] = current_run_stats.get("validated_base_retained", 0) + 1
     except Exception:
         pass
     return base_url
@@ -4420,19 +4436,57 @@ def _log_media_outcome(label: str, media: list, *, fallback_reason: str | None =
     kinds = [x.get("kind") for x in media if isinstance(x, dict)]
     kind = kinds[0] if kinds else "none"
     provider = "none"
+    endpoint = "none"
     for item in media:
         if isinstance(item, dict) and item.get("url"):
             provider = _provider_for_url(item["url"]) or "unknown"
+            # Final endpoint/hosting category (host-based)
+            try:
+                import urllib.parse as _up
+                host = _up.urlparse(str(item["url"])).netloc.lower()
+                if host:
+                    endpoint = host
+                    # Normalize known categories for readability
+                    if "v.redd.it" in host:
+                        endpoint = "v.redd.it"
+                    elif "i.redd.it" in host:
+                        endpoint = "i.redd.it"
+                    elif "vxreddit" in host:
+                        endpoint = "vxreddit"
+                    elif "embedez" in host or "redditez" in host:
+                        endpoint = "embedez"
+                    elif "embeddit" in host:
+                        endpoint = "embeddit"
+                    elif "preview.redd.it" in host:
+                        endpoint = "preview.redd.it"
+                else:
+                    endpoint = provider
+            except Exception:
+                endpoint = provider
             break
     logging.info(
         f"[{label or 'media'}] media-outcome kind={kind} provider={provider} "
         f"fallback={fallback_reason or 'none'}")
-    # Track for summary (existing observation only)
+    # Track for summary (existing observation only, no extra network)
     try:
         if isinstance(current_run_stats, dict):
             prov = provider or "none"
             current_run_stats["selected_media_providers"][prov] = current_run_stats["selected_media_providers"].get(prov, 0) + 1
             current_run_stats["media_provider_counts"][prov] = current_run_stats["media_provider_counts"].get(prov, 0) + 1
+            # Final media endpoint/hosting category
+            ep = endpoint or prov
+            current_run_stats["final_media_endpoint_category"][ep] = current_run_stats["final_media_endpoint_category"].get(ep, 0) + 1
+            # Final card media kind and tile count
+            k = kind or "none"
+            current_run_stats["final_card_media_kind_counts"][k] = current_run_stats["final_card_media_kind_counts"].get(k, 0) + 1
+            current_run_stats["final_card_media_tile_total"] += len(media) if isinstance(media, list) else 0
+            # Terminal media fallback (proxy -> native) when fallback_reason indicates native fallback
+            if fallback_reason and "native" in fallback_reason.lower() or (fallback_reason == "none" and False):
+                pass  # handled in resolve_post_media directly
+            if fallback_reason and fallback_reason not in ("none", None):
+                # If fallback is terminal (e.g., no usable proxy), count centrally via resolve path
+                # We track terminal fallbacks explicitly in resolve_post_media fallback branch
+                pass
     except Exception:
         pass
 
@@ -4717,11 +4771,22 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
                 proxy_media_used = True
                 logging.info(f"[{label or 'proxy'}] card media via "
                              f"{_provider_for_url(proxy_video['url'])} — 1 video tile.")
+                try:
+                    if isinstance(current_run_stats, dict):
+                        via = str(proxy.get("service") or _provider_for_url(proxy_video['url']) or "unknown")
+                        current_run_stats["media_resolved_via_provider"][via] = current_run_stats["media_resolved_via_provider"].get(via, 0) + 1
+                except Exception:
+                    pass
             elif has_video:
                 # Stills are not an eligible fallback for a video post.
                 _use_proxy_text()
                 logging.info(f"[{label or 'proxy'}] proxy returned stills for a video "
                              f"post — native video chain will run.")
+                try:
+                    if isinstance(current_run_stats, dict):
+                        current_run_stats["terminal_media_fallbacks"] = current_run_stats.get("terminal_media_fallbacks", 0) + 1
+                except Exception:
+                    pass
             elif (not video_dead and not arctic_is_video and redlib_items
                   and any(x["kind"] == "video" for x in redlib_items)):
                 # round 38c: a redlib gallery WITH a video item is the most
@@ -4732,11 +4797,21 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
                 proxy_media_used = True
                 logging.info(f"[{label or 'proxy'}] card media via redlib harvest "
                              f"(gallery video) — {len(media)} item(s).")
+                try:
+                    if isinstance(current_run_stats, dict):
+                        current_run_stats["media_resolved_via_provider"]["redlib"] = current_run_stats["media_resolved_via_provider"].get("redlib", 0) + 1
+                except Exception:
+                    pass
             elif (not video_dead and not arctic_is_video and arctic_items
                   and len(arctic_items) >= max(1, len(proxy_images))):
                 media = [dict(item) for item in arctic_items]
                 _use_proxy_text()
                 proxy_media_used = True
+                try:
+                    if isinstance(current_run_stats, dict):
+                        current_run_stats["media_resolved_via_provider"]["arctic"] = current_run_stats["media_resolved_via_provider"].get("arctic", 0) + 1
+                except Exception:
+                    pass
             elif (not video_dead and not arctic_is_video and redlib_items
                   and len(redlib_items) >= max(1, len(proxy_images))):
                 # image post: the COMPLETE ordered gallery from the redlib
@@ -4749,17 +4824,33 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
                 logging.info(f"[{label or 'proxy'}] card media via redlib harvest "
                              f"— {len(media)} item(s) (body/stats via "
                              f"{proxy['service']}).")
+                try:
+                    if isinstance(current_run_stats, dict):
+                        current_run_stats["media_resolved_via_provider"]["redlib"] = current_run_stats["media_resolved_via_provider"].get("redlib", 0) + 1
+                except Exception:
+                    pass
             elif not video_dead and not arctic_is_video and proxy_images:
                 media = proxy_images
                 _use_proxy_text()
                 proxy_media_used = True
                 logging.info(f"[{label or 'proxy'}] card media via {proxy['service']} "
                              f"— {len(media)} item(s).")
+                try:
+                    if isinstance(current_run_stats, dict):
+                        via = str(proxy.get("service") or "unknown")
+                        current_run_stats["media_resolved_via_provider"][via] = current_run_stats["media_resolved_via_provider"].get(via, 0) + 1
+                except Exception:
+                    pass
             else:
                 # no usable proxy media (a dead proxy video counts too — the
                 # native DASH chain has audio)
                 logging.info(f"[{label or 'proxy'}] no usable proxy media — "
                              f"falling back to the native RSS path.")
+                try:
+                    if isinstance(current_run_stats, dict):
+                        current_run_stats["terminal_media_fallbacks"] = current_run_stats.get("terminal_media_fallbacks", 0) + 1
+                except Exception:
+                    pass
         # round 14: redditez og pages often lack the stats line (they live in
         # the oembed, not the og tags) — backfill from the Embeddit JSON
         # (one extra request, ~1 s, not bot-gated)
@@ -5271,12 +5362,22 @@ async def heal_proxy_video_message(session, webhook_url: str, message_id: str,
             if check_resp.status != 200:
                 logging.info(f"[{label}] proxy-video media heal skipped: "
                              f"revalidation HTTP {check_resp.status}")
+                try:
+                    if isinstance(current_run_stats, dict):
+                        current_run_stats["heal_skipped_after_revalidation"] = current_run_stats.get("heal_skipped_after_revalidation", 0) + 1
+                except Exception:
+                    pass
                 return False
             try:
                 current = await check_resp.json(content_type=None)
             except Exception:
                 logging.info(f"[{label}] proxy-video media heal skipped: "
                              "revalidation response was not JSON")
+                try:
+                    if isinstance(current_run_stats, dict):
+                        current_run_stats["heal_skipped_after_revalidation"] = current_run_stats.get("heal_skipped_after_revalidation", 0) + 1
+                except Exception:
+                    pass
                 return False
         still_unresolved = [url for url in unresolved_reddit_video_items(current)
                             if url.strip() in expected_urls]
@@ -5284,6 +5385,11 @@ async def heal_proxy_video_message(session, webhook_url: str, message_id: str,
             logging.info(f"[{label}] proxy-video media heal skipped after "
                          f"{PROXY_VIDEO_HEAL_DELAY}s revalidation: the queued "
                          "video is no longer explicitly unresolved")
+            try:
+                if isinstance(current_run_stats, dict):
+                    current_run_stats["heal_skipped_after_revalidation"] = current_run_stats.get("heal_skipped_after_revalidation", 0) + 1
+            except Exception:
+                pass
             return False
 
         async with session.patch(
@@ -5293,6 +5399,11 @@ async def heal_proxy_video_message(session, webhook_url: str, message_id: str,
             if resp.status in (200, 204):
                 logging.info(f"[{label}] proxy-video media heal edit succeeded "
                              f"after {PROXY_VIDEO_HEAL_DELAY}s revalidation")
+                try:
+                    if isinstance(current_run_stats, dict):
+                        current_run_stats["heal_edit_performed"] = current_run_stats.get("heal_edit_performed", 0) + 1
+                except Exception:
+                    pass
                 return True
             logging.warning(f"[{label}] proxy-video media heal edit HTTP {resp.status}: "
                             f"{(await resp.text())[:200]}")
@@ -6174,6 +6285,11 @@ async def main():
                                              f"returned {len(unresolved)} video item(s) with "
                                              "unresolved-media evidence; the edit is "
                                              "revalidated before it is sent.")
+                                try:
+                                    if isinstance(current_run_stats, dict):
+                                        current_run_stats["heal_queued"] = current_run_stats.get("heal_queued", 0) + 1
+                                except Exception:
+                                    pass
                             await asyncio.sleep(1.5)
                         else:
                             body = await resp.text()
