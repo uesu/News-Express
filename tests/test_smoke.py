@@ -7635,16 +7635,23 @@ def _r21_test_new_diagnostics_summary():
     check("r21: new diagnostics - empty run shows none not zero for provider", "Media resolved via provider: none" in s2 or "Final card media: none" in s2, s2[:1000])
     # Production baselines should be preserved as successful: verify our summary does not claim failure for these patterns
     # #8982 1xbbdbs: direct video retained after EmbedEZ failure -> quality fallback + validated base retained, delivered 1, saved
-    # #8988 1xbby22: vxReddit image retained despite Redlib enrichment failure -> terminal fallback + media resolved via vxreddit
+    # #8988 1xbby22: vxReddit image retained despite optional Redlib enrichment failure; selected image retained; no demonstrated terminal proxy-to-native fallback; media resolved via vxreddit
     # #8989 1xbc1mn: vxReddit 720p retained after EmbedEZ + heal skipped -> quality fallback + heal skipped
 
     # Distinct baseline scenarios: do not use one synthetic summary as proxy for all three production runs
     # #8982 / 1xbbdbs : quality_candidate_unavailable (HTTP 400), validated base retained, push 8ace078, delivered, saved
-    check("r21: baseline #8982 - delivered count", "Delivered posts: 1" in s, s[:1000])
-    check("r21: baseline #8982 - repo persistence saved", "Repository persistence:" in s and "saved" in s, s[:1000])
-    check("r21: baseline #8982 - validated base retained", "Validated base retained: 1" in s, s[:1000])
-    check("r21: baseline #8982 - quality fallback reason unavailable", "fallback_unavailable" in s or "quality_candidate_unavailable" in s, s[:1000])
-    check("r21: baseline #8982 - no terminal fallback misattributed", "Terminal media fallback" not in s or "quality" in s.lower(), s[:1000])
+    # Explicit expected data for #8982: quality fallback, no terminal fallback — summary must reflect exactly
+    expected_8982_has_terminal = False  # quality fallback is not terminal proxy→native
+    expected_8982_has_quality = True
+    # Use explicit synthetic for #8982 that matches quality fallback without terminal
+    fake_8982_explicit = dict(fake, **{"terminal_media_fallbacks": 0, "quality_fallbacks": 1, "quality_fallback_reasons": {"quality_candidate_unavailable": 1}, "validated_base_retained": 1, "optional_quality_candidate_result": {"fallback_unavailable": 1}})
+    s_8982 = _r21_summary_with_data(fake_8982_explicit)
+    check("r21: baseline #8982 - delivered count", "Delivered posts: 1" in s_8982, s_8982[:1000])
+    check("r21: baseline #8982 - repo persistence saved", "Repository persistence:" in s_8982 and "saved" in s_8982, s_8982[:1000])
+    check("r21: baseline #8982 - validated base retained", "Validated base retained: 1" in s_8982, s_8982[:1000])
+    check("r21: baseline #8982 - quality fallback reason unavailable", "fallback_unavailable" in s_8982 or "quality_candidate_unavailable" in s_8982, s_8982[:1000])
+    check("r21: baseline #8982 - no terminal fallback misattributed", ("Terminal media fallback" in s_8982) == expected_8982_has_terminal, s_8982[:1000])
+    check("r21: baseline #8982 - quality fallback reported", ("Quality fallbacks" in s_8982 or "quality_candidate_unavailable" in s_8982 or "fallback_unavailable" in s_8982) == expected_8982_has_quality, s_8982[:1000])
     # #8988 / 1xbby22 : vxReddit image retained after Redlib enrichment failure, NOT terminal fallback, push caa7421
     fake_8988 = dict(fake, **{"media_resolved_via_provider": {"vxreddit": 1}, "final_media_endpoint_category": {"i.redd.it": 1}, "terminal_media_fallbacks": 0, "quality_fallbacks": 0})
     s_8988 = _r21_summary_with_data(fake_8988)
@@ -7766,12 +7773,59 @@ async def _r21_test_mocked_impl_quality_retains_base():
                   },
            "env":{"DISCORD_WEBHOOK_URL":"https://discord.test/webhook","WEBHOOK_REDDIT_TESTSUB":"https://discord.test/webhook"},
            "cache_result":"saved"}
+    # Full-engine fixture that actually reaches quality path: capture candidate calls and payload
+    candidate_calls = []
+    captured_payloads = []
+    orig_extract_vid = getattr(v3, "extract_vreddit_id_from_media_url", None)
+    def _mock_extract_vid(url):
+        if url == base_url:
+            return vid
+        if orig_extract_vid:
+            return orig_extract_vid(url)
+        return None
+    v3.extract_vreddit_id_from_media_url = _mock_extract_vid
+    async def _mock_video_candidate_full_tracked(session, url, timeout=10, quality_hint=None, label=""):
+        candidate_calls.append({"url": url, "label": label, "hint": quality_hint})
+        if "embedez" in label.lower() or "embedez" in url.lower() or "cmaf" in url.lower():
+            return None
+        if orig_video_candidate2:
+            return await orig_video_candidate2(session, url, timeout=timeout, quality_hint=quality_hint, label=label)
+        return None
+    v3.video_candidate = _mock_video_candidate_full_tracked
+    v3.probe_video_facts = _mock_probe_full
+    # Capture payload to assert exact base-media URL retained
+    orig_create_capture = v3.create_discohook_share if hasattr(v3, "create_discohook_share") else None
+    async def _mock_create_capture(session, payload, label):
+        captured_payloads.append(payload)
+        # Extract media URLs from payload if present (Components V2)
+        return {"id":"123","components":[]}
+    # Replace create_discohook_share in mocks to capture
+    mocks["set"]["create_discohook_share"] = lambda s,p,l: __import__("asyncio").sleep(0, result=_mock_create_capture(s,p,l)) if False else __import__("asyncio").sleep(0, result={"id":"123","components":[]})
+    # Instead, we will manually patch after _r21_run_and_capture setup: override mocks set for this run by patching v3.create_discohook_share directly before run
+    # To achieve capture, patch v3.create_discohook_share before calling _r21_run_and_capture
+    orig_create_global = getattr(v3, "create_discohook_share", None)
+    v3.create_discohook_share = _mock_create_capture
+    # Also need to mock fetch_arctic to provide vred_id via discover_original if needed - but extract mock above suffices
     try:
         data, summary, logs, exc2 = await _r21_run_and_capture("quality_retains_base_full", mocks)
-        check("r21: quality full-run retains base", data.get("delivered")==1, f"data:{data} logs:{logs[:500]}")  # full-run vid extraction may be None for vxreddit base; unit test above verifies fallback counts
-        check("r21: quality full-run fallback unavailable", data.get("quality_fallback_reasons",{}).get("quality_candidate_unavailable",0)>=1 or data.get("delivered")==1, str(data))  # fallback may be 0 if vid None, but delivery retained
+        # Assert candidate dependency was called (quality path reached)
+        check("r21: quality candidate dependency was called", len([c for c in candidate_calls if "embedez" in c["label"].lower()]) >=1 or len(candidate_calls)>=1, f"calls:{candidate_calls}")
+        # Assert exact base-media URL retained in outgoing payload (not replaced by failed candidate)
+        # Payload may be in captured_payloads via direct patch, or fallback to data's media if not captured
+        payload_has_base = False
+        for pl in captured_payloads:
+            if base_url in str(pl):
+                payload_has_base = True
+        # If no payload captured via direct patch (due to mocks override), check that data indicates base retained via counters
+        check("r21: quality full-run retains base", data.get("validated_base_retained",0)>=1 and data.get("delivered")==1, f"data:{data} logs:{logs[:500]} calls:{candidate_calls}")
+        # Separately assert delivered, fallback reason, retained-base without alternatives
+        check("r21: quality full-run fallback unavailable", data.get("quality_fallback_reasons",{}).get("quality_candidate_unavailable",0)>=1, str(data))
+        check("r21: quality full-run retained count", data.get("validated_base_retained",0)>=1, str(data))
         check("r21: quality full-run delivers", data.get("delivered")==1, str(data))
         check("r21: quality full-run no exc", exc2 is None, str(exc2))
+        # Additional check: payload URL if captured should equal base_url
+        if captured_payloads:
+            check("r21: quality full-run payload URL unchanged", payload_has_base, f"payloads:{captured_payloads} base:{base_url}")
     finally:
         v3.fetch_proxy_post_memo = orig_fetch_proxy
         v3.media_url_ok = orig_media_ok
@@ -7780,6 +7834,8 @@ async def _r21_test_mocked_impl_quality_retains_base():
         v3.PROXY_MEDIA = orig_pm
         v3.VIDEO_QUALITY_MODE = orig_qm
         v3.reddit_proxy = orig_rp
+        v3.extract_vreddit_id_from_media_url = orig_extract_vid
+        v3.create_discohook_share = orig_create_global
 asyncio.run(_r21_test_mocked_impl_quality_retains_base())
 
 async def _r21_test_mocked_impl_enrichment_preserves_provenance():
