@@ -272,7 +272,7 @@ jobs:
           fi
           echo "CACHE_RESULT=success" >> "$GITHUB_ENV"
       # Reporting only: stable local run-result record, no network or scraping.
-      # Summary source: reddit_run_result.json (stable local record) -> GITHUB_STEP_SUMMARY via helper script; no additional network requests.
+      # Summary source: reddit_run_result.json -> GITHUB_STEP_SUMMARY (inline, no additional requests).
       - name: Write monitor run summary
         if: always()
         run: |
@@ -283,7 +283,95 @@ jobs:
           export RUNTIME
           export CACHE_RESULT
           export JOB_STATUS="${{ job.status }}"
-          python .github/scripts/render_reddit_summary.py
+          python3 - << 'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os, pathlib
+          runtime = os.environ.get("RUNTIME", "unavailable")
+          cache_result = os.environ.get("CACHE_RESULT", "unavailable")
+          job_status = os.environ.get("JOB_STATUS", "unavailable")
+          result_path = pathlib.Path("reddit_run_result.json")
+          data = {}
+          if result_path.exists():
+              try:
+                  raw = result_path.read_text(encoding="utf-8")
+                  loaded = json.loads(raw)
+                  if isinstance(loaded, dict):
+                      data = loaded
+                  else:
+                      data = {"error": "wrong_shape", "raw_type": type(loaded).__name__}
+              except Exception as e:
+                  data = {"error": f"malformed_json: {type(e).__name__}"}
+          def v(k, default="unavailable"):
+              val = data.get(k)
+              return str(val) if val is not None else default
+          def dict_str(d):
+              if not isinstance(d, dict) or not d:
+                  return "none"
+              return ", ".join(f"{k}: {v}" for k, v in sorted(d.items()))
+          print("## Reddit Feed Monitor — run summary")
+          print()
+          print(f"**Result:** {job_status}")
+          print(f"**Monitor runtime:** {runtime}")
+          print(f"**State persistence:** {cache_result}")
+          if data.get("completed") is False:
+              print(f"**Run status:** incomplete")
+              if data.get("error"):
+                  print(f"**Error:** {data.get('error')}")
+          print()
+          print("### Feed")
+          print(f"- Combined-feed entries: {v('combined_entries')}")
+          # Legacy phrasing for compatibility: Subreddits represented: X of Y
+          sub_rep = v('subreddits_represented')
+          comb_cov = v('combined_subreddits_covered')
+          cfg = v('subreddits_configured')
+          if sub_rep != "unavailable":
+              print(f"- Subreddits represented: {sub_rep} of {cfg}")
+              if comb_cov != "unavailable" and comb_cov != sub_rep:
+                  print(f"- Combined subreddits covered: {comb_cov} of {cfg} configured")
+          else:
+              print(f"- Combined subreddits covered: {comb_cov} of {cfg} configured")
+          print(f"- Combined fetch status: {v('combined_fetch_status')}")
+          if data.get('fallback_status') and data.get('fallback_status') != "not_attempted":
+              print(f"- Fallback status: {v('fallback_status')}")
+              print(f"- Fallback entries: {v('fallback_entries')}")
+              print(f"- Fallback subreddits covered: {v('fallback_subreddits_covered')}")
+          if data.get('arctic_candidates') is not None:
+              print(f"- Arctic candidates: {v('arctic_candidates')}")
+          print(f"- Unposted candidates considered: {v('unposted_candidates_considered')}")
+          print(f"- Candidates entering processing: {v('candidates_entering_processing')}")
+          print(f"- Delivered posts: {v('delivered')}")
+          if 'dry_run_would_deliver' in data:
+              print(f"- Dry-run would-deliver: {v('dry_run_would_deliver')}")
+          print(f"- Failed deliveries: {v('failed_delivery')}")
+          print()
+          print("### Skipped and deferred")
+          print(f"- Known-rejected archive candidates: {v('known_pending_suppressed')}")
+          if data.get('known_pending_by_reason'):
+              print(f"  - by reason: {dict_str(data.get('known_pending_by_reason'))}")
+          print(f"- Retry backoff: {v('retry_backoff')}")
+          if data.get('retry_backoff_by_reason'):
+              print(f"  - by reason: {dict_str(data.get('retry_backoff_by_reason'))}")
+          print(f"- Fresh-age hold: {v('fresh_hold')}")
+          print(f"- Newly rejected removed/deleted: {v('newly_rejected_removed')}")
+          if data.get('newly_rejected_by_reason'):
+              print(f"  - by reason: {dict_str(data.get('newly_rejected_by_reason'))}")
+          print(f"- Liveness not verified: {v('liveness_not_verified')}")
+          if data.get('liveness_by_reason'):
+              print(f"  - by reason: {dict_str(data.get('liveness_by_reason'))}")
+          print(f"- Media-wait: {v('media_wait')}")
+          print(f"- Partial-gallery: {v('partial_gallery')}")
+          print(f"- Flood-cap dropped: {v('flood_cap_dropped')}")
+          print(f"- Dedup skipped in run: {v('dedup_skipped_in_run')}")
+          print(f"- Other skipped: {v('other_skipped')}")
+          if data.get('other_by_reason'):
+              print(f"  - by reason: {dict_str(data.get('other_by_reason'))}")
+          print()
+          print("### Providers and media")
+          print("- Warmup results: see monitor.log")
+          print("- Observed provider failures: see monitor.log; counts describe this run's local observations, not a health audit")
+          print()
+          print("Counts describe this run's local observations, not an independent subreddit-visibility or end-to-end health audit.")
+          print("Summary source: reddit_run_result.json (per-run, ignored) + monitor.log for provider diagnostics; no additional network requests.")
+          PY
         env:
           CACHE_RESULT: ${{ env.CACHE_RESULT }}
           JOB_STATUS: ${{ job.status }}
