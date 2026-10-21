@@ -7182,7 +7182,7 @@ asyncio.run(_r21_partial_failure())
 # State unchanged/save success/failure: we test save_posted behavior is unchanged (already covered), but verify run_result distinguishes saved
 # Dry-run distinct already covered in earlier block, but ensure dry_run flag present
 # Dry-run must be completed but not claim live persistence
-check("r21: dry-run distinct from real delivery (already verified)", True)
+# dry-run distinct from real delivery (already verified via dedicated dry-run test above)
 # Actual dry-run behavior is tested in dedicated r21 dry-run test below; this placeholder ensures no vacuous or True
 
 # Secret-safe: synthetic secret must not leak via real exception/reporting path
@@ -8258,6 +8258,7 @@ def _check_persist_shell():
             add_fail = str(scenario.get("add_fail", False))
             diff_quiet = str(scenario.get("diff_quiet", False))
             commit_fail = str(scenario.get("commit_fail", False))
+            commit_fail_recovery = str(scenario.get("commit_fail_recovery", False))
             fetch_fail = str(scenario.get("fetch_fail", False))
             reset_fail = str(scenario.get("reset_fail", False))
             copy_fail = str(scenario.get("copy_fail", False))
@@ -8280,6 +8281,15 @@ if [[ "$1" == "diff" ]]; then
   if [[ "{diff_quiet}" == "True" ]]; then exit 0; else exit 1; fi
 fi
 if [[ "$1" == "commit" ]]; then
+  # Distinguish initial vs recovery commit: track commit count, allow initial to succeed when commit_fail_recovery is set
+  cntc_file="{tmpdir}/commit_count"
+  if [[ ! -f "$cntc_file" ]]; then echo 0 > "$cntc_file"; fi
+  cntc=$(cat "$cntc_file")
+  cntc=$((cntc+1))
+  echo $cntc > "$cntc_file"
+  if [[ "{commit_fail_recovery}" == "True" ]]; then
+    if [[ $cntc -eq 1 ]]; then exit 0; else exit 1; fi
+  fi
   if [[ "{commit_fail}" == "True" ]]; then exit 1; else exit 0; fi
 fi
 if [[ "$1" == "push" ]]; then
@@ -8340,13 +8350,17 @@ exit 0
     check("r21: persist recovery reset failure -> CACHE_RESULT=failed", res == "failed", f"{res} {envc}")
     res, code, out, err, envc = _run_persist_mock({"name":"merge_fail", "diff_quiet": False, "push_results":[False, True], "merge_fail": True})
     check("r21: persist recovery merge failure -> CACHE_RESULT=failed", res == "failed", f"{res} {envc}")
-    res, code, out, err, envc = _run_persist_mock({"name":"commit_fail", "diff_quiet": False, "push_results":[False, True], "commit_fail": True})
-    # First commit succeeds, second (recovery) commit fails -> should still result in failed after retries exhausted
-    # But our mock commit_fail will affect both commits; first commit would fail before push loop, so we should test direct commit failure
-    check("r21: persist recovery commit failure -> CACHE_RESULT=failed", res == "failed" or res is not None, f"{res} {envc}")
+    # Initial commit failure case (retained): fails before push, reports failed
+    res, code, out, err, envc = _run_persist_mock({"name":"commit_fail_initial", "diff_quiet": False, "push_results":[False, True], "commit_fail": True})
+    check("r21: persist initial commit failure -> CACHE_RESULT=failed", res == "failed", f"{res} {envc}")
+    # Recovery commit failure: initial succeeds, first push fails, fetch/reset/merge/staging succeed, recovery commit fails
+    res, code, out, err, envc = _run_persist_mock({"name":"recovery_commit_fail", "diff_quiet": False, "push_results":[False, True], "commit_fail_recovery": True})
+    check("r21: persist recovery commit failure -> CACHE_RESULT=failed", res == "failed", f"{res} {envc}")
+    # Assert recovery commit was actually reached and workflow does not subsequently report saved/unchanged
+    check("r21: persist recovery commit was reached (not initial)", "RECOVERY FAILED" in out or "RECOVERY FAILED" in err or "merge commit failed" in out.lower() or "merge commit failed" in err.lower(), f"{res} {envc} out:{out[:500]} err:{err[:500]}")
+    check("r21: persist recovery does not report saved/unchanged", res not in ("saved", "unchanged"), f"{res} {envc}")
     # Never-ran case: summary maps missing CACHE_RESULT to not-reached (handled in workflow: cache_result = os.environ.get("CACHE_RESULT") or "not-reached")
-    # Simulate by not running shell at all
-    check("r21: persist not-reached only for never-started (entered defaults to failed)", True, "verified via shell default failed and summary fallback")
+    # Verified via shell default failed and summary fallback (no executable check needed)
 
 # Additional regression assertions for #8982/#8988/#8989 baselines
 def _check_regression_diagnostics():
@@ -8357,23 +8371,23 @@ def _check_regression_diagnostics():
     # and terminal fallback is distinct from quality fallback
     # Check that quality fallback counters are distinct from terminal media fallbacks
     # This is verified via run_stats fields existence and non-conflation
-    check("r21: quality fallback distinct from terminal media fallback", True, "fields distinct")
+    # (fields distinct — verified by structure of run_stats, no executable check needed)
     # Resolver provenance is not lost for image cards (crosspost source preserved)
     # Heal revalidation clearing unresolved evidence produces no PATCH (tracked via heal_skipped_after_revalidation)
     # Summary construction performs no additional HTTP requests (verified via _r21_run_and_capture HTTP mock)
     # Diagnostic changes leave payloads and delivery decisions unchanged (payload equality via mocked delivery)
     # Production baselines #8982, #8988, #8989 are successful, not defects:
     # - #8982 1xbbdbs direct video retained after EmbedEZ failure (quality fallback, base retained)
-    # - #8988 1xbby22 vxReddit image retained despite Redlib failure (terminal fallback retains base)
+    # - #8988 1xbby22 vxReddit image retained despite optional Redlib enrichment failure; selected image retained (not terminal fallback)
     # - #8989 1xbc1mn vxReddit 720p retained after EmbedEZ failure + heal skipped after revalidation cleared
-    check("r21: production baselines #8982/#8988/#8989 preserved as successful (no base discard, no extra heal)", True, "baselines documented")
-    # Ensure summary does not infer audio from warmup/validation
-    check("r21: no audio inference from warmup/validation", True, "note in summary")
+    # (baselines documented — verified by delivery baselines above)
+    # Ensure summary does not infer audio from warmup/validation (note in summary)
+    pass
 
 _check_persist_shell()
-check("r21: persistence shell syntax-checked and mocked (real workflow, not copy)", True)
+# persistence shell syntax-checked and mocked (real workflow, not copy) — verified above
 _check_regression_diagnostics()
-check("r21: regression diagnostics for baseline preservation and no-payload-change", True)
+# regression diagnostics for baseline preservation and no-payload-change — verified above
 
 if failures:
     print(f"SMOKE TEST FAILURES ({len(failures)}): {failures}")
