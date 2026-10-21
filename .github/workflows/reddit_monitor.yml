@@ -125,12 +125,11 @@ jobs:
           # Media-waiting entries are re-checked every PENDING_RECHECK_SECONDS
           # (default 1800 s). Removed posts are never re-checked.
           PENDING_RECHECK_SECONDS: ${{ vars.PENDING_RECHECK_SECONDS }}
-          # Round 64 (2026-10-04; wired to the workflow in round 66):
-          # stateless delivery pipeline — FRESH_HOLD_SECONDS floors a
-          # candidate's age (default 30 s), LISTING_CONFIRM (default on)
-          # requires a pristine /new listing read before posting.
+          # Round 64 (2026-10-04; updated 2026-10-21 cleanup):
+          # stateless fresh-age hold — FRESH_HOLD_SECONDS floors a
+          # candidate's age (default 30 s). The companion pristine listing
+          # gate has been removed; no listing-confirm wiring remains.
           FRESH_HOLD_SECONDS: ${{ vars.FRESH_HOLD_SECONDS }}
-          LISTING_CONFIRM: ${{ vars.LISTING_CONFIRM }}
           # Dedup retention and per-run flood cap (round 34; all optional).
           MAX_CACHE_SIZE_PER_SUB: ${{ vars.MAX_CACHE_SIZE_PER_SUB }}
           MAX_CACHE_SIZE_TOTAL: ${{ vars.MAX_CACHE_SIZE_TOTAL }}
@@ -272,43 +271,19 @@ jobs:
             fi
           fi
           echo "CACHE_RESULT=success" >> "$GITHUB_ENV"
-
-      # Reporting only: reads the local monitor log and performs no network or cache work.
+      # Reporting only: stable local run-result record, no network or scraping.
+      # Summary source: reddit_run_result.json (stable local record) -> GITHUB_STEP_SUMMARY via helper script; no additional network requests.
       - name: Write monitor run summary
         if: always()
         run: |
-          [ -f monitor.log ] || : > monitor.log
-          count_matches() { local pattern="$1"; grep -Ec "$pattern" monitor.log 2>/dev/null || true; }
-          extract_number() { local value; value=$(grep -Eo "$1" monitor.log 2>/dev/null | grep -Eo '[0-9]+' | tail -1 || true); printf '%s\n' "${value:-unavailable}"; }
-          runtime=unavailable
+          RUNTIME=unavailable
           if [ -n "${MONITOR_START_EPOCH:-}" ] && [ -n "${MONITOR_END_EPOCH:-}" ]; then
-            runtime="$(( MONITOR_END_EPOCH - MONITOR_START_EPOCH ))s"
+            RUNTIME="$(( MONITOR_END_EPOCH - MONITOR_START_EPOCH ))s"
           fi
-          ok=$(count_matches 'proxy warm-up.*OK')
-          failed=$(count_matches 'proxy warm-up.*(DOWN|FAILED|unavailable|error)')
-          new_candidates=$(extract_number 'Found [0-9]+ new Reddit posts')
-          if grep -q 'No new Reddit posts to post\.' monitor.log; then new_candidates=0; fi
-          {
-            echo "## Reddit Feed Monitor — run summary"
-            echo
-            if [ "${{ job.status }}" = "success" ]; then echo "**Result:** success"; else echo "**Result:** failure"; fi
-            echo "**Runtime:** ${runtime}"
-            echo
-            echo "### Feed"
-            echo "- counts describe matching local log records, not an independent delivery/source-health audit"
-            echo "- entries read: $(extract_number 'Combined feed OK: [0-9]+ entries')"
-            echo "- new candidates: ${new_candidates}"
-            echo "- posts delivered: $(count_matches 'Reddit V3 Posted:')"
-            echo "- listing/retry-related log lines: $(count_matches 'skipped.*next tick|retried next tick')"
-            echo
-            echo "### Providers and videos"
-            echo "- provider/quality counts below are observed log matches, not exhaustive request or health totals"
-            echo "- proxy warmups: ${ok} OK, ${failed} failed"
-            echo "- accepted 1080p upgrades: $(count_matches 'EmbedEZ 1080p candidate accepted')"
-            echo "- quality fallback notices: $(count_matches 'retaining validated base')"
-            echo "- observed card-media provider labels: $(grep -Eo 'card media via [^ ]+' monitor.log 2>/dev/null | sort -u | tr '\n' ' ' || true)"
-            echo
-            echo "### State"
-            echo "- cache commit/push: ${CACHE_RESULT:-failed}"
-            echo "- summary source: local monitor.log only; no additional requests"
-          } >> "$GITHUB_STEP_SUMMARY"
+          export RUNTIME
+          export CACHE_RESULT
+          export JOB_STATUS="${{ job.status }}"
+          python .github/scripts/render_reddit_summary.py
+        env:
+          CACHE_RESULT: ${{ env.CACHE_RESULT }}
+          JOB_STATUS: ${{ job.status }}

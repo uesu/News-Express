@@ -118,11 +118,13 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    the content-advisory gate entirely (engine, Variables, tests, docs) at the
    maintainer's request: do not reintroduce any content classification,
    allowlist, fail-open/fail-closed logic or "unknown metadata" hold for it.
-   Current delivery still includes dedup, the stateless fresh-age and pristine
-   listing checks, plus operational liveness/media-readiness checks. Some
-   operational holds are recorded in `pending_reddit.json` and rechecked
-   according to `PENDING_RECHECK_SECONDS` (default 1800 s); the two round-64
-   stateless checks do not write pending entries. The truthful record of
+   Current delivery still includes dedup, the stateless fresh-age hold, plus
+   operational liveness/media-readiness checks. Some operational holds are
+   recorded in `pending_reddit.json` and rechecked
+   according to `PENDING_RECHECK_SECONDS` (default 1800 s); the fresh-age hold
+   is stateless and does not write pending entries, and the companion
+   pristine-listing gate was removed in the 2026-10-21 cleanup (do not
+   silently restore it as a default gate). The truthful record of
    content-gate removal is `docs/history/ROUND_67.md`.
 2. **Gates never guess.** Every hold/skip requires exact, provable evidence
    (same URL, same author+title, removal notice on the post's own page).
@@ -185,12 +187,18 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 ## Key defaults (all overridable via repo Variables, no code change)
 
 - `FRESH_HOLD_SECONDS=30` — flat minimum post age before a candidate is
-  considered (round 64); `LISTING_CONFIRM` (default on) requires a pristine
-  /new listing read before posting. These two checks are stateless.
+  considered (round 64; stateless; the companion pristine-listing gate was
+  removed 2026-10-21, do not restore it). `0` disables the floor.
 - `PENDING_RECHECK_SECONDS=1800` — active throttle for retryable operational
   holds tracked in `pending_reddit.json`; confirmed removed/deleted archive
-  entries use a no-recheck path unless they reappear via RSS. Distinct from
-  the stateless age/listing checks.
+  entries use a no-recheck path unless they reappear via RSS via a
+  provenance-aware reconsideration that still applies removal checks. Distinct
+  from the stateless fresh-age hold. Archive/media presence is not proof of
+  current subreddit visibility.
+- Logs and the GitHub Actions run summary share consistent outcome
+  definitions derived from a stable local `reddit_run_result.json` record;
+  no extra network calls are made for the summary; zero deliveries is not a
+  failure; missing data is reported as unavailable.
 - `MEDIA_HEAL_SCOPE` — `video` (default) | `on`/`all` | `off` (round 56/56b).
 - `RETRACT_DEAD_POSTS` — default OFF; `1` enables dead-post tombstoning
   (round 44; requires two independent proofs before touching a message).

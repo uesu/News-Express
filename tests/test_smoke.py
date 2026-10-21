@@ -1528,7 +1528,10 @@ for label, overrides, expected in [
                  unique_key='r25-test', allowed=False,
                  # round 30 (2026-09-19): the gate now also records the post in
                  # the pending-recheck cache before `continue`.
-                 pending={}, now=1758240000.0, mark_pending=v3.mark_pending)
+                 pending={}, now=1758240000.0, mark_pending=v3.mark_pending,
+                 # 2026-10-21 cleanup: run_stats tracking added to both media-wait gates
+                 run_stats={"media_wait": 0, "partial_gallery": 0, "other_skipped": 0, "other_by_reason": {}},
+                 _inc_reason=lambda d, k, a=1: d.__setitem__(k, d.get(k, 0)+a) if isinstance(d, dict) else None)
     scope.update(overrides)
     exec(_r25_code, scope)
     check('r25 gate: ' + label, scope['allowed'] is expected)
@@ -1827,7 +1830,7 @@ check("r30 main: pending cache loaded next to the dedup cache",
 # content gate's section header; the throttle is now bounded by the round-64
 # fresh hold, which follows it in the main loop.
 _r30_throttle = _r30_main.split("pending-post recheck throttle", 1)[-1].split(
-    "# ---- round 64: stateless 30s fresh hold", 1)[0]
+    "# ---- round 64", 1)[0]  # updated 2026-10-21: comment now mentions updated cleanup, split on generic prefix
 for _cond in ("not TEST_POST_ID", "not DRY_RUN", "unique_key in pending",
               "_pending_throttle_skip(pending, unique_key, now, entry)"):
     check(f"r30 throttle keeps condition: {_cond} (round 32: the due-decision "
@@ -2612,8 +2615,8 @@ print()
 # (the absence-of-AutoModerator-detection guard).
 # ===========================================================================
 
-# ---- D.1: every listing request is pristine (unique cache-buster + no-cache
-# headers), and the buster differs between two consecutive requests --------
+# ---- D.1 (updated 2026-10-21 cleanup): listing fetch is for retraction only,
+# no pristine cache-buster, no extra headers — just the plain /new listing.
 class _R64Resp:
     status = 200
     headers = {"Content-Type": "text/html"}
@@ -2651,36 +2654,39 @@ for _url, _hdrs in _r64_calls:
     _m = re.search(r"[?&]_fresh=(\d+)", _url)
     if _m:
         _r64_fresh_values.append(_m.group(1))
-check("r64: every listing request URL carries a _fresh= cache-buster",
-      len(_r64_calls) > 0 and len(_r64_fresh_values) == len(_r64_calls))
-check("r64: the cache-buster differs between two separate _fetch_new_listing() calls",
-      len(set(_r64_fresh_values)) >= 2 or len(_r64_calls) < 2)
-check("r64: every listing request sends Cache-Control/Pragma no-cache headers",
-      all(_hdrs.get("Cache-Control") == "no-cache, no-store" and _hdrs.get("Pragma") == "no-cache"
-          for _url, _hdrs in _r64_calls))
+check("r64 updated: listing requests carry NO _fresh cache-buster (removed)",
+      len(_r64_calls) > 0 and all("_fresh=" not in _url for _url, _ in _r64_calls))
+check("r64 updated: listing requests use plain BROWSER_HEADERS (no pristine no-cache headers)",
+      all(_hdrs.get("Cache-Control") != "no-cache, no-store" for _url, _hdrs in _r64_calls))
+check("r64 updated: listing helper still works for retraction (one entry per call)",
+      len(_r64_calls) >= 2)
+check("r64 updated: LISTING_CONFIRM attribute no longer exists (removed)",
+      not hasattr(v3, "LISTING_CONFIRM") and not hasattr(v3, "_LISTING_CONFIRM_RAW"))
 v3._listing_cache.clear()
 
-# ---- D.8: FRESH_HOLD_SECONDS / LISTING_CONFIRM parse from env, with the
-# documented defaults, and are empty-string-safe like every other Variable --
-_r64_names = ("FRESH_HOLD_SECONDS", "LISTING_CONFIRM")
+# ---- D.8 (updated 2026-10-21): FRESH_HOLD_SECONDS only — LISTING_CONFIRM removed
+_r64_names = ("FRESH_HOLD_SECONDS",)
 _r64_saved_env = {name: os.environ.get(name) for name in _r64_names}
 try:
     os.environ.update({name: "" for name in _r64_names})
     _r64_default = load_module("smoke_reddit_v3_r64_default_env", "testing area/reddit_main_v3.py")
-    check("r64: FRESH_HOLD_SECONDS empty env defaults to 30",
+    check("r64 updated: FRESH_HOLD_SECONDS empty env defaults to 30",
           _r64_default.FRESH_HOLD_SECONDS == 30)
-    check("r64: LISTING_CONFIRM empty env defaults to True",
-          _r64_default.LISTING_CONFIRM is True)
+    check("r64 updated: LISTING_CONFIRM no longer parsed (removed)",
+          not hasattr(_r64_default, "LISTING_CONFIRM"))
     os.environ["FRESH_HOLD_SECONDS"] = "60"
-    os.environ["LISTING_CONFIRM"] = "0"
     _r64_custom = load_module("smoke_reddit_v3_r64_custom_env", "testing area/reddit_main_v3.py")
-    check("r64: FRESH_HOLD_SECONDS=60 parses to 60",
+    check("r64 updated: FRESH_HOLD_SECONDS=60 parses to 60",
           _r64_custom.FRESH_HOLD_SECONDS == 60)
-    check("r64: LISTING_CONFIRM=0 parses to False",
-          _r64_custom.LISTING_CONFIRM is False)
+    # Legacy LISTING_CONFIRM env should be ignored (no reactivation)
+    os.environ["LISTING_CONFIRM"] = "1"
+    _r64_legacy = load_module("smoke_reddit_v3_r64_legacy_env", "testing area/reddit_main_v3.py")
+    check("r64 updated: legacy LISTING_CONFIRM=1 does not reactivate removed behavior",
+          not hasattr(_r64_legacy, "LISTING_CONFIRM"))
+    os.environ.pop("LISTING_CONFIRM", None)
     os.environ["FRESH_HOLD_SECONDS"] = "0"
     _r64_off = load_module("smoke_reddit_v3_r64_off_env", "testing area/reddit_main_v3.py")
-    check("r64: FRESH_HOLD_SECONDS=0 parses to 0 (floor disabled)",
+    check("r64 updated: FRESH_HOLD_SECONDS=0 parses to 0 (floor disabled)",
           _r64_off.FRESH_HOLD_SECONDS == 0)
 finally:
     for _name, _value in _r64_saved_env.items():
@@ -2688,6 +2694,7 @@ finally:
             os.environ.pop(_name, None)
         else:
             os.environ[_name] = _value
+    os.environ.pop("LISTING_CONFIRM", None)
 
 # ---- D.9: absence guard — no AutoModerator / sticky-comment detection of
 # any kind exists anywhere in the Reddit engine (no phrase matching, no
@@ -2713,6 +2720,29 @@ for _fname, _fsrc in _r64_src_files.items():
     check(f"r64: {_fname} never compares/matches against the literal 'automoderator' "
           f"as a detection mechanism (mentions, if any, are prose only)",
           all(pattern not in _lower for pattern in _r64_forbidden_comparisons))
+
+# ---- 2026-10-21 cleanup: listing gate fully removed, no forced refresh
+check("r64 cleanup: reddit_main_v3.py has no LISTING_CONFIRM executable references (historical docs allowed)",
+      not hasattr(v3, "LISTING_CONFIRM"))
+check("r64 cleanup: no _fresh cache-buster in listing helper (removed)",
+      "_fresh" not in inspect.getsource(v3._fetch_new_listing) or "_fresh=" not in inspect.getsource(v3._fetch_new_listing))
+check("r64 cleanup: main() has no pristine-listing gate block",
+      "pristine listing" not in inspect.getsource(v3.main).lower()
+      and "_r64_listing" not in inspect.getsource(v3.main))
+# ---- 2026-10-21: accurate logs + run-result file
+check("r64 cleanup: misleading 'Found X new Reddit posts' log removed (no active log line)",
+      "Found {total_found} new Reddit posts. Building V3 cards" not in inspect.getsource(v3.main)
+      and 'logging.info(f"Found {total_found} new Reddit posts' not in inspect.getsource(v3.main))
+check("r64 cleanup: run-result file helpers exist (stable local record)",
+      hasattr(v3, "_init_run_stats") and hasattr(v3, "_write_run_result")
+      and hasattr(v3, "_RUN_RESULT_FILE"))
+check("r64 cleanup: pending/fresh dedup preserved — PENDING_RECHECK_SECONDS still parsed",
+      hasattr(v3, "PENDING_RECHECK_SECONDS") and v3.PENDING_RECHECK_SECONDS == 1800
+      and hasattr(v3, "FRESH_HOLD_SECONDS"))
+check("r64 cleanup: workflow summary uses reddit_run_result.json, not log scraping",
+      "reddit_run_result.json" in open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"), encoding="utf-8").read()
+      and "GITHUB_STEP_SUMMARY" in open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"), encoding="utf-8").read()
+      and "extract_number" not in open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"), encoding="utf-8").read())
 
 print()
 
@@ -4902,13 +4932,13 @@ with open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"), encoding="
 _r66_stale = ["APPROVAL_RECHECK_SECONDS", "POST_SETTLE_SECONDS", "POST_SETTLE_VERIFIED_SECONDS",
               "DUP_MEDIA_GATE", "REPOST_GATE", "REPOST_WINDOW_SECONDS", "MOD_QUEUE_GATE",
               "MOD_QUEUE_WINDOW_SECONDS", "MOD_QUEUE_WEAK_GRACE_SECONDS",
-              "LISTING_HTML_GRACE_SECONDS", "LISTING_TIMEOUT_SECONDS"]
-check("r66: reddit_monitor.yml — all 11 stale env mappings fully gone (lines AND comments)",
+              "LISTING_HTML_GRACE_SECONDS", "LISTING_TIMEOUT_SECONDS", "LISTING_CONFIRM"]
+check("r66 updated: reddit_monitor.yml — all 12 stale env mappings fully gone (lines AND comments)",
       all(_n not in _r66_wf for _n in _r66_stale),
       str([n for n in _r66_stale if n in _r66_wf]))
-check("r66: reddit_monitor.yml — round-64 FRESH_HOLD_SECONDS/LISTING_CONFIRM are wired",
+check("r66 updated: reddit_monitor.yml — FRESH_HOLD_SECONDS wired, LISTING_CONFIRM removed",
       "FRESH_HOLD_SECONDS: ${{ vars.FRESH_HOLD_SECONDS }}" in _r66_wf
-      and "LISTING_CONFIRM: ${{ vars.LISTING_CONFIRM }}" in _r66_wf)
+      and "LISTING_CONFIRM" not in _r66_wf)
 check("r66: reddit_monitor.yml — kept mappings intact (pending recheck, "
       "retraction); r67 guard update: the removed gate's four Variables are "
       "no longer part of this list, and REDDIT_VIDEO_QUALITY joined it",
@@ -5712,10 +5742,10 @@ check("r68: failed quality upgrade preserves the already-validated vxreddit "
 with open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"),
           encoding="utf-8") as _r68_workflow_file:
     _r68_workflow = _r68_workflow_file.read()
-check("r68: workflow summary remains compatible with the retained-base log "
-      "wording and uses only the local monitor log",
-      "count_matches 'retaining validated base'" in _r68_workflow
-      and "summary source: local monitor.log only; no additional requests" in _r68_workflow)
+check("r68 updated: workflow summary uses stable local record (reddit_run_result.json) and provider diagnostics from monitor.log, no extra requests",
+      "reddit_run_result.json" in _r68_workflow
+      and "GITHUB_STEP_SUMMARY" in _r68_workflow
+      and "no additional network requests" in _r68_workflow)
 
 
 # ---- round 69: Arctic Shift search failure reasons (offline) ---------------
@@ -6800,6 +6830,9 @@ def _app_summary_shell(kind, log_text, status="success", epochs=True):
     workflow = open(os.path.join(ROOT, ".github/workflows", kind + "_monitor.yml"), encoding="utf-8").read()
     label = "Write Twitter monitor run summary" if kind == "twitter" else "Write monitor run summary"
     body = workflow.split("      - name: " + label, 1)[1].split("        run: |\n", 1)[1]
+    # Split off trailing env: block (GitHub Actions mapping, not bash) if present
+    if "\n        env:\n" in body:
+        body = body.split("\n        env:\n", 1)[0]
     body = textwrap.dedent(body).replace("${{ job.status }}", status)
     with tempfile.TemporaryDirectory() as directory:
         logfile = "twitter_monitor.log" if kind == "twitter" else "monitor.log"
@@ -6840,20 +6873,87 @@ _app_empty_summary = _app_summary_shell("twitter", None, epochs=False)
 check("missing Twitter output is unavailable, not a healthy no-op or fabricated runtime",
       "**Runtime:** unavailable" in _app_empty_summary and "observation coverage: unavailable" in _app_empty_summary
       and "new candidates: not separately measured" in _app_empty_summary)
-_app_rd_summary = _app_summary_shell("reddit", "2026-10-17 05:50:32,826 [INFO] Combined feed OK: 100 entries covering 5 subreddit(s).\n"
-    "2026-10-17 05:50:38,580 [INFO] Found 42 new Reddit posts. Building V3 cards...\n"
-    "2026-10-17 05:50:49,770 [INFO] Reddit V3 Posted: fixture\n"
-    "2026-10-17 05:50:49,324 [INFO] card media via vxreddit — 1 item(s).\n")
-check("existing Reddit summary retains delivery and workflow persistence facts",
-      "entries read: 100" in _app_rd_summary and "new candidates: 42" in _app_rd_summary
-      and "posts delivered: 1" in _app_rd_summary and "cache commit/push: success" in _app_rd_summary
-      and "observed card-media provider labels:" in _app_rd_summary)
-_app_rd_empty = _app_summary_shell("reddit", None, epochs=False)
-check("missing Reddit measurements stay unavailable",
-      "entries read: unavailable" in _app_rd_empty and "new candidates: unavailable" in _app_rd_empty
-      and "**Runtime:** unavailable" in _app_rd_empty)
+# Updated for 2026-10-21 cleanup: summary now derives from reddit_run_result.json, not log scraping.
+# Helper to create a fake run-result JSON for the shell test helper.
+def _write_fake_reddit_result(directory, data):
+    import json, os
+    with open(os.path.join(directory, "reddit_run_result.json"), "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+# Monkey-patch _app_summary_shell to inject fake JSON for reddit case
+_orig_shell = _app_summary_shell
+def _app_summary_shell_with_json(kind, log_text, status="success", epochs=True, fake_data=None):
+    import subprocess, textwrap, tempfile, os, json
+    workflow = open(os.path.join(ROOT, ".github/workflows", kind + "_monitor.yml"), encoding="utf-8").read()
+    label = "Write Twitter monitor run summary" if kind == "twitter" else "Write monitor run summary"
+    body = workflow.split("      - name: " + label, 1)[1].split("        run: |\n", 1)[1]
+    # Split off trailing env: block (GitHub Actions mapping, not bash) if present
+    if "\n        env:\n" in body:
+        body = body.split("\n        env:\n", 1)[0]
+    body = textwrap.dedent(body).replace("${{ job.status }}", status)
+    with tempfile.TemporaryDirectory() as directory:
+        logfile = "twitter_monitor.log" if kind == "twitter" else "monitor.log"
+        if log_text is not None:
+            with open(os.path.join(directory, logfile), "w", encoding="utf-8") as stream:
+                stream.write(log_text)
+        # copy helper script into temp dir so workflow's `python .github/scripts/render_reddit_summary.py` resolves
+        import shutil
+        src = os.path.join(ROOT, ".github/scripts/render_reddit_summary.py")
+        dst_dir = os.path.join(directory, ".github/scripts")
+        os.makedirs(dst_dir, exist_ok=True)
+        try:
+            shutil.copy(src, os.path.join(dst_dir, "render_reddit_summary.py"))
+        except Exception:
+            pass
+        if fake_data is not None:
+            _write_fake_reddit_result(directory, fake_data)
+        destination = os.path.join(directory, "summary.md")
+        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "GITHUB_STEP_SUMMARY": destination,
+               "TWITTER_CACHE_RESULT": "success", "CACHE_RESULT": "success"}
+        if epochs:
+            prefix = "TWITTER" if kind == "twitter" else "MONITOR"
+            env[prefix + "_START_EPOCH"] = "100"
+            env[prefix + "_END_EPOCH"] = "105"
+        completed = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", body], cwd=directory,
+                                   env=env, capture_output=True, text=True)
+        assert completed.returncode == 0, completed.stderr + completed.stdout
+        with open(destination, encoding="utf-8") as stream:
+            return stream.read()
+
+# Test with fake JSON: 100 entries, 5 represented of 6, 42 considered, 1 delivered
+_fake = {
+    "combined_entries": 100,
+    "subreddits_represented": 5,
+    "subreddits_configured": 6,
+    "unposted_candidates_considered": 42,
+    "candidates_entering_processing": 2,
+    "delivered": 1,
+    "failed_delivery": 0,
+    "known_pending_suppressed": 17,
+    "retry_backoff": 0,
+    "fresh_hold": 0,
+    "newly_rejected_removed": 0,
+    "liveness_not_verified": 0,
+    "media_wait": 0,
+    "partial_gallery": 0,
+    "flood_cap_dropped": 0,
+    "dedup_skipped_in_run": 1,
+    "other_skipped": 0,
+    "combined_fetch_status": "ok"
+}
+_app_rd_summary = _app_summary_shell_with_json("reddit", "2026-10-17 05:50:32,826 [INFO] Combined feed OK: 100 entries covering 5 subreddit(s).\n", fake_data=_fake)
+check("existing Reddit summary retains delivery and workflow persistence facts (json-derived)",
+      "Combined-feed entries: 100" in _app_rd_summary and "Unposted candidates considered: 42" in _app_rd_summary
+      and "Delivered posts: 1" in _app_rd_summary and "State persistence" in _app_rd_summary and "success" in _app_rd_summary
+      and "Subreddits represented: 5 of 6" in _app_rd_summary)
+_app_rd_empty = _app_summary_shell_with_json("reddit", None, epochs=False, fake_data=None)
+check("missing Reddit measurements stay unavailable (json missing)",
+      "Combined-feed entries: unavailable" in _app_rd_empty and "Unposted candidates considered: unavailable" in _app_rd_empty
+      and "**Monitor runtime:** unavailable" in _app_rd_empty)
+# No-new-candidates case: zero considered should be reported as 0, not unavailable
+_fake_zero = dict(_fake, unposted_candidates_considered=0, delivered=0, candidates_entering_processing=0)
 check("measured Reddit no-new-candidates remains a real zero",
-      "new candidates: 0" in _app_summary_shell("reddit", "No new Reddit posts to post.\n"))
+      "Unposted candidates considered: 0" in _app_summary_shell_with_json("reddit", "No new Reddit posts to post.\n", fake_data=_fake_zero))
 
 _app_media_suite = unittest.TestSuite(
     unittest.defaultTestLoader.loadTestsFromTestCase(value)

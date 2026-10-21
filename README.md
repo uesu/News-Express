@@ -335,9 +335,8 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `FRESH_HOLD_SECONDS` | `30` | flat minimum post age before a candidate is considered; `0` = off |
-| `LISTING_CONFIRM` | `1` | `0` = disable the pristine `/new` listing confirmation (restores round-63 delivery) |
-| `PENDING_RECHECK_SECONDS` | `1800` | shared throttle for retryable operational holds; confirmed removed/deleted archive entries use a no-recheck path unless they reappear via RSS |
+| `FRESH_HOLD_SECONDS` | `30` | flat minimum post age before a candidate is considered; `0` = off (stateless) |
+| `PENDING_RECHECK_SECONDS` | `1800` | shared throttle for retryable operational holds; confirmed removed/deleted archive entries use a no-recheck path unless they reappear via RSS (provenance-aware, still runs removal checks) |
 | `REDDIT_VIDEO_QUALITY` | `balanced` | video-quality selection: `balanced` (EmbedEZ 1080p may replace vxreddit → 720p → durable DASH floor), `compatibility` (pre-round-67 order, instant rollback), `highest` (wider quality window) |
 | `RETRACT_DEAD_POSTS` | `0` | `1` enables the dead-post retraction seatbelt |
 | `RETRACT_MODE` | `edit` | `edit` (tombstone in place) or `delete` |
@@ -407,27 +406,24 @@ see [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) and the
 2. **Pending recheck throttle** — retryable operational holds already recorded
    for a candidate are re-evaluated according to `PENDING_RECHECK_SECONDS`
    (default 1800 s). Confirmed removed/deleted archive entries use a no-recheck
-   path unless they reappear via RSS.
+   path unless they reappear via RSS (eligible for reconsideration when
+   returned by RSS, still subject to removal checks; archive/media presence
+   alone is not proof of current visibility).
 3. **Fresh hold** — a flat, stateless `FRESH_HOLD_SECONDS` (30 s) minimum age
    computed from the post's own timestamp. This check itself creates no
    tracker or pending entry.
-4. **Pristine listing confirmation** — a cache-busted read of the
-   subreddit's `/new` listing (unique `_fresh=` buster + `no-cache` headers,
-   never reused across runs) proves the post is live right now. Not listed
-   yet → skipped this tick only — never blocked, never cached; it posts the
-   tick it first appears. All listing sources down → treated as an outage,
-   never as absence.
-5. **Operational liveness/media checks** — source evidence about a post's
+4. **Operational liveness/media checks** — source evidence about a post's
    liveness or removal/approval state, or incomplete archive media, can defer
    delivery. Retryable holds are recorded with a reason in
    `pending_reddit.json` and revisited on the configured interval; the
    removed/deleted no-recheck exception above still applies.
-6. **Deliver** — the card posts; the dedup key is cached.
+5. **Deliver** — the card posts; the dedup key is cached.
 
-The round-64 fresh-age and pristine-listing skips remain stateless; they do not
-write `pending_reddit.json`. The active operational pending cache is separate
-from the removed Round-63 settle-window, dedicated moderator-queue, and
-duplicate-media/repost gates. Round 67 also removed the content-advisory gate
+The fresh-age hold (round 64, stateless) does not write `pending_reddit.json`
+(its companion pristine-listing gate was removed in the 2026-10-21 cleanup; do
+not restore it). The active operational pending cache is separate from the
+removed Round-63 settle-window, dedicated moderator-queue, and duplicate-
+media/repost gates. Round 67 also removed the content-advisory gate
 and its four Variables, so the monitor makes no content-based posting decision
 on any path. The truthful record of that removal lives in
 [`docs/history/ROUND_67.md`](docs/history/ROUND_67.md).

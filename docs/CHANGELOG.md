@@ -38,6 +38,10 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-21 — Reddit delivery cleanup: pristine-listing removal, accurate logs and run summary.**
+
+  Remove the mandatory pristine listing-confirmation dependency (`LISTING_CONFIRM` parsing, cache, `_fresh`/`no-cache` headers, gate branches, workflow wiring, docs/tests) per the approved handoff. The `FRESH_HOLD_SECONDS` floor (default 30 s, stateless) and posted-post deduplication are preserved. Useful pending suppression with bounded timed retries, pending expiry/source-provenance and provenance-aware RSS reconsideration (still subject to removal checks) are retained; archive/media presence is not treated as proof of current subreddit visibility. Reddit logs now use stage-accurate aggregated `INFO` with per-candidate `DEBUG` (replacing the misleading “Found X new Reddit posts” wording) and the Actions run summary is derived from a stable local `reddit_run_result.json` record without scraping or extra network calls; workflow result remains independent of delivery count and missing data is reported as unavailable. Documentation, configuration examples and `AGENTS.md` updated; historical audits preserved.
+
 * **2026-10-20 — Plain-text profile crosspost attribution.**
 
   The `🔁 Crosspost of u/<name> Profile` line for profile crossposts
