@@ -7793,39 +7793,54 @@ async def _r21_test_mocked_impl_quality_retains_base():
         return None
     v3.video_candidate = _mock_video_candidate_full_tracked
     v3.probe_video_facts = _mock_probe_full
-    # Capture payload to assert exact base-media URL retained
-    orig_create_capture = v3.create_discohook_share if hasattr(v3, "create_discohook_share") else None
+    # Capture payload via mocks["set"] — no competing patch, no dead code
     async def _mock_create_capture(session, payload, label):
         captured_payloads.append(payload)
-        # Extract media URLs from payload if present (Components V2)
         return {"id":"123","components":[]}
-    # Replace create_discohook_share in mocks to capture
-    mocks["set"]["create_discohook_share"] = lambda s,p,l: __import__("asyncio").sleep(0, result=_mock_create_capture(s,p,l)) if False else __import__("asyncio").sleep(0, result={"id":"123","components":[]})
-    # Instead, we will manually patch after _r21_run_and_capture setup: override mocks set for this run by patching v3.create_discohook_share directly before run
-    # To achieve capture, patch v3.create_discohook_share before calling _r21_run_and_capture
-    orig_create_global = getattr(v3, "create_discohook_share", None)
-    v3.create_discohook_share = _mock_create_capture
-    # Also need to mock fetch_arctic to provide vred_id via discover_original if needed - but extract mock above suffices
+    mocks["set"]["create_discohook_share"] = _mock_create_capture
     try:
         data, summary, logs, exc2 = await _r21_run_and_capture("quality_retains_base_full", mocks)
         # Assert candidate dependency was called (quality path reached)
         check("r21: quality candidate dependency was called", len([c for c in candidate_calls if "embedez" in c["label"].lower()]) >=1 or len(candidate_calls)>=1, f"calls:{candidate_calls}")
-        # Assert exact base-media URL retained in outgoing payload (not replaced by failed candidate)
-        # Payload may be in captured_payloads via direct patch, or fallback to data's media if not captured
-        payload_has_base = False
+        # Assert capture count unconditionally
+        check("r21: quality full-run payload captured", len(captured_payloads) >=1, f"captured:{len(captured_payloads)} calls:{candidate_calls}")
+        # Extract media URLs from captured Components V2 payload
+        extracted_urls = []
         for pl in captured_payloads:
-            if base_url in str(pl):
-                payload_has_base = True
-        # If no payload captured via direct patch (due to mocks override), check that data indicates base retained via counters
-        check("r21: quality full-run retains base", data.get("validated_base_retained",0)>=1 and data.get("delivered")==1, f"data:{data} logs:{logs[:500]} calls:{candidate_calls}")
+            # Components V2 payload contains components -> media urls
+            try:
+                comps = pl.get("components") or []
+                for c in comps:
+                    if isinstance(c, dict):
+                        inner = c.get("components") or c.get("items") or []
+                        for ic in inner:
+                            if isinstance(ic, dict):
+                                media = ic.get("media") or {}
+                                if isinstance(media, dict) and media.get("url"):
+                                    extracted_urls.append(media["url"])
+                                # Also check direct url fields
+                                if ic.get("url"):
+                                    extracted_urls.append(ic["url"])
+                # Fallback: str payload contains url
+                if not extracted_urls and base_url in str(pl):
+                    extracted_urls.append(base_url)
+            except Exception:
+                pass
+            # Also check string representation for urls
+            if base_url in str(pl) and base_url not in extracted_urls:
+                extracted_urls.append(base_url)
+        # Assert exact base URL is retained and failed candidate absent
+        # Failed candidate is embedez/cmaf 1080p URL (should not be in payload)
+        has_base = base_url in extracted_urls or base_url in str(captured_payloads)
+        has_failed_candidate = any("embedez" in str(pl) or "cmaf" in str(pl).lower() for pl in captured_payloads)
+        check("r21: quality full-run base URL retained in payload", has_base, f"extracted:{extracted_urls} payloads:{captured_payloads} base:{base_url}")
+        check("r21: quality full-run failed candidate absent in payload", not has_failed_candidate, f"payloads:{captured_payloads}")
         # Separately assert delivered, fallback reason, retained-base without alternatives
+        check("r21: quality full-run retains base counter", data.get("validated_base_retained",0)>=1, f"data:{data} logs:{logs[:500]} calls:{candidate_calls}")
         check("r21: quality full-run fallback unavailable", data.get("quality_fallback_reasons",{}).get("quality_candidate_unavailable",0)>=1, str(data))
         check("r21: quality full-run retained count", data.get("validated_base_retained",0)>=1, str(data))
         check("r21: quality full-run delivers", data.get("delivered")==1, str(data))
         check("r21: quality full-run no exc", exc2 is None, str(exc2))
-        # Additional check: payload URL if captured should equal base_url
-        if captured_payloads:
-            check("r21: quality full-run payload URL unchanged", payload_has_base, f"payloads:{captured_payloads} base:{base_url}")
     finally:
         v3.fetch_proxy_post_memo = orig_fetch_proxy
         v3.media_url_ok = orig_media_ok
@@ -7835,7 +7850,6 @@ async def _r21_test_mocked_impl_quality_retains_base():
         v3.VIDEO_QUALITY_MODE = orig_qm
         v3.reddit_proxy = orig_rp
         v3.extract_vreddit_id_from_media_url = orig_extract_vid
-        v3.create_discohook_share = orig_create_global
 asyncio.run(_r21_test_mocked_impl_quality_retains_base())
 
 async def _r21_test_mocked_impl_enrichment_preserves_provenance():
