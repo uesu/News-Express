@@ -387,6 +387,9 @@ FRESH_HOLD_SECONDS = _env_int("FRESH_HOLD_SECONDS", 30)
 # ---------------------------------------------------------------------------
 _RUN_RESULT_FILE = "reddit_run_result.json"
 
+# Global for media tracking (set per-run inside main)
+current_run_stats = None
+
 def _init_run_stats():
     # Fresh per-invocation record; never reuse stale prior-run file.
     # Feed coverage is measured from the feed itself, not from deduplicated
@@ -430,6 +433,12 @@ def _init_run_stats():
         "proxy_warmup_status": "not-reached",
         "proxy_warmup_services": None,
         "video_quality": os.getenv("REDDIT_VIDEO_QUALITY", "").strip() or "balanced",
+        # Media outcome tracking (existing observations only, no extra network)
+        "selected_media_providers": {},
+        "quality_upgrades_accepted": 0,
+        "quality_fallbacks": 0,
+        "quality_fallback_reasons": {},
+        "media_provider_counts": {},
     }
 
 def _inc_reason(counter_dict, reason, amount=1):
@@ -3521,7 +3530,7 @@ async def proxy_video_quality_upgrade(session: aiohttp.ClientSession, vid: str |
     extra probe happens only on Reddit-video posts (never on image, GIF,
     photo or gallery paths).
     """
-    global _video_quality_budget_used
+    global _video_quality_budget_used, current_run_stats
     if not vid or not base_url:
         return base_url
     mode = VIDEO_QUALITY_MODE if VIDEO_QUALITY_MODE in VIDEO_QUALITY_MODES else "balanced"
@@ -3554,6 +3563,13 @@ async def proxy_video_quality_upgrade(session: aiohttp.ClientSession, vid: str |
         logging.info(f"[{label or 'proxy'}] quality fallback: candidate=embedez; "
                      f"retaining validated base provider={_provider_for_url(base_url)}; "
                      "reason=quality_candidate_unavailable")
+        try:
+            if isinstance(current_run_stats, dict):
+                current_run_stats["quality_fallbacks"] = current_run_stats.get("quality_fallbacks", 0) + 1
+                reason = "quality_candidate_unavailable"
+                current_run_stats["quality_fallback_reasons"][reason] = current_run_stats["quality_fallback_reasons"].get(reason, 0) + 1
+        except Exception:
+            pass
         return base_url
     facts = await probe_video_facts(session, base_url,
                                    timeout=float(VIDEO_NATIVE_TIMEOUT_SECONDS))
@@ -3568,10 +3584,22 @@ async def proxy_video_quality_upgrade(session: aiohttp.ClientSession, vid: str |
         logging.info(f"[{label or 'proxy'}] EmbedEZ 1080p candidate accepted: "
                      f"provider=embedez, content_type={content_type}, "
                      f"{_video_evidence(quality)}, reason=validated quality improvement.")
+        try:
+            if isinstance(current_run_stats, dict):
+                current_run_stats["quality_upgrades_accepted"] = current_run_stats.get("quality_upgrades_accepted", 0) + 1
+        except Exception:
+            pass
         return quality["url"]
     logging.info(f"[{label or 'proxy'}] quality fallback: candidate=embedez; "
                  f"retaining validated base provider={_provider_for_url(base_url)}; "
                  "reason=quality_candidate_not_superior_or_unvalidated")
+    try:
+        if isinstance(current_run_stats, dict):
+            current_run_stats["quality_fallbacks"] = current_run_stats.get("quality_fallbacks", 0) + 1
+            reason = "quality_candidate_not_superior_or_unvalidated"
+            current_run_stats["quality_fallback_reasons"][reason] = current_run_stats["quality_fallback_reasons"].get(reason, 0) + 1
+    except Exception:
+        pass
     return base_url
 
 
@@ -4388,6 +4416,7 @@ def _motion_video_url(item: dict | None) -> str | None:
 
 
 def _log_media_outcome(label: str, media: list, *, fallback_reason: str | None = None):
+    global current_run_stats
     kinds = [x.get("kind") for x in media if isinstance(x, dict)]
     kind = kinds[0] if kinds else "none"
     provider = "none"
@@ -4398,6 +4427,14 @@ def _log_media_outcome(label: str, media: list, *, fallback_reason: str | None =
     logging.info(
         f"[{label or 'media'}] media-outcome kind={kind} provider={provider} "
         f"fallback={fallback_reason or 'none'}")
+    # Track for summary (existing observation only)
+    try:
+        if isinstance(current_run_stats, dict):
+            prov = provider or "none"
+            current_run_stats["selected_media_providers"][prov] = current_run_stats["selected_media_providers"].get(prov, 0) + 1
+            current_run_stats["media_provider_counts"][prov] = current_run_stats["media_provider_counts"].get(prov, 0) + 1
+    except Exception:
+        pass
 
 
 async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
@@ -5472,6 +5509,8 @@ async def main():
     use_oauth = bool(REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET)
 
     run_stats = _init_run_stats()
+    global current_run_stats
+    current_run_stats = run_stats
     # Initialize fresh record; mark incomplete until successful completion
     run_stats["completed"] = False
     _write_run_result(run_stats, {"status": "started"})  # ensure stale prior file is not reused; will be overwritten on completion

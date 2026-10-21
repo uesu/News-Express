@@ -25,15 +25,25 @@ terminal feed failures, empty accounts, post counters, and cache status.
 
 Reddit's workflow-only summary is derived from a stable local
 `reddit_run_result.json` record (plus `monitor.log` for per-candidate details)
-and reports runtime, completion (`completed` true/false, dry-run distinct),
-local persistence (`unchanged`/`saved`/`failed`/`not-reached`/`skipped_dry_run`)
-and repository persistence (same set, observed commit/push), feed and delivery
-counters, proxy warmup health/services, video quality mode (`balanced` default),
-and fallback labels; it sanitizes error messages and makes no extra network
-requests. It does not alter provider selection, posting, scheduling, cache
-policy, or media requests, and missing data is reported as `unavailable`/
-`not-reached` (zero deliveries is not a failure; dry-run is explicitly labelled;
-local save is not conflated with repository push).
+and reports runtime, completion (`completed` true only after required work
+including persistence; `normal`/`no-candidate`/`dry-run` completed vs
+`failed`/`interrupted` incomplete; not by JSON write/`finally`), local
+persistence (`unchanged`/`saved`/`failed`/`not-reached`/`skipped_dry_run`,
+preparation/staging/commit/recovery/push failures all `failed`; only
+never-started is `not-reached`) and repository persistence (same set, observed
+commit/push, dry-run explicit; local save not conflated with repository push),
+feed and delivery counters, proxy warmup health/services, video quality mode
+(`balanced` default, `highest`/`compatibility`), selected card-media provider,
+accepted optional quality upgrades and failed optional quality candidates/
+base-retention fallbacks with reason (distinct from feed fallback); it
+sanitizes error messages (webhook/token/Auth redaction, bounded 500 chars,
+preserves operation/type/category) and makes no extra network requests; it
+syntax-checks the real workflow persistence shell with `bash -n` and mocks
+`unchanged`/`saved`/`recovered`/`failed` `CACHE_RESULT` in tests (no copied
+test-only shell); neither warmup nor successful video validation proves audio.
+It does not alter provider selection, posting, scheduling, cache policy, or
+media requests, and missing data is reported as `unavailable`/`not-reached`
+(zero deliveries is not a failure; dry-run is explicitly labelled).
 
 The operational `pending_reddit.json` cache remains active. It records selected
 liveness/removal/approval and media-readiness holds. Retryable holds use the

@@ -198,11 +198,11 @@ jobs:
         run: |
           echo "CACHE_RESULT=not-reached" >> "$GITHUB_ENV"
           set -o pipefail
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add -f posted_reddit.json proxy_health.json pending_reddit.json
+          git config --local user.email "github-actions[bot]@users.noreply.github.com" || { echo "CACHE_RESULT=failed" >> "$GITHUB_ENV"; echo "::error::CACHE PREPARATION FAILED — git config failed"; exit 1; }
+          git config --local user.name "github-actions[bot]" || { echo "CACHE_RESULT=failed" >> "$GITHUB_ENV"; echo "::error::CACHE PREPARATION FAILED — git config failed"; exit 1; }
+          git add -f posted_reddit.json proxy_health.json pending_reddit.json || { echo "CACHE_RESULT=failed" >> "$GITHUB_ENV"; echo "::error::CACHE STAGING FAILED — git add failed"; exit 1; }
           if [ -f posted_messages.json ]; then
-            git add -f posted_messages.json
+            git add -f posted_messages.json || { echo "CACHE_RESULT=failed" >> "$GITHUB_ENV"; echo "::error::CACHE STAGING FAILED — git add failed"; exit 1; }
           fi
 
           if git diff --cached --quiet; then
@@ -271,7 +271,7 @@ jobs:
               echo "::error::CACHE PUSH FAILED after ${attempts}/3 attempt(s) — dedup cache was not persisted; the next run may re-post. Rerun this monitor after GitHub recovers."
               exit 1
             fi
-          else
+
             echo "CACHE_RESULT=saved" >> "$GITHUB_ENV"
           fi
       # Reporting only: stable local run-result record, no network or scraping.
@@ -385,7 +385,7 @@ jobs:
               print(f"  - by reason: {dict_str(data.get('other_by_reason'))}")
           print()
           print("### Providers and media")
-          # Warmup: locally observed, no extra network
+          # Warmup: locally observed, no extra network (does not prove audio)
           warmup_status = data.get("proxy_warmup_status", "unavailable")
           warmup_services = data.get("proxy_warmup_services")
           if warmup_status == "ok" and isinstance(warmup_services, dict):
@@ -402,11 +402,38 @@ jobs:
           # Video quality mode (local config, no network)
           vq = data.get("video_quality", "unavailable")
           print(f"- Video quality mode: {vq}")
-          # Fallback is already in Feed section, but note here if not-reached vs zero
+          # Selected card-media provider (existing observation, no extra network)
+          providers = data.get("selected_media_providers") or data.get("media_provider_counts")
+          if isinstance(providers, dict) and providers:
+              print(f"- Selected media provider: {dict_str(providers)}")
+          else:
+              if data.get("unposted_candidates_considered") == 0:
+                  print(f"- Selected media provider: none (no candidates)")
+              else:
+                  # Show as unavailable vs not-reached
+                  print(f"- Selected media provider: {v('selected_media_providers')}")
+          # Accepted optional quality upgrades (Embedez 1080p)
+          qa = data.get("quality_upgrades_accepted")
+          if qa is not None:
+              print(f"- Quality upgrades accepted: {qa}")
+          # Failed optional quality candidates / base-retention fallbacks (distinct from feed fallback)
+          qf = data.get("quality_fallbacks", 0)
+          if qf:
+              print(f"- Quality fallbacks (base retained): {qf}")
+              if data.get("quality_fallback_reasons"):
+                  print(f"  - by reason: {dict_str(data.get('quality_fallback_reasons'))}")
+          elif qa is not None and qa == 0:
+              print(f"- Quality fallbacks (base retained): 0")
+          # Distinguish feed fallback (RSS per-subreddit) from video-quality fallback (above)
           if data.get("fallback_status") == "not_attempted":
-              print(f"- Fallback: not attempted (combined succeeded)")
-          # Provider observations: use local counts, not health audit
-          print("- Note: per-candidate provider details in monitor.log; counts above are this run's local observations")
+              print(f"- Feed fallback: not attempted (combined succeeded)")
+          elif data.get("fallback_status") in ("ok", "partial", "all_failed"):
+              print(f"- Feed fallback: {data.get('fallback_status')} ({v('fallback_entries')} entries, {v('fallback_subreddits_covered')} subreddits)")
+          elif data.get("fallback_status") is not None:
+              print(f"- Feed fallback: {v('fallback_status')}")
+          # Clarify: warmup and video validation do not prove audio inclusion
+          print(f"- Note: provider warmup and video validation do not prove audio inclusion")
+          print(f"- Note: per-candidate provider/quality details in monitor.log; counts above are this run's local observations")
           print()
           print("Counts describe this run's local observations, not an independent subreddit-visibility or end-to-end health audit.")
           print("Summary source: reddit_run_result.json (per-run, ignored) + monitor.log for provider diagnostics; no additional network requests.")

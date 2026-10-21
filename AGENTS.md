@@ -197,13 +197,26 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   current subreddit visibility.
 - Logs and the GitHub Actions run summary share consistent outcome
   definitions derived from a stable local `reddit_run_result.json` record;
-  completion (`completed` true/false, dry-run explicitly labelled), local
-  persistence (`unchanged`/`saved`/`failed`/`not-reached`/`skipped_dry_run`)
-  and repository persistence (same set, observed commit/push) are
-  distinguished; error messages are sanitized (webhook/token redaction) and
-  bounded; provider diagnostics (proxy warmup, video quality `balanced` default,
-  fallback) are retained locally without extra network calls; zero deliveries
-  is not a failure; missing data is reported as `unavailable`/`not-reached`.
+  completion (`completed` true only after required work including persistence;
+  `normal`/`no-candidate`/`dry-run` completed vs `failed`/`interrupted`
+  incomplete; not by JSON write/finally), local persistence
+  (`unchanged`/`saved`/`failed`/`not-reached`/`skipped_dry_run`) and
+  repository persistence (same set, observed commit/push, dry-run explicit;
+  local save ≠ repo push) are distinguished; preparation/staging/commit/
+  recovery/push failures all report `failed` (only never-started is
+  `not-reached`); error messages are sanitized (webhook/token/Auth redaction,
+  bounded 500 chars, preserves operation/type/category) and do not leak
+  secrets in JSON/summary/logs; provider diagnostics are retained locally
+  without extra network calls: proxy warmup (available/unavailable),
+  video quality mode (`balanced` default, `highest`/`compatibility`),
+  selected card-media provider per post, accepted optional quality upgrades
+  (Embedez 1080p validated), failed optional quality candidates/base-retention
+  fallbacks with reason (distinct from feed fallback); neither warmup nor
+  successful video validation proves audio inclusion; zero deliveries is not
+  a failure; missing data is reported as `unavailable`/`not-reached`; the
+  real workflow persistence shell is syntax-checked with `bash -n` and mocked
+  for unchanged/saved/recovered/failed/CACHE_RESULT in tests (no copied
+  test-only shell).
 - `MEDIA_HEAL_SCOPE` — `video` (default) | `on`/`all` | `off` (round 56/56b).
 - `RETRACT_DEAD_POSTS` — default OFF; `1` enables dead-post tombstoning
   (round 44; requires two independent proofs before touching a message).
