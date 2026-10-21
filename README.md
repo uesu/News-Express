@@ -89,8 +89,8 @@ flowchart LR
 | **Feeds** | one **combined RSS request** for all subreddits (fits Reddit's ~1 req/min datacenter limit) with automatic per-subreddit fallback; the optional `REDDIT_FEED_TOKEN` moves requests to the logged-in tier |
 | **FULL MODE** | with an optional Reddit script app: 💬/👍 stats, the OP's stickied comment, and true crosspost embeds |
 | **Fallback fleet** | proxy services (vxreddit → redditez → Embeddit rewrite — the priority/tie-break order, dispatched as bounded concurrent waves with Embeddit held back), Redlib instances, and the Arctic Shift archive — a dead source never breaks a run |
-| **Delivery checks & state** | dedup, stateless fresh-age and pristine `/new` checks, plus operational pending rechecks for selected liveness/media-readiness holds; optional post-delivery retraction (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
-| **Listing-safe delivery** | cache-busted `/new` confirmation posts an item on the first tick it is visible; listing outages are never treated as proof of absence |
+| **Delivery checks & state** | dedup, stateless fresh-age hold (default 30 s, `0` off), plus operational pending rechecks for selected liveness/media-readiness holds; optional post-delivery retraction; pristine `/new` confirmation removed 2026-10-21 (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
+| **Listing safety** | retraction seatbelt retains its own `/new` listing proof (two proofs required); delivery no longer requires pristine listing — outages are never proof of absence, removal checks still apply |
 
 ### 🧱 Platform
 

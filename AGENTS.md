@@ -197,8 +197,13 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   current subreddit visibility.
 - Logs and the GitHub Actions run summary share consistent outcome
   definitions derived from a stable local `reddit_run_result.json` record;
-  no extra network calls are made for the summary; zero deliveries is not a
-  failure; missing data is reported as unavailable.
+  completion (`completed` true/false, dry-run explicitly labelled), local
+  persistence (`unchanged`/`saved`/`failed`/`not-reached`/`skipped_dry_run`)
+  and repository persistence (same set, observed commit/push) are
+  distinguished; error messages are sanitized (webhook/token redaction) and
+  bounded; provider diagnostics (proxy warmup, video quality `balanced` default,
+  fallback) are retained locally without extra network calls; zero deliveries
+  is not a failure; missing data is reported as `unavailable`/`not-reached`.
 - `MEDIA_HEAL_SCOPE` — `video` (default) | `on`/`all` | `off` (round 56/56b).
 - `RETRACT_DEAD_POSTS` — default OFF; `1` enables dead-post tombstoning
   (round 44; requires two independent proofs before touching a message).

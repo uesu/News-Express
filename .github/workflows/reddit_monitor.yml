@@ -196,7 +196,7 @@ jobs:
         env:
           CACHE_BRANCH: ${{ github.ref_name }}
         run: |
-          echo "CACHE_RESULT=failed" >> "$GITHUB_ENV"
+          echo "CACHE_RESULT=not-reached" >> "$GITHUB_ENV"
           set -o pipefail
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -207,9 +207,10 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "No cache changes to push."
-            echo "CACHE_RESULT=success" >> "$GITHUB_ENV"
+            echo "CACHE_RESULT=unchanged" >> "$GITHUB_ENV"
           else
             if ! git commit -m "auto: update reddit monitor caches"; then
+              echo "CACHE_RESULT=failed" >> "$GITHUB_ENV"
               echo "::error::CACHE COMMIT FAILED — dedup cache was not persisted; rerun this monitor after resolving the repository state."
               exit 1
             fi
@@ -266,11 +267,13 @@ jobs:
             done
 
             if [ "$pushed" -ne 1 ]; then
+              echo "CACHE_RESULT=failed" >> "$GITHUB_ENV"
               echo "::error::CACHE PUSH FAILED after ${attempts}/3 attempt(s) — dedup cache was not persisted; the next run may re-post. Rerun this monitor after GitHub recovers."
               exit 1
             fi
+          else
+            echo "CACHE_RESULT=saved" >> "$GITHUB_ENV"
           fi
-          echo "CACHE_RESULT=success" >> "$GITHUB_ENV"
       # Reporting only: stable local run-result record, no network or scraping.
       # Summary source: reddit_run_result.json -> GITHUB_STEP_SUMMARY (inline, no additional requests).
       - name: Write monitor run summary
@@ -309,13 +312,29 @@ jobs:
               return ", ".join(f"{k}: {v}" for k, v in sorted(d.items()))
           print("## Reddit Feed Monitor — run summary")
           print()
+          # Repository persistence (observed commit/push) vs local persistence (from run_result)
           print(f"**Result:** {job_status}")
           print(f"**Monitor runtime:** {runtime}")
-          print(f"**State persistence:** {cache_result}")
-          if data.get("completed") is False:
+          # Repo persistence is from workflow env (observed git push), local is from run_result (file saves)
+          print(f"**Repository persistence:** {cache_result}")
+          local_persist = data.get("persistence_status", "unavailable")
+          print(f"**Local persistence:** {local_persist}")
+          if local_persist == "skipped_dry_run":
+              print(f"  - Dry-run: no local cache write (as intended)")
+          # Run completion with dry-run distinction
+          if data.get("completed") is True:
+              print(f"**Run status:** completed")
+              if data.get("dry_run") is True:
+                  print(f"  - Dry-run execution (no live delivery or persistence)")
+              elif data.get("dry_run") is False:
+                  print(f"  - Live execution")
+          elif data.get("completed") is False:
               print(f"**Run status:** incomplete")
               if data.get("error"):
+                  # Error already sanitized in engine
                   print(f"**Error:** {data.get('error')}")
+          else:
+              print(f"**Run status:** unavailable")
           print()
           print("### Feed")
           print(f"- Combined-feed entries: {v('combined_entries')}")
@@ -366,8 +385,28 @@ jobs:
               print(f"  - by reason: {dict_str(data.get('other_by_reason'))}")
           print()
           print("### Providers and media")
-          print("- Warmup results: see monitor.log")
-          print("- Observed provider failures: see monitor.log; counts describe this run's local observations, not a health audit")
+          # Warmup: locally observed, no extra network
+          warmup_status = data.get("proxy_warmup_status", "unavailable")
+          warmup_services = data.get("proxy_warmup_services")
+          if warmup_status == "ok" and isinstance(warmup_services, dict):
+              details = ", ".join(f"{k}={'ok' if v.get('ok') else 'down'}" for k, v in sorted(warmup_services.items()))
+              print(f"- Proxy warmup: {warmup_status} ({details})")
+          elif warmup_status == "ok":
+              print(f"- Proxy warmup: {warmup_status}")
+          elif warmup_status == "disabled":
+              print(f"- Proxy warmup: disabled (PROXY_MEDIA=0 or module missing)")
+          elif warmup_status in ("failed", "unavailable", "not-reached"):
+              print(f"- Proxy warmup: {warmup_status}")
+          else:
+              print(f"- Proxy warmup: {warmup_status}")
+          # Video quality mode (local config, no network)
+          vq = data.get("video_quality", "unavailable")
+          print(f"- Video quality mode: {vq}")
+          # Fallback is already in Feed section, but note here if not-reached vs zero
+          if data.get("fallback_status") == "not_attempted":
+              print(f"- Fallback: not attempted (combined succeeded)")
+          # Provider observations: use local counts, not health audit
+          print("- Note: per-candidate provider details in monitor.log; counts above are this run's local observations")
           print()
           print("Counts describe this run's local observations, not an independent subreddit-visibility or end-to-end health audit.")
           print("Summary source: reddit_run_result.json (per-run, ignored) + monitor.log for provider diagnostics; no additional network requests.")

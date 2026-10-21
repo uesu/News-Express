@@ -38,9 +38,18 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
-* **2026-10-21 — Reddit delivery cleanup: pristine-listing removal, accurate logs and run summary.**
+* **2026-10-21 — Reddit delivery cleanup: pristine-listing removal, accurate completion/persistence reporting, secret-redacted diagnostics.**
 
-  Remove the mandatory pristine listing-confirmation dependency (`LISTING_CONFIRM` parsing, cache, `_fresh`/`no-cache` headers, gate branches, workflow wiring, docs/tests) per the approved handoff. The `FRESH_HOLD_SECONDS` floor (default 30 s, stateless) and posted-post deduplication are preserved. Useful pending suppression with bounded timed retries, pending expiry/source-provenance and provenance-aware RSS reconsideration (still subject to removal checks) are retained; archive/media presence is not treated as proof of current subreddit visibility. Reddit logs now use stage-accurate aggregated `INFO` with per-candidate `DEBUG` (replacing the misleading “Found X new Reddit posts” wording) and the Actions run summary is derived from a stable local `reddit_run_result.json` record without scraping or extra network calls; workflow result remains independent of delivery count and missing data is reported as unavailable. Documentation, configuration examples and `AGENTS.md` updated; historical audits preserved.
+  Remove the mandatory pristine listing-confirmation dependency (`LISTING_CONFIRM` parsing, cache, `_fresh`/`no-cache` headers, gate branches, workflow wiring, docs/tests) per the approved handoff. The `FRESH_HOLD_SECONDS` floor (default 30 s, stateless) and posted-post deduplication are preserved. Useful pending suppression with bounded timed retries (48 h expiry, source-provenance `rss`/`arctic`), provenance-aware RSS reconsideration (still subject to removal checks; archive/media presence not proof of visibility) and bounded transient retry are retained.
+
+  Reddit logs now use stage-accurate aggregated `INFO` (considered/entering/delivered/known-pending/retry-backoff/fresh-hold/etc., removal/liveness at `INFO` with conditional wording) with per-candidate `DEBUG`; the misleading “Found X new Reddit posts” wording is removed. The Actions run summary is derived from a stable local `reddit_run_result.json` record (inline YAML Python, validates JSON object, handles missing/malformed/wrong-shape as `unavailable`, no scraping or extra network calls):
+
+  - Completion is `completed` true/false, dry-run explicitly labelled (`skipped_dry_run`), no claim of live delivery/persistence for dry-run; failures during or before required persistence are `incomplete` with `not-reached` vs `failed` distinction, and `finally` does not overwrite success.
+  - Local persistence (`unchanged`/`saved`/`failed`/`not-reached`/`skipped_dry_run`) and repository persistence (same set, observed commit/push, `unchanged` vs `saved` distinct) are reported separately and not conflated; local save is not inferred as repository push.
+  - Error messages are sanitized and bounded (webhook URLs, `token=` query, `Authorization`/`Bearer` redacted to `[REDACTED]`, exception type preserved, safe diagnostics retained; delivery decisions unchanged).
+  - Provider/media diagnostics are retained locally (proxy warmup `ok`/`disabled`/`failed`/`unavailable` with service map, video quality `balanced` default, fallback `ok`/`partial`/`all_failed`/`not_attempted`) without extra network requests; zero vs unavailable is distinguished; detailed per-candidate logs remain as supporting evidence.
+
+  Documentation, `.env.example`, `AGENTS.md`, `README` and `docs/REPOSITORY_TRACKING.md` updated; `reddit_run_result.json` remains reporting-only, ignored per-run (not delivery state, not cache-merge input, not Twitter state); historical audits preserved. Tests moved into existing suites (no standalone formatter/cleanup-test file) and verify normal/no-candidate/dry-run/failure paths, unchanged-vs-saved, secret-redaction, provider diagnostics and summary-generation without network.
 
 * **2026-10-20 — Plain-text profile crosspost attribution.**
 

@@ -24,12 +24,16 @@ terminal feed failures, empty accounts, post counters, and cache status.
 ## Reddit V3
 
 Reddit's workflow-only summary is derived from a stable local
-`reddit_run_result.json` record (plus `monitor.log` for provider diagnostics)
-and reports runtime, feed and delivery counters, proxy warmup health,
-quality-upgrade diagnostics, fallback labels and the cache commit/push result;
-it makes no extra network requests. It does not alter provider selection,
-posting, scheduling, cache policy, or media requests, and missing data is
-reported as unavailable (zero deliveries is not a failure).
+`reddit_run_result.json` record (plus `monitor.log` for per-candidate details)
+and reports runtime, completion (`completed` true/false, dry-run distinct),
+local persistence (`unchanged`/`saved`/`failed`/`not-reached`/`skipped_dry_run`)
+and repository persistence (same set, observed commit/push), feed and delivery
+counters, proxy warmup health/services, video quality mode (`balanced` default),
+and fallback labels; it sanitizes error messages and makes no extra network
+requests. It does not alter provider selection, posting, scheduling, cache
+policy, or media requests, and missing data is reported as `unavailable`/
+`not-reached` (zero deliveries is not a failure; dry-run is explicitly labelled;
+local save is not conflated with repository push).
 
 The operational `pending_reddit.json` cache remains active. It records selected
 liveness/removal/approval and media-readiness holds. Retryable holds use the

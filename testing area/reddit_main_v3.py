@@ -425,17 +425,52 @@ def _init_run_stats():
         "dedup_skipped_in_run": 0,
         "completed": False,
         "error": None,
+        "persistence_status": "not-reached",
+        "dry_run": bool(DRY_RUN) if 'DRY_RUN' in globals() else False,
+        "proxy_warmup_status": "not-reached",
+        "proxy_warmup_services": None,
+        "video_quality": os.getenv("REDDIT_VIDEO_QUALITY", "").strip() or "balanced",
     }
 
 def _inc_reason(counter_dict, reason, amount=1):
     key = str(reason or "unknown")
     counter_dict[key] = counter_dict.get(key, 0) + amount
 
+def _sanitize_error_message(msg, max_len=500):
+    """Redact credential-bearing URLs/tokens before emission."""
+    try:
+        s = str(msg or "")
+    except Exception:
+        s = "<unprintable>"
+    # Bound initial length
+    if len(s) > 1000:
+        s = s[:1000] + "..."
+    # Redact webhook URLs with secrets
+    # e.g. https://discord.com/api/webhooks/123/abc -> https://discord.com/api/webhooks/[REDACTED]
+    s = re.sub(r"https://discord\.com/api/webhooks/[^\s\"']+", "https://discord.com/api/webhooks/[REDACTED]", s)
+    s = re.sub(r"https://discordapp\.com/api/webhooks/[^\s\"']+", "https://discordapp.com/api/webhooks/[REDACTED]", s)
+    s = re.sub(r"https://canary\.discord\.com/api/webhooks/[^\s\"']+", "https://canary.discord.com/api/webhooks/[REDACTED]", s)
+    # Redact token query param
+    s = re.sub(r"token=[^\s&\"']+", "token=[REDACTED]", s, flags=re.IGNORECASE)
+    # Redact Authorization headers (cover Bearer token and whole header)
+    s = re.sub(r"Bearer\s+[^\s\"']+", "Bearer [REDACTED]", s, flags=re.IGNORECASE)
+    s = re.sub(r"Authorization:[^\n]*", "Authorization: [REDACTED]", s, flags=re.IGNORECASE)
+    # Bound final
+    if len(s) > max_len:
+        s = s[:max_len-3] + "..."
+    return s
+
 def _write_run_result(stats, extra=None):
     try:
         out = dict(stats)
         if extra:
             out.update(extra)
+        # Sanitize error before emission (redact secrets, bound length)
+        if "error" in out and out["error"] is not None:
+            try:
+                out["error"] = _sanitize_error_message(out["error"])
+            except Exception:
+                out["error"] = "<sanitization_failed>"
         # Validate JSON is object-like; ensure completed flag present
         if not isinstance(out, dict):
             out = {"error": "invalid_run_result_shape", "raw": str(out)[:500]}
@@ -444,7 +479,10 @@ def _write_run_result(stats, extra=None):
             json.dump(out, f, indent=2, sort_keys=True, ensure_ascii=False)
             f.write("\n")
     except Exception as e:
-        logging.error(f"Failed to write run result: {e}")
+        try:
+            logging.error(f"Failed to write run result: {_sanitize_error_message(e)}")
+        except Exception:
+            logging.error("Failed to write run result: <unprintable>")
 
 
 
@@ -1146,8 +1184,8 @@ def save_posted(posted: set, keep_newest: frozenset = frozenset()) -> set:
             json.dump(sorted(kept), f, indent=2)
         return kept
     except Exception as e:
-        logging.error(f"Error saving cache: {e}")
-        return set()
+        logging.error(f"Error saving cache: {_sanitize_error_message(e)}")
+        raise
 
 
 def load_pending() -> dict:
@@ -1172,7 +1210,8 @@ def save_pending(pending: dict) -> None:
         with open(PENDING_FILE, "w", encoding="utf-8") as f:
             json.dump(dict(sorted(pruned.items())), f, indent=2)
     except Exception as e:
-        logging.error(f"Error saving pending cache: {e}")
+        logging.error(f"Error saving pending cache: {_sanitize_error_message(e)}")
+        raise
 
 
 def load_posted_messages() -> dict:
@@ -1202,7 +1241,8 @@ def save_posted_messages(messages: dict) -> None:
         with open(POSTED_MESSAGES_FILE, "w", encoding="utf-8") as f:
             json.dump(dict(sorted(pruned.items())), f, indent=2)
     except Exception as e:
-        logging.error(f"Error saving posted-message cache: {e}")
+        logging.error(f"Error saving posted-message cache: {_sanitize_error_message(e)}")
+        raise
 
 
 def mark_pending(pending: dict, key: str, reason: str, now: float,
@@ -5445,10 +5485,28 @@ async def main():
             # ---- round 13: proxy warm-up (writes proxy_health.json) ----------
             global _proxy_health
             if PROXY_MEDIA and reddit_proxy is not None:
-                _proxy_health = await reddit_proxy.proxy_warmup(session)
+                try:
+                    _proxy_health = await reddit_proxy.proxy_warmup(session)
+                    # Record for reporting (no extra network)
+                    try:
+                        run_stats["proxy_warmup_status"] = "ok" if _proxy_health else "unavailable"
+                        run_stats["proxy_warmup_services"] = _proxy_health if isinstance(_proxy_health, dict) else None
+                    except Exception:
+                        run_stats["proxy_warmup_status"] = "unavailable"
+                except Exception as e:
+                    logging.error(f"Proxy warmup failed: {_sanitize_error_message(e)}")
+                    run_stats["proxy_warmup_status"] = "failed"
+                    run_stats["proxy_warmup_services"] = None
             else:
                 logging.info("Proxy media off (PROXY_MEDIA=0 or module missing) — "
                              "native media only.")
+                run_stats["proxy_warmup_status"] = "disabled"
+                run_stats["proxy_warmup_services"] = None
+            # Refresh video quality from env (in case var set per-run)
+            try:
+                run_stats["video_quality"] = os.getenv("REDDIT_VIDEO_QUALITY", "").strip() or "balanced"
+            except Exception:
+                pass
 
             # ---- TEST POST mode (round 12): rebuild one specific post --------
             if TEST_POST_ID:
@@ -5615,19 +5673,52 @@ async def main():
                              f"{run_stats['subreddits_represented']} of {run_stats['subreddits_configured']} subreddits represented; "
                              f"dedup skipped {run_stats['dedup_skipped_in_run']} in collect).")
                 if RETRACT_DEAD_POSTS and not DRY_RUN:
-                    await retract_dead_posts(session, posted_messages, now)
-                saved = save_posted(posted, frozenset(posted - posted_at_start))
-                _verify_dedup_save(posted_at_start, posted, saved)
-                save_pending(pending)
-                save_posted_messages(posted_messages)
-                # aggregated summary for quiet run
-                logging.info(f"Run summary: {run_stats['unposted_candidates_considered']} considered, "
-                             f"{run_stats['candidates_entering_processing']} entering processing, "
-                             f"{run_stats['delivered']} delivered, {run_stats['dedup_skipped_in_run']} dedup, "
-                             f"{run_stats['known_pending_suppressed']} known-pending, {run_stats['retry_backoff']} retry-backoff, "
-                             f"{run_stats['fresh_hold']} fresh-hold.")
-                _write_run_result(run_stats, {"monitor_runtime_note": "no_candidates"})
-                return
+                    try:
+                        await retract_dead_posts(session, posted_messages, now)
+                    except Exception as e:
+                        logging.error(f"Retract failed (no-candidates): {_sanitize_error_message(e)}")
+                # Persistence handling for no-candidates (including dry-run)
+                if DRY_RUN:
+                    logging.info("DRY RUN finished (no candidates): cache NOT saved, Discord NOT touched.")
+                    run_stats["persistence_status"] = "skipped_dry_run"
+                    run_stats["completed"] = True
+                    run_stats["dry_run"] = True
+                    logging.info(f"Run summary: {run_stats['unposted_candidates_considered']} considered, "
+                                 f"{run_stats['candidates_entering_processing']} entering processing, "
+                                 f"{run_stats['delivered']} delivered, {run_stats['dedup_skipped_in_run']} dedup, "
+                                 f"{run_stats['known_pending_suppressed']} known-pending, {run_stats['retry_backoff']} retry-backoff, "
+                                 f"{run_stats['fresh_hold']} fresh-hold.")
+                    _write_run_result(run_stats, {"monitor_runtime_note": "no_candidates", "dry_run": True, "completed": True, "persistence_status": "skipped_dry_run"})
+                    return
+                else:
+                    try:
+                        saved = save_posted(posted, frozenset(posted - posted_at_start))
+                        _verify_dedup_save(posted_at_start, posted, saved)
+                        save_pending(pending)
+                        save_posted_messages(posted_messages)
+                        # Determine local persistence outcome: unchanged vs saved
+                        if posted == posted_at_start:
+                            run_stats["persistence_status"] = "unchanged"
+                        else:
+                            run_stats["persistence_status"] = "saved"
+                        run_stats["completed"] = True
+                        run_stats["error"] = None
+                        run_stats["dry_run"] = False
+                    except Exception as e:
+                        run_stats["persistence_status"] = "failed"
+                        run_stats["completed"] = False
+                        run_stats["error"] = f"{type(e).__name__}:{_sanitize_error_message(e)}"
+                        logging.error(f"Persistence failed (no-candidates): {_sanitize_error_message(e)}")
+                    logging.info(f"Run summary: {run_stats['unposted_candidates_considered']} considered, "
+                                 f"{run_stats['candidates_entering_processing']} entering processing, "
+                                 f"{run_stats['delivered']} delivered, {run_stats['dedup_skipped_in_run']} dedup, "
+                                 f"{run_stats['known_pending_suppressed']} known-pending, {run_stats['retry_backoff']} retry-backoff, "
+                                 f"{run_stats['fresh_hold']} fresh-hold.")
+                    _write_run_result(run_stats, {"monitor_runtime_note": "no_candidates", "completed": run_stats["completed"], "persistence_status": run_stats["persistence_status"], "error": run_stats["error"], "dry_run": False})
+                    if not run_stats["completed"]:
+                        # Preserve original exception context for reporting without leaking secrets
+                        raise RuntimeError(f"persistence_failed:{run_stats['error']}")
+                    return
 
             # Accurate stage log replaces misleading "Found X new Reddit posts. Building V3 cards..."
             logging.info(f"Reddit candidates: {total_found} unposted candidate(s) considered from "
@@ -6051,7 +6142,7 @@ async def main():
                             run_stats["failed_delivery"] += 1
                             _inc_reason(run_stats.get("other_by_reason", {}), f"discord_{resp.status}")
                 except Exception as e:
-                    logging.error(f"Failed building/posting {unique_key}: {e}")
+                    logging.error(f"Failed building/posting {unique_key}: {_sanitize_error_message(e)}")
                     run_stats["failed_delivery"] += 1
                     _inc_reason(run_stats.get("other_by_reason", {}), type(e).__name__ if e else "exception")
 
@@ -6100,43 +6191,89 @@ async def main():
 
         if DRY_RUN:
             logging.info("DRY RUN finished: cache NOT saved, Discord NOT touched.")
-            _write_run_result(run_stats, {"dry_run": True})
+            run_stats["persistence_status"] = "skipped_dry_run"
+            run_stats["completed"] = True
+            run_stats["dry_run"] = True
+            run_stats["error"] = None
+            _write_run_result(run_stats, {"dry_run": True, "completed": True, "persistence_status": "skipped_dry_run"})
         else:
-            saved = save_posted(posted, frozenset(posted - posted_at_start))
-            _verify_dedup_save(posted_at_start, posted, saved)
-            save_pending(pending)
-            save_posted_messages(posted_messages)
-            logging.info("Reddit V3 Monitor execution finished.")
-            _write_run_result(run_stats, {"dry_run": False, "saved": bool(saved)})
+            try:
+                saved = save_posted(posted, frozenset(posted - posted_at_start))
+                _verify_dedup_save(posted_at_start, posted, saved)
+                save_pending(pending)
+                save_posted_messages(posted_messages)
+                if posted == posted_at_start:
+                    run_stats["persistence_status"] = "unchanged"
+                else:
+                    run_stats["persistence_status"] = "saved"
+                run_stats["completed"] = True
+                run_stats["error"] = None
+                run_stats["dry_run"] = False
+                logging.info("Reddit V3 Monitor execution finished.")
+                _write_run_result(run_stats, {"dry_run": False, "completed": True, "persistence_status": run_stats["persistence_status"], "saved": bool(saved)})
+            except Exception as e:
+                run_stats["persistence_status"] = "failed"
+                run_stats["completed"] = False
+                run_stats["error"] = f"{type(e).__name__}:{_sanitize_error_message(e)}"
+                logging.error(f"Persistence failed: {_sanitize_error_message(e)}")
+                _write_run_result(run_stats, {"dry_run": False, "completed": False, "persistence_status": "failed", "error": run_stats["error"]})
+                raise
 
 
 
     except Exception as e:
-        # Preserve observed counters and mark incomplete; re-raise original exception
+        # Preserve observed counters and mark incomplete; sanitize error before emission
+        sanitized = _sanitize_error_message(e)
         run_stats["completed"] = False
-        run_stats["error"] = f"{type(e).__name__}: {e}"
+        # Determine if persistence was already attempted
+        if run_stats.get("persistence_status") == "not-reached":
+            # Heuristic: if exception appears to be persistence-related, mark failed, else keep not-reached
+            msg_lower = sanitized.lower()
+            if "persistence_failed" in sanitized.lower() or "save" in type(e).__name__.lower() or "cache" in msg_lower:
+                run_stats["persistence_status"] = "failed"
+            # else leave as not-reached (failure before persistence)
+        # Preserve first error if already set (e.g. persistence failure), else set sanitized
+        if not run_stats.get("error"):
+            run_stats["error"] = f"{type(e).__name__}:{sanitized}"
         try:
-            _write_run_result(run_stats, {"completed": False, "error": run_stats["error"]})
+            logging.error(f"Run failed ({type(e).__name__}): {sanitized}")
+        except Exception:
+            pass
+        try:
+            _write_run_result(run_stats, {"completed": False, "error": run_stats["error"], "persistence_status": run_stats["persistence_status"]})
         except Exception:
             pass
         raise
     finally:
-        # Ensure a result file exists even if earlier write failed; do not mask delivery success
+        # Ensure a result file exists even if earlier writes failed; never overwrite a successful completion
         try:
-            # If completed already written, this is idempotent; if not, write incomplete marker
-            if not run_stats.get("completed"):
-                import json as _json_final, pathlib as _pl_final
-                p = _pl_final.Path(_RUN_RESULT_FILE)
+            p = pathlib.Path(_RUN_RESULT_FILE)
+            needs_write = False
+            if not p.exists():
                 needs_write = True
-                if p.exists():
-                    try:
-                        d = _json_final.loads(p.read_text(encoding="utf-8"))
-                        if isinstance(d, dict) and d.get("completed"):
-                            needs_write = False
-                    except Exception:
-                        pass
-                if needs_write:
-                    _write_run_result(run_stats, {"completed": False})
+            else:
+                try:
+                    d = json.loads(p.read_text(encoding="utf-8"))
+                    # If file already has completed True, don't overwrite with incomplete
+                    if isinstance(d, dict) and d.get("completed") is True and run_stats.get("completed") is True:
+                        needs_write = False
+                    elif isinstance(d, dict) and d.get("completed") is True and not run_stats.get("completed"):
+                        # Existing success should not be overwritten by finally's incomplete
+                        needs_write = False
+                    elif not run_stats.get("completed") and not p.exists():
+                        needs_write = True
+                    elif not run_stats.get("completed") and isinstance(d, dict) and not d.get("completed"):
+                        # Already incomplete, no need to rewrite unless missing error
+                        needs_write = False
+                    else:
+                        # No file or incomplete without prior success
+                        if not isinstance(d, dict) or not d.get("completed"):
+                            needs_write = not p.exists()
+                except Exception:
+                    needs_write = not p.exists()
+            if needs_write and not run_stats.get("completed"):
+                # Only write incomplete marker if no file exists and we're incomplete
+                _write_run_result(run_stats, {"completed": False, "persistence_status": run_stats.get("persistence_status", "not-reached")})
         except Exception:
             pass
 if __name__ == "__main__":
