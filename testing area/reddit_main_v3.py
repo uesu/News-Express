@@ -4480,13 +4480,7 @@ def _log_media_outcome(label: str, media: list, *, fallback_reason: str | None =
             k = kind or "none"
             current_run_stats["final_card_media_kind_counts"][k] = current_run_stats["final_card_media_kind_counts"].get(k, 0) + 1
             current_run_stats["final_card_media_tile_total"] += len(media) if isinstance(media, list) else 0
-            # Terminal media fallback (proxy -> native) when fallback_reason indicates native fallback
-            if fallback_reason and "native" in fallback_reason.lower() or (fallback_reason == "none" and False):
-                pass  # handled in resolve_post_media directly
-            if fallback_reason and fallback_reason not in ("none", None):
-                # If fallback is terminal (e.g., no usable proxy), count centrally via resolve path
-                # We track terminal fallbacks explicitly in resolve_post_media fallback branch
-                pass
+
     except Exception:
         pass
 
