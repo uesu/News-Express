@@ -1135,7 +1135,10 @@ def _shrink_posted_cache(posted: set, keep_newest: frozenset = frozenset()) -> s
     """
     by_sub: dict = {}
     for key in posted:
-        by_sub.setdefault(key.partition("_")[0], []).append(key)
+        # Keys are "{sub}_{post_id}" where sub may contain underscores;
+        # post_id never does, so split on the LAST underscore.
+        sub = key.rsplit("_", 1)[0] if "_" in key else key
+        by_sub.setdefault(sub, []).append(key)
 
     def _trim(keys: list, quota: int) -> list:
         keys.sort()  # leet ids: chronological within a subreddit
@@ -1178,6 +1181,13 @@ def cap_new_posts(new_posts: list, cap: int) -> list:
     """Round 34: bound one run's post count (MAX_POSTS_PER_RUN note).
     `new_posts` is sorted oldest-first; keep the NEWEST `cap` entries and
     log the dropped oldest (they retry next run inside the 48 h window)."""
+    if cap <= 0:
+        if new_posts:
+            logging.warning(f"POST FLOOD GUARD: {len(new_posts)} new posts this run "
+                            f"exceed the cap of {cap} — posting the newest {cap}; the "
+                            f"{len(new_posts)} oldest retry next run inside the 48 h "
+                            f"window. Dropped: {[p[2] for p in new_posts]}")
+        return []
     if len(new_posts) <= cap:
         return new_posts
     dropped = [p[2] for p in new_posts[:len(new_posts) - cap]]
@@ -1222,11 +1232,22 @@ def load_pending() -> dict:
 def save_pending(pending: dict) -> None:
     # Prune entries older than PENDING_MAX_AGE_SECONDS (the 48h posting
     # window has passed — collect() can no longer pick the post up anyway).
+    def _first_seen_age_ok(v: dict, now: float) -> bool:
+        raw = v.get("first_seen")
+        if raw is None:
+            raw = v.get("last_checked")
+        if raw is None:
+            # No timestamp at all — keep so we don't silently drop a pending entry
+            return True
+        try:
+            ts = float(raw)
+        except (TypeError, ValueError):
+            return True
+        return now - ts <= PENDING_MAX_AGE_SECONDS
     try:
         now = time.time()
         pruned = {k: v for k, v in pending.items()
-                  if isinstance(v, dict)
-                  and now - float(v.get("first_seen") or 0) <= PENDING_MAX_AGE_SECONDS}
+                  if isinstance(v, dict) and _first_seen_age_ok(v, now)}
         with open(PENDING_FILE, "w", encoding="utf-8") as f:
             json.dump(dict(sorted(pruned.items())), f, indent=2)
     except Exception as e:
@@ -1251,12 +1272,20 @@ def load_posted_messages() -> dict:
 def save_posted_messages(messages: dict) -> None:
     if not RETRACT_DEAD_POSTS:
         return
+    def _msg_age_ok(v: dict, now: float) -> bool:
+        raw = v.get("delivered_at")
+        if raw is None:
+            return True
+        try:
+            ts = float(raw)
+        except (TypeError, ValueError):
+            return True
+        return now - ts <= RETRACT_WINDOW_SECONDS
     try:
         now = time.time()
         pruned = {
             k: v for k, v in (messages or {}).items()
-            if isinstance(v, dict) and not v.get("retracted")
-            and now - float(v.get("delivered_at") or 0) <= RETRACT_WINDOW_SECONDS
+            if isinstance(v, dict) and not v.get("retracted") and _msg_age_ok(v, now)
         }
         with open(POSTED_MESSAGES_FILE, "w", encoding="utf-8") as f:
             json.dump(dict(sorted(pruned.items())), f, indent=2)
@@ -1292,7 +1321,11 @@ def pending_due(pending: dict, key: str, now: float) -> bool:
     entry = pending.get(key)
     if not isinstance(entry, dict):
         return True
-    return now - float(entry.get("last_checked") or 0) >= PENDING_RECHECK_SECONDS
+    try:
+        last = float(entry.get("last_checked") or 0)
+    except (TypeError, ValueError):
+        return True
+    return now - last >= PENDING_RECHECK_SECONDS
 
 
 # ---------------------------------------------------------------------------
@@ -1331,7 +1364,10 @@ def _pending_throttle_skip(pending: dict, key: str, now: float, entry) -> bool:
         # Arctic resurface -> skip (never re-verified); RSS re-appearance
         # (a restore, fresh "updated" stamp) -> run the full pipeline.
         return isinstance(entry, _ArcticEntry)
-    last = float(pend.get("last_checked") or 0) if isinstance(pend, dict) else 0.0
+    try:
+        last = float(pend.get("last_checked") or 0) if isinstance(pend, dict) else 0.0
+    except (TypeError, ValueError):
+        last = 0.0
     return now - last < PENDING_RECHECK_SECONDS
 
 
@@ -1406,7 +1442,9 @@ def extract_subreddit(path: str) -> str | None:
 
 
 def extract_post_id(path: str) -> str | None:
-    match = re.search(r"/comments/([a-zA-Z0-9]+)/", path)
+    if not path:
+        return None
+    match = re.search(r"/comments/([a-zA-Z0-9]+)(?:/|[?#]|$)", path)
     return match.group(1) if match else None
 
 
@@ -5601,7 +5639,7 @@ async def main():
     # of the backstop, so the next eviction burst is visible in the log.
     _sub_counts: dict = {}
     for _k in posted:
-        _pfx = _k.partition("_")[0]
+        _pfx = _k.rsplit("_", 1)[0] if "_" in _k else _k
         _sub_counts[_pfx] = _sub_counts.get(_pfx, 0) + 1
     _hot = {s: n for s, n in _sub_counts.items() if n >= MAX_CACHE_SIZE_PER_SUB - 10}
     if _hot or len(posted) >= MAX_CACHE_SIZE_TOTAL * 9 // 10:
