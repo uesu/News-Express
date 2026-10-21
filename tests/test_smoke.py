@@ -7802,39 +7802,49 @@ async def _r21_test_mocked_impl_quality_retains_base():
         data, summary, logs, exc2 = await _r21_run_and_capture("quality_retains_base_full", mocks)
         # Assert candidate dependency was called (quality path reached)
         check("r21: quality candidate dependency was called", len([c for c in candidate_calls if "embedez" in c["label"].lower()]) >=1 or len(candidate_calls)>=1, f"calls:{candidate_calls}")
-        # Assert capture count unconditionally
-        check("r21: quality full-run payload captured", len(captured_payloads) >=1, f"captured:{len(captured_payloads)} calls:{candidate_calls}")
-        # Extract media URLs from captured Components V2 payload
+        # Assert expected captured payload count exactly for one-delivery fixture (no conditional skip)
+        check("r21: quality full-run payload captured", len(captured_payloads) == 1, f"captured:{len(captured_payloads)} expected 1 payload for single delivery")
         extracted_urls = []
         for pl in captured_payloads:
-            # Components V2 payload contains components -> media urls
-            try:
-                comps = pl.get("components") or []
-                for c in comps:
-                    if isinstance(c, dict):
-                        inner = c.get("components") or c.get("items") or []
-                        for ic in inner:
-                            if isinstance(ic, dict):
-                                media = ic.get("media") or {}
-                                if isinstance(media, dict) and media.get("url"):
-                                    extracted_urls.append(media["url"])
-                                # Also check direct url fields
-                                if ic.get("url"):
-                                    extracted_urls.append(ic["url"])
-                # Fallback: str payload contains url
-                if not extracted_urls and base_url in str(pl):
-                    extracted_urls.append(base_url)
-            except Exception:
-                pass
-            # Also check string representation for urls
-            if base_url in str(pl) and base_url not in extracted_urls:
-                extracted_urls.append(base_url)
-        # Assert exact base URL is retained and failed candidate absent
-        # Failed candidate is embedez/cmaf 1080p URL (should not be in payload)
-        has_base = base_url in extracted_urls or base_url in str(captured_payloads)
-        has_failed_candidate = any("embedez" in str(pl) or "cmaf" in str(pl).lower() for pl in captured_payloads)
-        check("r21: quality full-run base URL retained in payload", has_base, f"extracted:{extracted_urls} payloads:{captured_payloads} base:{base_url}")
-        check("r21: quality full-run failed candidate absent in payload", not has_failed_candidate, f"payloads:{captured_payloads}")
+            comps = pl.get("components") if isinstance(pl, dict) else None
+            if not isinstance(comps, list):
+                continue
+            for container in comps:
+                if not isinstance(container, dict):
+                    continue
+                # Container components (e.g., type 17 container)
+                inner = container.get("components")
+                if not isinstance(inner, list):
+                    continue
+                for comp in inner:
+                    if not isinstance(comp, dict):
+                        continue
+                    # Type-12 gallery holds items
+                    if comp.get("type") == 12:
+                        items = comp.get("items")
+                        if isinstance(items, list):
+                            for it in items:
+                                if isinstance(it, dict):
+                                    media = it.get("media")
+                                    if isinstance(media, dict) and isinstance(media.get("url"), str):
+                                        extracted_urls.append(media["url"])
+                        # Also direct media in gallery component (some payloads use media field directly)
+                        media = comp.get("media")
+                        if isinstance(media, dict) and isinstance(media.get("url"), str):
+                            if media["url"] not in extracted_urls:
+                                extracted_urls.append(media["url"])
+                    # Type-10 media component directly under container
+                    elif comp.get("type") == 10:
+                        media = comp.get("media")
+                        if isinstance(media, dict) and isinstance(media.get("url"), str):
+                            extracted_urls.append(media["url"])
+        # Assert actual gallery media URL equals base_url (exact, no string fallback)
+        check("r21: quality full-run base URL retained in payload", base_url in extracted_urls, f"extracted:{extracted_urls} expected base:{base_url} payloads:{captured_payloads}")
+        # Assert exact count for one-delivery fixture — gallery should contain exactly one media URL equal to base_url
+        check("r21: quality full-run payload media count", len(extracted_urls) == 1 and extracted_urls[0] == base_url, f"extracted:{extracted_urls} base:{base_url}")
+        # Check rejected candidate URLs against extracted media URLs (not whole payload string)
+        has_failed_candidate = any("embedez" in u.lower() or "cmaf" in u.lower() for u in extracted_urls)
+        check("r21: quality full-run failed candidate absent in payload", not has_failed_candidate, f"extracted:{extracted_urls}")
         # Separately assert delivered, fallback reason, retained-base without alternatives
         check("r21: quality full-run retains base counter", data.get("validated_base_retained",0)>=1, f"data:{data} logs:{logs[:500]} calls:{candidate_calls}")
         check("r21: quality full-run fallback unavailable", data.get("quality_fallback_reasons",{}).get("quality_candidate_unavailable",0)>=1, str(data))
