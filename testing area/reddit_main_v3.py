@@ -423,6 +423,81 @@ _RUN_RESULT_FILE = "reddit_run_result.json"
 # Global for media tracking (set per-run inside main)
 current_run_stats = None
 
+def _candidate_healthy(reason: str | None) -> bool:
+    """Lightweight healthy flag from an already-known reason — no I/O.
+
+    Removal/deletion markers (the _NO_RECHECK_REASONS set) are unhealthy
+    (the post itself is gone); everything else — pending approval,
+    media-wait, fresh-hold, retry-backoff — is healthy-but-deferred.
+    """
+    if not reason:
+        return True
+    return str(reason) not in _NO_RECHECK_REASONS
+
+def _format_instance_health(used: list, unused: list, health_by_host: dict) -> str:
+    """Human-readable instance inventory line — used first, then idle."""
+    parts = []
+    if used:
+        parts.append("used/active: " + ", ".join(used))
+    if unused:
+        parts.append("not used this run (no extra request — health unknown unless previously observed): " + ", ".join(unused))
+    return " | ".join(parts) if parts else "no instances"
+
+
+def _collect_instance_inventory(run_stats, proxy_health, redlib_reach):
+    """Build used/unused instance lists from in-memory state only — no extra HTTP."""
+    used = []
+    unused = []
+    try:
+        if isinstance(proxy_health, dict):
+            for svc, info in proxy_health.items():
+                ok = bool(info.get("ok")) if isinstance(info, dict) else bool(info)
+                health = "healthy=yes" if ok else "healthy=no (down)"
+                used.append(f"{svc} ({health}, proxy warmup)")
+        elif proxy_health:
+            used.append(f"proxy_warmup ({proxy_health})")
+        if run_stats.get("combined_fetch_status") in ("ok", "empty"):
+            used.append("www.reddit.com (healthy=yes, combined feed)")
+        if redlib_reach:
+            for inst, (ok, total) in sorted(redlib_reach.items()):
+                _host = inst.replace('https://', '').replace('http://', '').split('/')[0]
+                if any(_host in u for u in used):
+                    continue
+                h = "healthy=yes" if ok else "healthy=no"
+                used.append(f"{_host} ({h} {ok}/{total} post-page)")
+        all_rss = []
+        try:
+            all_rss = list(REDDIT_RSS_INSTANCES)
+        except Exception:
+            pass
+        observed_hosts = set()
+        # Collect hosts already represented in used list (to avoid duplicate and mark correctly)
+        for u in used:
+            # Extract host token before space or '('
+            _host_token = u.split()[0].replace('(', '').replace(')', '').strip()
+            # _host_token may be like 'www.reddit.com' or 'redlib.example.com'
+            if _host_token:
+                observed_hosts.add(f"https://{_host_token}")
+                observed_hosts.add(_host_token)
+                # Also add raw with https for matching
+                if "www.reddit.com" in u:
+                    observed_hosts.add("https://www.reddit.com")
+                if "old.reddit.com" in u:
+                    observed_hosts.add("https://old.reddit.com")
+        for h in all_rss:
+            _h_host = h.replace('https://', '').replace('http://', '').split('/')[0]
+            if h not in observed_hosts and _h_host not in observed_hosts and not any(_h_host in ui for ui in used):
+                unused.append(f"{_h_host} (not used this run — health unknown without extra request)")
+        try:
+            if EDDRIT_BASE and EDDRIT_BASE not in observed_hosts:
+                if not any(EDDRIT_BASE.replace('https://', '') in ui for ui in used):
+                    unused.append(f"{EDDRIT_BASE.replace('https://', '')} (not used this run)")
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return {"used": used, "unused": unused}
+
 def _init_run_stats():
     # Fresh per-invocation record; never reuse stale prior-run file.
     # Feed coverage is measured from the feed itself, not from deduplicated
@@ -466,6 +541,10 @@ def _init_run_stats():
         "proxy_warmup_status": "not-reached",
         "proxy_warmup_services": None,
         "video_quality": os.getenv("REDDIT_VIDEO_QUALITY", "").strip() or "balanced",
+        # Zero-cost detail: candidate IDs + health and instance inventory (from in-memory state only)
+        "unposted_candidate_ids": [],
+        "unposted_candidate_details": [],
+        "instance_inventory": {},
         # Media outcome tracking (existing observations only, no extra network)
         "selected_media_providers": {},
         "quality_upgrades_accepted": 0,
@@ -5916,6 +5995,18 @@ async def main():
                 logging.info(f"Reddit monitor: no unposted candidates to consider (combined feed {run_stats['combined_entries']} entries, "
                              f"{run_stats['subreddits_represented']} of {run_stats['subreddits_configured']} subreddits represented; "
                              f"dedup skipped {run_stats['dedup_skipped_in_run']} in collect).")
+                # Zero-cost detail for empty candidate set (no extra request)
+                try:
+                    run_stats["unposted_candidate_ids"] = []
+                    run_stats["unposted_candidate_details"] = []
+                    _inv_empty = _collect_instance_inventory(run_stats, _proxy_health, _redlib_reach)
+                    run_stats["instance_inventory"] = _inv_empty
+                    if _inv_empty.get("used"):
+                        logging.info("Instances used/active this run: " + "; ".join(_inv_empty["used"]))
+                    if _inv_empty.get("unused"):
+                        logging.info("Instances not used this run (no extra request — health unknown unless previously observed): " + "; ".join(_inv_empty["unused"]))
+                except Exception:
+                    pass
                 if RETRACT_DEAD_POSTS and not DRY_RUN:
                     try:
                         await retract_dead_posts(session, posted_messages, now)
@@ -5969,6 +6060,23 @@ async def main():
                          f"{run_stats['combined_entries']} feed entries covering "
                          f"{run_stats['subreddits_represented']} of {run_stats['subreddits_configured']} subreddit(s) represented.")
 
+            # Zero-cost inventory: IDs + health (from in-memory pending/feed state, no extra requests).
+            # Initial snapshot before per-candidate gates; each gate later updates its entry's reason/health.
+            _candidate_inventory = {}
+            for _sub, _path, _uk, _pub, _act, _ent in new_posts:
+                _src = ("arctic" if isinstance(_ent, _ArcticEntry) else "rss")
+                _pend_reason = str(pending[_uk].get("reason") or "unknown") if _uk in pending else None
+                _init_reason = _pend_reason or "new"
+                _healthy = _candidate_healthy(_pend_reason) if _pend_reason else True
+                _candidate_inventory[_uk] = {"id": _uk, "source": _src, "reason": _init_reason, "healthy": _healthy}
+            run_stats["unposted_candidate_ids"] = list(_candidate_inventory.keys())
+            run_stats["unposted_candidate_details"] = list(_candidate_inventory.values())
+            if _candidate_inventory:
+                logging.info("Unposted candidate IDs (%d): %s (healthy=yes means not removed/deleted — still deferrable; no extra request)" % (
+                    len(_candidate_inventory),
+                    ", ".join(f"{d['id']} (healthy={'yes' if d['healthy'] else 'no'}, reason={d['reason']}, src={d['source']})" for d in _candidate_inventory.values())
+                ))
+
             # newest first per sub for stable ordering
             new_posts.sort(key=lambda p: p[3])
 
@@ -5981,6 +6089,13 @@ async def main():
             if _before_cap != _after_cap:
                 run_stats["flood_cap_dropped"] = _before_cap - _after_cap
                 logging.warning(f"Flood cap: {run_stats['flood_cap_dropped']} candidate(s) dropped (cap {MAX_POSTS_PER_RUN}).")
+                # Mark dropped candidates in inventory (healthy but deferred to next run, no extra request)
+                _kept_ids = {p[2] for p in new_posts}
+                for _did, _dinfo in _candidate_inventory.items():
+                    if _did not in _kept_ids:
+                        _dinfo["reason"] = "flood_cap_dropped"
+                        _dinfo["healthy"] = True
+                run_stats["unposted_candidate_details"] = list(_candidate_inventory.values())
 
             # Round 72: defer edits until every card/continuation has been sent.
             # Multiple proxy videos warm up concurrently; healthy posts never
@@ -5995,6 +6110,12 @@ async def main():
                 # their whole point).
                 if not TEST_POST_ID and unique_key in posted:
                     run_stats["dedup_skipped_in_run"] += 1
+                    try:
+                        if unique_key in _candidate_inventory:
+                            _candidate_inventory[unique_key]["reason"] = "dedup"
+                            _candidate_inventory[unique_key]["healthy"] = True
+                    except NameError:
+                        pass
                     logging.debug(f"[{unique_key}] already posted (dedup) — skipped.")
                     continue
                 webhook_url = get_webhook_for_subreddit(subreddit)
@@ -6002,6 +6123,12 @@ async def main():
                     logging.error(f"No webhook configured for r/{subreddit}. Skipping {unique_key}.")
                     run_stats["other_skipped"] += 1
                     _inc_reason(run_stats["other_by_reason"], "missing_webhook")
+                    try:
+                        if unique_key in _candidate_inventory:
+                            _candidate_inventory[unique_key]["reason"] = "missing_webhook"
+                            _candidate_inventory[unique_key]["healthy"] = True
+                    except NameError:
+                        pass
                     continue
 
                 reddit_url = f"https://www.reddit.com{path}"
@@ -6024,6 +6151,12 @@ async def main():
                     if _pend.get("reason") in _NO_RECHECK_REASONS:
                         run_stats["known_pending_suppressed"] += 1
                         _inc_reason(run_stats["known_pending_by_reason"], _pend_reason)
+                        try:
+                            if unique_key in _candidate_inventory:
+                                _candidate_inventory[unique_key]["reason"] = _pend_reason
+                                _candidate_inventory[unique_key]["healthy"] = _candidate_healthy(_pend_reason)
+                        except NameError:
+                            pass
                         logging.debug(f"[{unique_key}] pending ({_pend_reason}) — "
                                      f"not re-checking (removed posts re-enter via RSS "
                                      f"when restored; entry expires at the 48 h window).")
@@ -6032,6 +6165,12 @@ async def main():
                                       - (now - float(_pend.get("last_checked") or 0)))
                         run_stats["retry_backoff"] += 1
                         _inc_reason(run_stats["retry_backoff_by_reason"], _pend_reason)
+                        try:
+                            if unique_key in _candidate_inventory:
+                                _candidate_inventory[unique_key]["reason"] = _pend_reason
+                                _candidate_inventory[unique_key]["healthy"] = _candidate_healthy(_pend_reason)
+                        except NameError:
+                            pass
                         logging.debug(f"[{unique_key}] pending ({_pend_reason}) — "
                                      f"skipping recheck, due again in ~{_due_in}s.")
                     continue
@@ -6044,6 +6183,12 @@ async def main():
                     _post_age = now - float(published_ts or now)
                     if _post_age < FRESH_HOLD_SECONDS:
                         run_stats["fresh_hold"] += 1
+                        try:
+                            if unique_key in _candidate_inventory:
+                                _candidate_inventory[unique_key]["reason"] = "fresh_hold"
+                                _candidate_inventory[unique_key]["healthy"] = True
+                        except NameError:
+                            pass
                         logging.debug(f"[{unique_key}] age {_post_age:.1f}s < "
                                      f"FRESH_HOLD_SECONDS ({FRESH_HOLD_SECONDS}s) — "
                                      f"skipped this tick (stateless, not cached), "
@@ -6126,6 +6271,12 @@ async def main():
                             run_stats["other_skipped"] += 1
                             _inc_reason(run_stats["other_by_reason"], "test_post_no_base")
                             run_stats["candidates_entering_processing"] -= 1
+                            try:
+                                if unique_key in _candidate_inventory:
+                                    _candidate_inventory[unique_key]["reason"] = "test_post_no_base"
+                                    _candidate_inventory[unique_key]["healthy"] = False
+                            except NameError:
+                                pass
                             continue
 
                 # ---- round 18: skip soft-removed / deleted / pending-approval
@@ -6146,6 +6297,12 @@ async def main():
                                      published_ts=published_ts)
                         run_stats["newly_rejected_removed"] += 1
                         _inc_reason(run_stats["newly_rejected_by_reason"], _removed)
+                        try:
+                            if unique_key in _candidate_inventory:
+                                _candidate_inventory[unique_key]["reason"] = _removed
+                                _candidate_inventory[unique_key]["healthy"] = _candidate_healthy(_removed)
+                        except NameError:
+                            pass
                         logging.info(f"[{unique_key}] post appears removed/deleted/"
                                      f"awaiting approval ({_removed}) — skipping, not "
                                      f"cached (eligible for reconsideration when returned by RSS, subject to normal checks).")
@@ -6180,6 +6337,12 @@ async def main():
                                      published_ts=published_ts)
                         run_stats["liveness_not_verified"] += 1
                         _inc_reason(run_stats["liveness_by_reason"], _why)
+                        try:
+                            if unique_key in _candidate_inventory:
+                                _candidate_inventory[unique_key]["reason"] = _live_reason
+                                _candidate_inventory[unique_key]["healthy"] = _candidate_healthy(_live_reason)
+                        except NameError:
+                            pass
                         logging.info(f"[{unique_key}] post not verified live "
                                      f"({_why}) — skipping, not cached (will "
                                      f"post once approved/restored).")
@@ -6205,6 +6368,15 @@ async def main():
                             and _arctic_media_hint(getattr(entry, "_arctic_post", None))):
                         mark_pending(pending, unique_key, "media_wait", now)
                         run_stats["media_wait"] += 1
+                        try:
+                            try:
+                                if unique_key in _candidate_inventory:
+                                    _candidate_inventory[unique_key]["reason"] = "media_wait"
+                                    _candidate_inventory[unique_key]["healthy"] = True
+                            except NameError:
+                                pass
+                        except NameError:
+                            pass
                         logging.debug(f"[{unique_key}] archive record says this post "
                                      f"has media (gallery/media_metadata) but no "
                                      f"source served any yet (Arctic fills those "
@@ -6221,6 +6393,15 @@ async def main():
                         if _arctic_n > len(data["media"]):
                             mark_pending(pending, unique_key, "partial_gallery", now)
                             run_stats["partial_gallery"] += 1
+                            try:
+                                try:
+                                    if unique_key in _candidate_inventory:
+                                        _candidate_inventory[unique_key]["reason"] = "partial_gallery"
+                                        _candidate_inventory[unique_key]["healthy"] = True
+                                except NameError:
+                                    pass
+                            except NameError:
+                                pass
                             logging.debug(f"[{unique_key}] archive record lists "
                                          f"{_arctic_n} gallery items but the sources "
                                          f"served only {len(data['media'])} this run — "
@@ -6250,6 +6431,12 @@ async def main():
                             logging.info(f"DRY RUN 2nd message for {unique_key} "
                                          f"(YouTube link only): {data['youtube_url']}")
                         run_stats["dry_run_would_deliver"] += 1
+                        try:
+                            if unique_key in _candidate_inventory:
+                                _candidate_inventory[unique_key]["reason"] = "dry_run_would_deliver"
+                                _candidate_inventory[unique_key]["healthy"] = True
+                        except NameError:
+                            pass
                         continue
 
                     inspect_video_response = _has_video_media(data)
@@ -6303,6 +6490,12 @@ async def main():
                                          f"{len(data['media'])} item(s)) | LATENCY "
                                          f"{_latency / 60:.1f}min after creation{_held_note}")
                             run_stats["delivered"] += 1
+                            try:
+                                if unique_key in _candidate_inventory:
+                                    _candidate_inventory[unique_key]["reason"] = "delivered"
+                                    _candidate_inventory[unique_key]["healthy"] = True
+                            except NameError:
+                                pass
                             # Round 66: a body that exceeded the card budget
                             # continues in follow-up messages — same webhook,
                             # same mechanism/ordering as the YouTube link
@@ -6406,6 +6599,28 @@ async def main():
 
             if RETRACT_DEAD_POSTS and not DRY_RUN:
                 await retract_dead_posts(session, posted_messages, now)
+
+            # Zero-cost finalization: candidate health + instance inventory (no extra network)
+            try:
+                # Finalize candidate inventory after all gates (updates happened inside loop)
+                run_stats["unposted_candidate_details"] = list(_candidate_inventory.values())
+                run_stats["unposted_candidate_ids"] = list(_candidate_inventory.keys())
+                _healthy_n = sum(1 for d in _candidate_inventory.values() if d.get("healthy"))
+                _unhealthy_n = len(_candidate_inventory) - _healthy_n
+                logging.info(f"Candidate health: {_healthy_n} healthy / {_unhealthy_n} unhealthy (removed/deleted) of {len(_candidate_inventory)} considered — all from in-memory feed+pending state, no extra network")
+                if _candidate_inventory:
+                    logging.info("Final candidate details: " + ", ".join(f"{d['id']} healthy={'yes' if d['healthy'] else 'no'} reason={d['reason']} src={d['source']}" for d in _candidate_inventory.values()))
+            except Exception as _inv_e:
+                logging.debug(f"candidate inventory finalization skipped: {_inv_e}")
+            try:
+                _inv = _collect_instance_inventory(run_stats, _proxy_health, _redlib_reach)
+                run_stats["instance_inventory"] = _inv
+                if _inv.get("used"):
+                    logging.info("Instances used/active this run: " + "; ".join(_inv["used"]))
+                if _inv.get("unused"):
+                    logging.info("Instances not used this run (no extra request — health unknown unless previously observed): " + "; ".join(_inv["unused"]))
+            except Exception as _inst_e:
+                logging.debug(f"instance inventory build skipped: {_inst_e}")
 
         log_redlib_reachability()   # round 49: which mirrors actually answered
 
