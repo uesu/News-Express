@@ -786,17 +786,36 @@ async def _fetch_new_listing(session, subreddit):
 # failure mode: it fails closed via permalink validation, costs nothing while
 # the native token feed answers, and the tier revives by itself once patched redlib
 # builds deploy. Re-audit bodies before promoting anything.
+# Round 78 (2026-10-22): Game-Express audit 2026-10-22 01:10-02:50Z live-probed 85+
+# candidates across redlib-instances, redlib v3.0.0 (#588/#592), farside,
+# frontend-blocklist, etc. on 3 Azure westus3 runs + all 3 code paths. 7 new
+# full dual-path winners + 5 listing-only reserves verified. This tier adopts
+# the blueprint (2->9 dual, +5 reserves) — degraded splash/rate-limit/GoAway
+# hosts (redlib.privadency.com 2s splash, safereddit 15s rate-limit, nadeko
+# GoAway) demoted out of the hot path; trap hosts (rl.blitzw.in honeypot,
+# red.arancia.click parked, redlib.jaydenha.uk fake, l.opnxng.com alias) never
+# added. Kareem.one excluded (Azure ASN 403 caveat). Fully-working dual first,
+# listing-only/partial at tail per instruction.
 REDDIT_RSS_INSTANCES = [
-    "https://www.reddit.com",
-    "https://old.reddit.com",
+    "https://www.reddit.com",              # [0] Primary w/ REDDIT_FEED_TOKEN
+    "https://old.reddit.com",              # [1] Auth alt origin (same token)
     # Token-gated fallback; harmlessly skipped when NITTER_RSS_TOKEN is empty.
-    "https://redlib.miningtcup.me",
-    "https://redlib.catsarch.com",
-    "https://redlib.nadeko.net",
-    "https://redlib.privadency.com",
-    "https://safereddit.com",
-    "https://red.artemislena.eu",
-    "https://redlib.privacyredirect.com",
+    "https://redlib.miningtcup.me",        # [2] Private token-gated
+    # Verified full dual-path public hosts (/new 200 OK + /comments/<id>/ 200 OK, zero challenge):
+    "https://redlib.catsarch.com",         # Existing healthy dual #1
+    "https://redlib.privacyredirect.com",  # Existing healthy dual #2
+    "https://snoo.habedieeh.re",           # NEW dual — up-to-date #592, inline CMAF MP4
+    "https://redlib.tiekoetter.com",       # NEW dual — DE dedicated, fast
+    "https://redlib.nohost.network",       # NEW dual — inline CMAF + full comments
+    "https://redlib-1.privadency.com",     # NEW dual — direct backend bypassing 2s splash
+    "https://redlib-2.privadency.com",     # NEW dual — direct backend #2
+    "https://reddit.idevicehacked.com",    # NEW dual — US, inline gallery on /new
+    # Verified /new listing-only reserves (pre-#592 /comments/ error; recover after v3.0.0):
+    "https://red.artemislena.eu",          # Existing /new pass (pre-#592)
+    "https://rl.awy.one",                  # NEW /new pass — zero challenge
+    "https://redlib.kylrth.com",           # NEW /new pass — CF, 301 from libreddit.kylrth.com
+    "https://redlib.freedit.eu",           # NEW /new pass — DE direct
+    "https://redlib.utilibre.org",         # NEW /new pass — FR collective
 ]
 
 RATE_LIMIT_RETRY_DELAY_1 = 6

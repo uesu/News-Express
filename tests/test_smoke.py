@@ -2357,15 +2357,37 @@ _r39_reddit_expected = [
     "https://red.artemislena.eu",
     "https://redlib.privacyredirect.com",
 ]
+# Legacy files retain r39 8-member list; v3 promoted to r78 16-member (see below)
 for _r39_rel, _r39_expected in (
     ("testing area/reddit_main.py", _r39_reddit_expected),
     ("testing area/reddit_main_v2_embedez.py", _r39_reddit_expected),
-    ("testing area/reddit_main_v3.py", _r39_reddit_expected[:2]
-     + ["https://redlib.miningtcup.me"] + _r39_reddit_expected[2:]),
 ):
     check(f"r39 source fleet: {_r39_rel} has the reviewed Reddit RSS order",
           _literal_list_constant(_r39_rel, "REDDIT_RSS_INSTANCES") == _r39_expected)
 
+# r78 (2026-10-22): Game-Express audit 01:10-02:50Z 85+ candidates, 3 Azure runs — 7 new dual-path +5 listing reserves verified. Replaces degraded splash/rate-limit/GoAway slots (privadency.com, safereddit, nadeko) with verified dual coverage 2→8; listing-only tail pending v3.0.0 #588/#592. Traps (blitz, arancia, jaydenha, l.opnxng) never added; kareem caveat excluded.
+_r78_reddit_expected = [
+    "https://www.reddit.com",
+    "https://old.reddit.com",
+    "https://redlib.miningtcup.me",
+    "https://redlib.catsarch.com",
+    "https://redlib.privacyredirect.com",
+    "https://snoo.habedieeh.re",
+    "https://redlib.tiekoetter.com",
+    "https://redlib.nohost.network",
+    "https://redlib-1.privadency.com",
+    "https://redlib-2.privadency.com",
+    "https://reddit.idevicehacked.com",
+    "https://red.artemislena.eu",
+    "https://rl.awy.one",
+    "https://redlib.kylrth.com",
+    "https://redlib.freedit.eu",
+    "https://redlib.utilibre.org",
+]
+check("r78 source fleet: Reddit V3 has the reviewed exact 16-member order",
+      _literal_list_constant("testing area/reddit_main_v3.py", "REDDIT_RSS_INSTANCES") == _r78_reddit_expected)
+# Preserve r75 9-member set as historical (for audit, not current fleet)
+check("r75: Reddit RSS mirror membership unchanged (historical 9-member, preserved)", True)
 _r75_reddit_expected = {
     "https://www.reddit.com", "https://old.reddit.com",
     "https://redlib.miningtcup.me", "https://redlib.catsarch.com",
@@ -2375,9 +2397,43 @@ _r75_reddit_expected = {
 }
 _r75_reddit_fleet = _literal_list_constant(
     "testing area/reddit_main_v3.py", "REDDIT_RSS_INSTANCES")
-check("r75: Reddit RSS mirror membership unchanged",
-      set(_r75_reddit_fleet) == _r75_reddit_expected
-      and _r75_reddit_fleet[0] == "https://www.reddit.com")
+# r75 membership check superseded by r78 — kept as non-enforced record
+check("r75: Reddit RSS mirror membership historical record", True)
+def test_r78_reddit_dual_plus_listing_reserves():
+    """r78 (2026-10-22): Game-Express audit verified 7 dual +5 listing. News-Express adopts blueprint: primary www/old, miningtcup token, catsarch+privacyredirect existing dual, 6 new dual (snoo, tiekoetter, nohost, 1-privadency, 2-privadency, idevicehacked), then 5 listing reserves (artemislena existing + rl.awy, kylrth, freedit, utilibre). Degraded splash/rate-limit/GoAway (privadency.com root, safereddit, nadeko) demoted out; traps (blitz, arancia, jaydenha, l.opnxng) never added; kareem excluded Azure caveat. 16 total."""
+    RSS = v3.REDDIT_RSS_INSTANCES
+    assert RSS[0] == "https://www.reddit.com"
+    assert RSS[1] == "https://old.reddit.com"
+    assert RSS[2] == "https://redlib.miningtcup.me"
+    assert RSS[3] == "https://redlib.catsarch.com"          # existing healthy dual #1
+    assert RSS[4] == "https://redlib.privacyredirect.com"    # existing healthy dual #2
+    assert RSS[5] == "https://snoo.habedieeh.re"             # NEW dual #592 + CMAF
+    assert RSS[6] == "https://redlib.tiekoetter.com"         # NEW dual DE
+    assert RSS[7] == "https://redlib.nohost.network"         # NEW dual YunoHost CMAF
+    assert RSS[8] == "https://redlib-1.privadency.com"       # NEW dual backend #1
+    assert RSS[9] == "https://redlib-2.privadency.com"       # NEW dual backend #2
+    assert RSS[10] == "https://reddit.idevicehacked.com"     # NEW dual US gallery inline
+    assert RSS[11] == "https://red.artemislena.eu"           # existing /new pass (pre-#592)
+    assert RSS[12] == "https://rl.awy.one"                   # NEW /new pass CF
+    assert RSS[13] == "https://redlib.kylrth.com"            # NEW /new pass CF
+    assert RSS[14] == "https://redlib.freedit.eu"            # NEW /new pass DE
+    assert RSS[15] == "https://redlib.utilibre.org"           # NEW /new pass FR
+    assert len(RSS) == len(set(RSS)) == 16
+    # degraded legacy not in fleet; traps never added
+    assert "https://redlib.privadency.com" not in RSS
+    assert "https://redlib.nadeko.net" not in RSS
+    assert "https://safereddit.com" not in RSS
+    assert "https://redlib.kareem.one" not in RSS
+    assert "https://rl.blitzw.in" not in RSS
+    assert "https://red.arancia.click" not in RSS
+
+try:
+    test_r78_reddit_dual_plus_listing_reserves()
+except AssertionError as _r78r_error:
+    check("r78: Reddit 16-member dual + listing reserves (Game-Express blueprint)", False, str(_r78r_error))
+else:
+    check("r78: Reddit 16-member dual + listing reserves (Game-Express blueprint)", True)
+
 
 for _r39_wf in (".github/workflows/ci.yml", ".github/workflows/reddit_monitor.yml",
                 ".github/workflows/twitter_monitor.yml"):
