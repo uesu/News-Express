@@ -87,7 +87,7 @@ jobs:
           # EMBEDEZ_API_KEY: ${{ secrets.EMBEDEZ_API_KEY }}   # round 13: no longer used —
           #   V3's proxy path (redditez/vxreddit/embeddit) is keyless; the secret
           #   can be deleted from the repo (only the old V2 needs it)
-          REDDIT_FEED_TOKEN: ${{ secrets.REDDIT_FEED_TOKEN }}   # your Reddit feed token (recommended — old.reddit.com -> Preferences -> Feeds; V3 also tries it on .json for full mode)
+          REDDIT_FEED_TOKEN: ${{ secrets.REDDIT_FEED_TOKEN }}   # your Reddit feed token (recommended — old.reddit.com -> Preferences -> Feeds; paste the full private RSS link `https://old.reddit.com/.rss?feed=<key>&user=<user>` or any shorthand `<key>&user=<user>`/`?feed=<key>&user=<user>`/`feed=<key>&user=<user>`/bare `<key>`; V3 also tries it on .json for full mode)
           # round 24 (2026-09-18): miningtcup's DogWAF token — the SAME
           # value the Twitter monitor uses (NITTER_RSS_TOKEN), stored as a
           # repo SECRET in both repos (GitHub masks secrets in all logs);

@@ -2438,6 +2438,204 @@ else:
     check("r78: Reddit 16-member dual + listing reserves (Game-Express blueprint)", True)
 
 
+# ---- r85: REDDIT_FEED_TOKEN normalization + query redaction (parity 85c447) ----
+# Synthetic fixtures only — never real credentials (per task spec)
+_r85_dummy_key = "0123456789abcdef0123456789abcdef01234567"
+_r85_dummy_user = "example_user"
+_r85_expected_q = f"feed={_r85_dummy_key}&user={_r85_dummy_user}"
+_r85_bare_q = f"feed={_r85_dummy_key}"
+# 4 canonical copy-paste shapes from old.reddit.com/prefs/feeds/
+_r85_inputs = {
+    "full_link": f"https://old.reddit.com/.rss?feed={_r85_dummy_key}&user={_r85_dummy_user}",
+    "qmark": f"?feed={_r85_dummy_key}&user={_r85_dummy_user}",
+    "feed_prefix": f"feed={_r85_dummy_key}&user={_r85_dummy_user}",
+    "bare_plus_user": f"{_r85_dummy_key}&user={_r85_dummy_user}",
+    "bare": _r85_dummy_key,
+}
+# --- format_reddit_feed_query() directly ---
+try:
+    assert hasattr(v3, "format_reddit_feed_query"), "missing format_reddit_feed_query"
+    for _k, _raw in _r85_inputs.items():
+        _got = v3.format_reddit_feed_query(_raw)
+        _exp = _r85_bare_q if _k == "bare" else _r85_expected_q
+        assert _got == _exp, f"{_k}: got { _got!r} exp {_exp!r}"
+    # empty / invalid
+    assert v3.format_reddit_feed_query("") == ""
+    assert v3.format_reddit_feed_query("   ") == ""
+    assert v3.format_reddit_feed_query("not-a-feed") == "" or v3.format_reddit_feed_query("not-a-feed") in ("feed=not-a-feed", ""), "junk handling"
+    # http full link with extra path ignored — still extracts feed+user
+    assert v3.format_reddit_feed_query(f"https://old.reddit.com/.rss?feed={_r85_dummy_key}&user={_r85_dummy_user}&extra=1") == _r85_expected_q
+    check("r85 format_reddit_feed_query: 4 shapes normalize to feed&user + bare (synthetic)", True)
+except AssertionError as _e:
+    check("r85 format_reddit_feed_query: 4 shapes normalize to feed&user + bare (synthetic)", False, str(_e))
+except Exception as _e:
+    check("r85 format_reddit_feed_query: 4 shapes normalize to feed&user + bare (synthetic)", False, f"{type(_e).__name__}: {_e}")
+
+# --- _redact_url_queries() strips ?feed / ?token ---
+try:
+    assert hasattr(v3, "_redact_url_queries"), "missing _redact_url_queries"
+    _sample = f"ClientConnectorError: Cannot connect to host www.reddit.com ssl:default [None] (url=https://www.reddit.com/r/sub/new.rss?{_r85_expected_q})"
+    _red = v3._redact_url_queries(_sample)
+    assert _r85_dummy_key not in _red and "feed=" not in _red, f"feed not redacted: {_red!r}"
+    assert "www.reddit.com/r/sub/new.rss" in _red or "www.reddit.com" in _red, f"base preserved: {_red!r}"
+    _tok_sample = "Exception: https://redlib.miningtcup.me/r/sub/new?token=secret123&other=1 failed"
+    _red2 = v3._redact_url_queries(_tok_sample)
+    assert "secret123" not in _red2 and "token=" not in _red2, f"token not redacted: {_red2!r}"
+    # also check NITTER token style query
+    _tok2 = "error on https://example.com/path?token=abc123&x=y"
+    assert "abc123" not in v3._redact_url_queries(_tok2)
+    check("r85 _redact_url_queries: strips ?feed=&user= and ?token= (synthetic)", True)
+except AssertionError as _e:
+    check("r85 _redact_url_queries: strips ?feed=&user= and ?token= (synthetic)", False, str(_e))
+except Exception as _e:
+    check("r85 _redact_url_queries: strips ?feed=&user= and ?token= (synthetic)", False, f"{type(_e).__name__}: {_e}")
+
+# --- Integration: _combined_feed_url(), _rss_listing, fetch_working_reddit_feed, _fetch_post_rss, fetch_post_json ---
+# Must be dynamic (not frozen at import) — mutating v3.REDDIT_FEED_TOKEN at runtime changes output.
+_orig_token = v3.REDDIT_FEED_TOKEN
+try:
+    for _label, _raw in _r85_inputs.items():
+        v3.REDDIT_FEED_TOKEN = _raw
+        _expected_q = _r85_bare_q if _label == "bare" else _r85_expected_q
+        # _combined_feed_url
+        _url = v3._combined_feed_url()
+        assert _expected_q in _url, f"_combined_feed_url { _label}: { _url!r} missing {_expected_q!r}"
+        assert "%26" not in _url and "%3D" not in _url, f"double-encoded: {_url!r}"
+        # source check for _rss_listing uses same helper (not quote)
+        _src_new_listing = inspect.getsource(v3._fetch_new_listing)
+        assert "format_reddit_feed_query(REDDIT_FEED_TOKEN)" in _src_new_listing, " _rss_listing not wired to format_reddit_feed_query"
+        assert "quote(REDDIT_FEED_TOKEN" not in _src_new_listing, "old quote encoding still present in _rss_listing"
+        # fetch_working_reddit_feed — capture via fake _fetch_feed
+        _capt = []
+        _orig_ff = v3._fetch_feed
+
+        async def _fake_ff(session, url, label):
+            _capt.append(url)
+            return None
+
+        v3._fetch_feed = _fake_ff
+        try:
+            asyncio.run(v3.fetch_working_reddit_feed(None, "TestSub"))
+        except Exception:
+            pass
+        v3._fetch_feed = _orig_ff
+        # first instance is www.reddit.com — must have token query
+        _found = [u for u in _capt if "reddit.com" in u]
+        assert _found, f"fetch_working_reddit_feed captured none: {_capt!r}"
+        assert any(_expected_q in u for u in _found), f"fetch_working feed_q missing for {_label}: {_found!r}"
+        assert not any("%26user" in u or "%3D" in u for u in _found), f"double-encoded in fetch_working: {_found!r}"
+        # non-reddit instances must NOT get token
+        _non_reddit = [u for u in _capt if "reddit.com" not in u and "?" in u and "feed=" in u]
+        assert not _non_reddit, f"token leaked to non-reddit: {_non_reddit!r}"
+        # _fetch_post_rss — similar capture
+        _capt2 = []
+        v3._fetch_feed = _fake_ff  # reuse fake that appends to _capt? need separate
+        # redefine to capture separately
+
+        async def _fake_ff2(session, url, label):
+            _capt2.append(url)
+            return None
+
+        v3._fetch_feed = _fake_ff2
+        try:
+            asyncio.run(v3._fetch_post_rss(None, "/r/TestSub/comments/abc123/test/"))
+        except Exception:
+            pass
+        v3._fetch_feed = _orig_ff
+        _found2 = [u for u in _capt2 if "reddit.com" in u]
+        if _found2:
+            assert any(_expected_q in u for u in _found2), f"_fetch_post_rss missing q for {_label}: {_capt2!r}"
+        # fetch_post_json — mock session + probe
+        _orig_probe = v3.feedtoken_probe_enabled
+        _orig_get_oauth = v3.get_oauth_token
+        _orig_failed = v3._feedtoken_json_failed
+        v3.feedtoken_probe_enabled = lambda: True
+        v3.get_oauth_token = lambda s: asyncio.sleep(0, result=None)
+        v3._feedtoken_json_failed = False
+        # patch asyncio.sleep for stagger to no-op
+        _orig_sleep = asyncio.sleep
+
+        async def _no_sleep(*a, **k):
+            return None
+
+        asyncio.sleep = _no_sleep
+        _capt_url = {}
+
+        class _MockResp:
+            def __init__(self, url):
+                self.status = 404
+                self._url = url
+
+            async def text(self):
+                return ""
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+        class _MockSession:
+            def get(self, url, headers=None, timeout=None):
+                _capt_url["url"] = url
+                return _MockResp(url)
+
+        try:
+            asyncio.run(v3.fetch_post_json(_MockSession(), "abc123", use_oauth=False))
+            _got_url = _capt_url.get("url", "")
+            assert _expected_q in _got_url, f"fetch_post_json { _label}: {_got_url!r} missing {_expected_q!r}"
+            assert "%26" not in _got_url, f"fetch_post_json double-encoded { _label}: {_got_url!r}"
+            assert f"/comments/abc123.json?limit=25&raw_json=1&{_expected_q}" in _got_url or _got_url.endswith(_expected_q), f"fetch_post_json format wrong: {_got_url!r}"
+        finally:
+            v3.feedtoken_probe_enabled = _orig_probe
+            v3.get_oauth_token = _orig_get_oauth
+            v3._feedtoken_json_failed = _orig_failed
+            asyncio.sleep = _orig_sleep
+        # ensure dynamic: changing token changes output immediately (not frozen)
+        # already proven by loop — each iteration mutated and got different expected
+    check("r85 integration: _combined_feed_url/_rss_listing/fetch_working/fetch_post_rss/fetch_post_json use format_reddit_feed_query dynamically (synthetic)", True)
+except AssertionError as _e:
+    check("r85 integration: _combined_feed_url/_rss_listing/fetch_working/fetch_post_rss/fetch_post_json use format_reddit_feed_query dynamically (synthetic)", False, str(_e))
+except Exception as _e:
+    check("r85 integration: _combined_feed_url/_rss_listing/fetch_working/fetch_post_rss/fetch_post_json use format_reddit_feed_query dynamically (synthetic)", False, f"{type(_e).__name__}: {_e}")
+finally:
+    v3.REDDIT_FEED_TOKEN = _orig_token
+
+# --- V1/V2 parity: they expose same helper and use it ---
+for _rel in ("testing area/reddit_main.py", "testing area/reddit_main_v2_embedez.py"):
+    try:
+        _m = load_module("smoke_r85_" + _rel.replace("/", "_").replace(" ", "_"), _rel)
+        assert hasattr(_m, "format_reddit_feed_query"), f"{_rel} missing format_reddit_feed_query"
+        assert hasattr(_m, "_redact_url_queries"), f"{_rel} missing _redact_url_queries"
+        # check normalization matches v3
+        for _raw in _r85_inputs.values():
+            assert _m.format_reddit_feed_query(_raw) == v3.format_reddit_feed_query(_raw), f"{_rel} mismatch { _raw!r}"
+        # source wiring
+        _src = inspect.getsource(_m._combined_feed_url)
+        assert "format_reddit_feed_query(REDDIT_FEED_TOKEN)" in _src, f"{_rel} _combined not wired"
+        _src2 = inspect.getsource(_m.fetch_working_reddit_feed)
+        assert "format_reddit_feed_query(REDDIT_FEED_TOKEN)" in _src2, f"{_rel} fetch_working not wired"
+        _src3 = inspect.getsource(_m._fetch_feed)
+        assert "_redact_url_queries" in _src3, f"{_rel} _fetch_feed not redacting"
+        check(f"r85 parity: {_rel} format helper + redaction (synthetic)", True)
+    except AssertionError as _e:
+        check(f"r85 parity: {_rel} format helper + redaction (synthetic)", False, str(_e))
+    except Exception as _e:
+        check(f"r85 parity: {_rel} format helper + redaction (synthetic)", False, f"{type(_e).__name__}: {_e}")
+
+# --- Ensure redaction is used in v3 exception paths ---
+try:
+    _src_fetch = inspect.getsource(v3._fetch_feed)
+    assert "_redact_url_queries" in _src_fetch, "_fetch_feed not redacting"
+    _src_postjson = inspect.getsource(v3.fetch_post_json)
+    assert "_redact_url_queries" in _src_postjson, "fetch_post_json not redacting"
+    check("r85 redaction wired in _fetch_feed and fetch_post_json (synthetic)", True)
+except AssertionError as _e:
+    check("r85 redaction wired in _fetch_feed and fetch_post_json (synthetic)", False, str(_e))
+except Exception as _e:
+    check("r85 redaction wired in _fetch_feed and fetch_post_json (synthetic)", False, f"{type(_e).__name__}: {_e}")
+
+
 for _r39_wf in (".github/workflows/ci.yml", ".github/workflows/reddit_monitor.yml",
                 ".github/workflows/twitter_monitor.yml"):
     with open(os.path.join(ROOT, _r39_wf), encoding="utf-8") as _fh:

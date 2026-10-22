@@ -306,7 +306,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 |---|---|
 | `SUBREDDITS` | Comma-separated subreddit names |
 | `WEBHOOK_REDDIT_<SUB>` | One per subreddit — `WEBHOOK_REDDIT_` + name **UPPERCASED**, non-alphanumerics → `_` |
-| `REDDIT_FEED_TOKEN` *(optional — **recommended**)* | Your personal Reddit feed token: `old.reddit.com/prefs/feeds` → any feed link ends with `?feed=<token>` — copy just the token. Moves RSS requests to the logged-in rate tier (429s essentially stop) |
+| `REDDIT_FEED_TOKEN` *(optional — **recommended**)* | Your personal Reddit feed token: `old.reddit.com/prefs/feeds` → copy any feed link **exactly as shown** — the full private RSS URL `https://old.reddit.com/.rss?feed=<40-char-key>&user=<username>` works, as do `?feed=<key>&user=<username>`, `<key>&user=<username>`, or bare `<key>`. Moves RSS requests to the logged-in rate tier (429s essentially stop) |
 | `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` *(optional — V3)* | Reddit **script app** (reddit.com/prefs/apps → type "script" → redirect `http://localhost`). Enables V3 **FULL MODE** (stats, OP comment, crosspost embeds) via OAuth. V3 works without it; drop both secrets in whenever the app exists and FULL MODE turns on with no code change |
 | `EMBEDEZ_API_KEY` | **V2 only** — from your embedez.com dashboard |
 | `DISCORD_WEBHOOK_URL` *(optional)* | Catch-all fallback |

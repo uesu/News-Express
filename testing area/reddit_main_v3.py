@@ -230,7 +230,7 @@ import importlib.util
 import aiohttp
 import feedparser
 from email.utils import parsedate_to_datetime
-from urllib.parse import parse_qsl, quote, unquote, urlparse
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlsplit
 from dotenv import load_dotenv
 
 try:
@@ -259,6 +259,37 @@ DEFAULT_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 # Still used for the RSS feed (rate tier) AND now also attempted on the
 # .json endpoints (workaround for the 2026 datacenter JSON wall — see header).
 REDDIT_FEED_TOKEN = os.getenv("REDDIT_FEED_TOKEN", "").strip()
+
+
+def format_reddit_feed_query(raw_token: str) -> str:
+    """Normalize `REDDIT_FEED_TOKEN` into an encoded `feed=...` (+ optional `&user=...`) query.
+
+    Accepts any form copied from `old.reddit.com/prefs/feeds/`:
+      * `https://old.reddit.com/.rss?feed=<40-hex>&user=<username>` (full link)
+      * `?feed=<40-hex>&user=<username>` or `feed=<40-hex>&user=<username>`
+      * `<40-hex>&user=<username>`
+      * `<40-hex>`
+    """
+    tok = (raw_token or "").strip()
+    if not tok:
+        return ""
+    if tok.lower().startswith(("http://", "https://")):
+        q = urlsplit(tok).query
+    elif tok.startswith("?"):
+        q = tok[1:]
+    elif tok.lower().startswith("feed="):
+        q = tok
+    else:
+        q = f"feed={tok}"
+    pairs = [(k, v) for k, v in parse_qsl(q, keep_blank_values=False) if k.lower() in ("feed", "user")]
+    if not pairs or not any(k.lower() == "feed" for k, _ in pairs):
+        return ""
+    return urlencode(pairs)
+
+
+def _redact_url_queries(msg: object) -> str:
+    return re.sub(r"\?[^\s)'\"]+", "", str(msg))
+
 
 # round 24 (2026-09-18): miningtcup's DogWAF token — the SAME value as the
 # Twitter repo's NITTER_RSS_TOKEN (their nitter RSS token is a DogWAF
@@ -706,8 +737,9 @@ async def _fetch_new_listing(session, subreddit):
     async def _rss_listing(instance):
         try:
             url = f"{instance}/r/{subreddit}/new.rss?limit=100"
-            if REDDIT_FEED_TOKEN:
-                url += f"&feed={quote(REDDIT_FEED_TOKEN, safe='')}"
+            feed_q = format_reddit_feed_query(REDDIT_FEED_TOKEN)
+            if feed_q:
+                url += f"&{feed_q}"
             async with session.get(url, headers=BROWSER_HEADERS, timeout=_timeout,
                                    allow_redirects=True) as resp:
                 xml = await resp.text() if resp.status == 200 else None
@@ -2950,15 +2982,16 @@ async def _fetch_feed(session: aiohttp.ClientSession, feed_url: str, label: str)
                     return None
                 return feed
         except Exception as e:
-            logging.info(f"[{label}] error: {e}")
+            logging.info(f"[{label}] error: {_redact_url_queries(e)}")
             return None
 
 
 def _combined_feed_url() -> str:
     """ONE feed for all tracked subreddits: /r/a+b+c/new.rss?limit=100 (+ token)."""
     url = "https://www.reddit.com/r/" + "+".join(SUBREDDITS) + f"/new.rss?limit={COMBINED_FEED_LIMIT}"
-    if REDDIT_FEED_TOKEN:
-        url += f"&feed={REDDIT_FEED_TOKEN}"
+    feed_q = format_reddit_feed_query(REDDIT_FEED_TOKEN)
+    if feed_q:
+        url += f"&{feed_q}"
     return url
 
 
@@ -2980,8 +3013,9 @@ async def fetch_working_reddit_feed(session: aiohttp.ClientSession, subreddit: s
     """Fallback mode: tries each RSS source in order for one subreddit."""
     for instance in REDDIT_RSS_INSTANCES:
         feed_url = f"{instance}/r/{subreddit}/new/.rss"
-        if REDDIT_FEED_TOKEN and "reddit.com" in instance:
-            feed_url += f"?feed={REDDIT_FEED_TOKEN}"
+        feed_q = format_reddit_feed_query(REDDIT_FEED_TOKEN)
+        if feed_q and "reddit.com" in instance:
+            feed_url += f"?{feed_q}"
         feed = await _fetch_feed(session, feed_url, instance)
         if feed:
             logging.info(f"Successfully fetched r/{subreddit} from {instance}")
@@ -3137,8 +3171,10 @@ async def fetch_post_json(session: aiohttp.ClientSession, post_id: str, use_oaut
         # Anonymous .json is 403 from datacenters; the token MIGHT lift it.
         # Round 31: only reached when REDDIT_JSON_PROBE allows it
         # (auto = only with an OAuth app; force = always; off = never).
-        url = (f"https://www.reddit.com/comments/{post_id}.json"
-               f"?limit=25&raw_json=1&feed={REDDIT_FEED_TOKEN}")
+        feed_q = format_reddit_feed_query(REDDIT_FEED_TOKEN)
+        if not feed_q:
+            return None
+        url = f"https://www.reddit.com/comments/{post_id}.json?limit=25&raw_json=1&{feed_q}"
         headers = dict(BROWSER_HEADERS)
         await asyncio.sleep(FEEDTOKEN_JSON_STAGGER)  # anonymous tier ~1 req/min
     else:
@@ -3177,7 +3213,7 @@ async def fetch_post_json(session: aiohttp.ClientSession, post_id: str, use_oaut
         logging.info(f"[{post_id}] post JSON OK via {source} (FULL MODE).")
         return post
     except Exception as e:
-        logging.info(f"[{post_id}] post JSON error: {e} — native mode.")
+        logging.info(f"[{post_id}] post JSON error: {_redact_url_queries(e)} — native mode.")
         return None
 
 
@@ -4185,8 +4221,9 @@ async def _fetch_post_rss(session: aiohttp.ClientSession, path: str):
     """
     for instance in REDDIT_RSS_INSTANCES:
         url = f"{instance}{path}.rss"
-        if REDDIT_FEED_TOKEN and "reddit.com" in instance:
-            url += f"?feed={REDDIT_FEED_TOKEN}"
+        feed_q = format_reddit_feed_query(REDDIT_FEED_TOKEN)
+        if feed_q and "reddit.com" in instance:
+            url += f"?{feed_q}"
         feed = await _fetch_feed(session, url, f"post-rss {instance}")
         if feed:
             return feed
