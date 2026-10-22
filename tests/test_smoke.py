@@ -2465,6 +2465,12 @@ try:
     assert v3.format_reddit_feed_query("not-a-feed") == "" or v3.format_reddit_feed_query("not-a-feed") in ("feed=not-a-feed", ""), "junk handling"
     # http full link with extra path ignored — still extracts feed+user
     assert v3.format_reddit_feed_query(f"https://old.reddit.com/.rss?feed={_r85_dummy_key}&user={_r85_dummy_user}&extra=1") == _r85_expected_q
+    # host/path-agnostic: www.reddit.com/.rss, reddit.com/.rss, old.reddit.com/?feed all work (same query extraction)
+    assert v3.format_reddit_feed_query(f"https://www.reddit.com/.rss?feed={_r85_dummy_key}&user={_r85_dummy_user}") == _r85_expected_q, "www.reddit.com/.rss"
+    assert v3.format_reddit_feed_query(f"https://www.reddit.com/.rss?feed={_r85_dummy_key}&user={_r85_dummy_user}&extra=1") == _r85_expected_q, "www with extra"
+    assert v3.format_reddit_feed_query(f"https://reddit.com/.rss?feed={_r85_dummy_key}&user={_r85_dummy_user}") == _r85_expected_q, "reddit.com/.rss"
+    assert v3.format_reddit_feed_query(f"https://old.reddit.com/?feed={_r85_dummy_key}&user={_r85_dummy_user}") == _r85_expected_q, "old without .rss"
+    assert v3.format_reddit_feed_query(f"https://old.reddit.com/?feed={_r85_dummy_key}&user={_r85_dummy_user}&extra=1") == _r85_expected_q, "old without .rss extra"
     check("r85 format_reddit_feed_query: 4 shapes normalize to feed&user + bare (synthetic)", True)
 except AssertionError as _e:
     check("r85 format_reddit_feed_query: 4 shapes normalize to feed&user + bare (synthetic)", False, str(_e))

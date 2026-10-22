@@ -265,7 +265,9 @@ def format_reddit_feed_query(raw_token: str) -> str:
     """Normalize `REDDIT_FEED_TOKEN` into an encoded `feed=...` (+ optional `&user=...`) query.
 
     Accepts any form copied from `old.reddit.com/prefs/feeds/`:
-      * `https://old.reddit.com/.rss?feed=<40-hex>&user=<username>` (full link)
+      * `https://old.reddit.com/.rss?feed=<40-hex>&user=<username>` (full link,
+        also `https://www.reddit.com/.rss?feed=…`, `https://reddit.com/.rss?feed=…`,
+        `https://old.reddit.com/?feed=…` — host/path-agnostic, query-only)
       * `?feed=<40-hex>&user=<username>` or `feed=<40-hex>&user=<username>`
       * `<40-hex>&user=<username>`
       * `<40-hex>`
