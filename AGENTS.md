@@ -118,11 +118,13 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    the content-advisory gate entirely (engine, Variables, tests, docs) at the
    maintainer's request: do not reintroduce any content classification,
    allowlist, fail-open/fail-closed logic or "unknown metadata" hold for it.
-   Current delivery still includes dedup, the stateless fresh-age and pristine
-   listing checks, plus operational liveness/media-readiness checks. Some
-   operational holds are recorded in `pending_reddit.json` and rechecked
-   according to `PENDING_RECHECK_SECONDS` (default 1800 s); the two round-64
-   stateless checks do not write pending entries. The truthful record of
+   Current delivery still includes dedup, the stateless fresh-age hold, plus
+   operational liveness/media-readiness checks. Some operational holds are
+   recorded in `pending_reddit.json` and rechecked
+   according to `PENDING_RECHECK_SECONDS` (default 1800 s); the fresh-age hold
+   is stateless and does not write pending entries, and the companion
+   pristine-listing gate was removed in the 2026-10-21 cleanup (do not
+   silently restore it as a default gate). The truthful record of
    content-gate removal is `docs/history/ROUND_67.md`.
 2. **Gates never guess.** Every hold/skip requires exact, provable evidence
    (same URL, same author+title, removal notice on the post's own page).
@@ -185,12 +187,44 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 ## Key defaults (all overridable via repo Variables, no code change)
 
 - `FRESH_HOLD_SECONDS=30` — flat minimum post age before a candidate is
-  considered (round 64); `LISTING_CONFIRM` (default on) requires a pristine
-  /new listing read before posting. These two checks are stateless.
+  considered (round 64; stateless; the companion pristine-listing gate was
+  removed 2026-10-21, do not restore it). `0` disables the floor.
 - `PENDING_RECHECK_SECONDS=1800` — active throttle for retryable operational
   holds tracked in `pending_reddit.json`; confirmed removed/deleted archive
-  entries use a no-recheck path unless they reappear via RSS. Distinct from
-  the stateless age/listing checks.
+  entries use a no-recheck path unless they reappear via RSS via a
+  provenance-aware reconsideration that still applies removal checks. Distinct
+  from the stateless fresh-age hold. Archive/media presence is not proof of
+  current subreddit visibility.
+- Logs and the GitHub Actions run summary share consistent outcome
+  definitions derived from a stable local `reddit_run_result.json` record;
+  completion (`completed` true only after required work including persistence;
+  `normal`/`no-candidate`/`dry-run` completed vs `failed`/`interrupted`
+  incomplete; not by JSON write/finally), local persistence
+  (`unchanged`/`saved`/`failed`/`not-reached`/`skipped_dry_run`, entered
+  defaults to `failed`, confirmed no-change `unchanged`, confirmed
+  successful `saved`, never-ran `not-reached`) and repository persistence
+  (same set, observed commit/push, dry-run explicit; local save ≠ repo push)
+  are distinguished; preparation/copying/recovery-reset/staging/commit/push
+  failures all report `failed` (only never-started is `not-reached`) and are
+  covered in tests of the actual workflow shell (`bash -n` + mock
+  `unchanged`/`saved`/`recovered`/`failed`); error messages are sanitized
+  (webhook/token/Auth redaction, bounded 500 chars, preserves
+  operation/type/category) and do not leak secrets in JSON/summary/logs;
+  provider diagnostics are retained locally without extra network calls and
+  reported separately when observed: proxy warmup
+  (available/unavailable with service map), video quality mode (`balanced`
+  default, `highest`/`compatibility`), media resolved via provider, final
+  media endpoint/hosting category, final card media kind and tile count,
+  optional quality candidate result, whether validated base was retained,
+  terminal media fallback (proxy→native, distinct from feed and quality
+  fallback), heal queued/edit-performed/skipped-after-revalidation; neither
+  warmup, HTTP validation, player controls nor “chain complete” proves audio
+  inclusion and Embeddit remains video-only; zero deliveries is not a failure;
+  missing data is `unavailable`/`not-reached`; production baselines #8982
+  (`1xbbdbs` video retained after EmbedEZ failure, #1 video tile, 3 buttons),
+  #8988 (`1xbby22` vxReddit image retained after Redlib enrichment failure)
+  and #8989 (`1xbc1mn` vxReddit 720p retained after EmbedEZ, heal skipped
+  after revalidation) are recorded as successful, not defects.
 - `MEDIA_HEAL_SCOPE` — `video` (default) | `on`/`all` | `off` (round 56/56b).
 - `RETRACT_DEAD_POSTS` — default OFF; `1` enables dead-post tombstoning
   (round 44; requires two independent proofs before touching a message).
@@ -215,3 +249,19 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   weaken a guard.
 - Verify repository CONTENT, not git history — the agent-platform
   workspace flattens local history between sessions.
+
+## Evidence-Driven Maintenance, Acceptance and Workspace Hygiene
+
+- Establish the task, assigned branch, current PR/base/head and dirty work before editing. Preserve unrelated changes and authorization boundaries.
+- Inspect actual references, complete relevant diffs, shared helpers and affected callers. Distinguish observed facts, inference, raw captures, reconstructions, screenshots, author reports and independently executed evidence.
+- Implement the smallest complete generic correction. Preserve existing defaults, source wording/order/media and unrelated behavior. Avoid unrequested rewrites, cosmetic churn, global unescaping and broad new frameworks.
+- Test actual decisions with mocked external boundaries. Assert outgoing content/media/link slots, request counts, results and durable state where relevant. No vacuous checks, skipped critical assertions, permissive alternatives or weakened coverage.
+- Run focused tests followed by documented relevant suites and final-head CI. Record exact commands/results/revision. Distinguish required checks from advisory jobs, committed coverage from ad-hoc checks, and stored baselines from actual baseline execution.
+- Measure performance reproducibly when required. Separate CPU work from network/pacing costs. Do not promise zero overhead or live reliability.
+- Keep active developer documentation, examples, `AGENTS.md` and acceptance reports consistent with committed code, tests, defaults, bounds and limitations. Preserve provenance and historical evidence. Respect production documentation exclusions.
+- Return **READY TO MERGE**, **CHANGES REQUIRED** or **REVIEW BLOCKED** for each PR. Tie acceptance to the exact head and disclose author-session versus independent review. Fixed findings do not automatically establish complete review; acceptance is not deployment authorization or a zero-bug warranty.
+- Keep resolved findings closed absent contradictory evidence. Review incremental changes without unnecessarily restarting unrelated work. Do not manufacture blockers from optional nits or maintain an endless acceptance loop.
+- Reuse bounded task-scoped temporary artifacts. Avoid repeated clones, archives, generated previews and duplicated logs. Inspect capacity early and retain concise durable context with exact revisions, commands, results, blockers and next actions.
+- Clean only verified disposable task-owned artifacts after inspecting status, ownership and retention needs. Never remove the repository root, `.git`, dirty user work, tracked fixtures, source captures, state or durable handoffs/evidence. No broad destructive cleanup as a capacity workaround.
+- If a snapshot/storage/tool limit blocks execution, report whether commands ran. Do not repeat identical blocked calls or claim writes/deletions succeeded. Request platform intervention or use a compact handoff when safe cleanup is impossible. Never promise automatic cross-session memory or unlimited storage.
+- Separate editing, committing/pushing, PR updates, merging, deployment, workflow dispatch, live API writes, state resets and production switch changes. Obtain the required authorization for each.
