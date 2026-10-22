@@ -790,12 +790,12 @@ async def _fetch_new_listing(session, subreddit):
 # candidates across redlib-instances, redlib v3.0.0 (#588/#592), farside,
 # frontend-blocklist, etc. on 3 Azure westus3 runs + all 3 code paths. 7 new
 # full dual-path winners + 5 listing-only reserves verified. This tier adopts
-# the blueprint (2->9 dual, +5 reserves) — degraded splash/rate-limit/GoAway
-# hosts (redlib.privadency.com 2s splash, safereddit 15s rate-limit, nadeko
-# GoAway) demoted out of the hot path; trap hosts (rl.blitzw.in honeypot,
-# red.arancia.click parked, redlib.jaydenha.uk fake, l.opnxng.com alias) never
-# added. Kareem.one excluded (Azure ASN 403 caveat). Fully-working dual first,
-# listing-only/partial at tail per instruction.
+# the blueprint (2->9 dual, +5 reserves) + keeps timeout-but-still-works per
+# production #9283 (2026-10-22 03:35 UTC westcentralus: REDLIB-REACH 4/9 —
+# artemislena, privacyredirect, privadency.com, safereddit 1/1). Fully-working
+# dual first, listing-only/partial next, timeout-but-still-works at tail. Trap
+# hosts (rl.blitzw.in honeypot, red.arancia.click parked, redlib.jaydenha.uk
+# fake, l.opnxng.com alias) never added; kareem excluded (Azure ASN caveat).
 REDDIT_RSS_INSTANCES = [
     "https://www.reddit.com",              # [0] Primary w/ REDDIT_FEED_TOKEN
     "https://old.reddit.com",              # [1] Auth alt origin (same token)
@@ -816,6 +816,10 @@ REDDIT_RSS_INSTANCES = [
     "https://redlib.kylrth.com",           # NEW /new pass — CF, 301 from libreddit.kylrth.com
     "https://redlib.freedit.eu",           # NEW /new pass — DE direct
     "https://redlib.utilibre.org",         # NEW /new pass — FR collective
+    # Timeout-but-still-works per live production #9283 (2026-10-22 03:35 UTC, westcentralus): REDLIB-REACH 4/9 showed these still answering 1/1 despite prior 2s splash/rate-limit — keep at tail per instruction (partial/timeout still works):
+    "https://redlib.privadency.com",       # Restored tail — privadency.com root 1/1 in #9283 (direct backends already above)
+    "https://safereddit.com",              # Restored tail — safereddit 1/1 in #9283 (rate-limit transient)
+    "https://redlib.nadeko.net",           # Restored tail — nadeko 0/1 in #9283 but GoAway timeout partially works on retry; kept at very last per keep-if-partial rule
 ]
 
 RATE_LIMIT_RETRY_DELAY_1 = 6

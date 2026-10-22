@@ -2383,8 +2383,11 @@ _r78_reddit_expected = [
     "https://redlib.kylrth.com",
     "https://redlib.freedit.eu",
     "https://redlib.utilibre.org",
+    "https://redlib.privadency.com",
+    "https://safereddit.com",
+    "https://redlib.nadeko.net",
 ]
-check("r78 source fleet: Reddit V3 has the reviewed exact 16-member order",
+check("r78 source fleet: Reddit V3 has the reviewed exact 19-member order",
       _literal_list_constant("testing area/reddit_main_v3.py", "REDDIT_RSS_INSTANCES") == _r78_reddit_expected)
 # Preserve r75 9-member set as historical (for audit, not current fleet)
 check("r75: Reddit RSS mirror membership unchanged (historical 9-member, preserved)", True)
@@ -2400,7 +2403,7 @@ _r75_reddit_fleet = _literal_list_constant(
 # r75 membership check superseded by r78 — kept as non-enforced record
 check("r75: Reddit RSS mirror membership historical record", True)
 def test_r78_reddit_dual_plus_listing_reserves():
-    """r78 (2026-10-22): Game-Express audit verified 7 dual +5 listing. News-Express adopts blueprint: primary www/old, miningtcup token, catsarch+privacyredirect existing dual, 6 new dual (snoo, tiekoetter, nohost, 1-privadency, 2-privadency, idevicehacked), then 5 listing reserves (artemislena existing + rl.awy, kylrth, freedit, utilibre). Degraded splash/rate-limit/GoAway (privadency.com root, safereddit, nadeko) demoted out; traps (blitz, arancia, jaydenha, l.opnxng) never added; kareem excluded Azure caveat. 16 total."""
+    """r78 (2026-10-22): Game-Express audit verified 7 dual +5 listing. News-Express adopts blueprint: primary www/old, miningtcup token, catsarch+privacyredirect existing dual, 6 new dual (snoo, tiekoetter, nohost, 1-privadency, 2-privadency, idevicehacked), then 5 listing reserves (artemislena existing + rl.awy, kylrth, freedit, utilibre) + 3 timeout-but-still-works tail (privadency.com, safereddit, nadeko) per production #9283 REDLIB-REACH 4/9. Traps never added; kareem excluded. 19 total."""
     RSS = v3.REDDIT_RSS_INSTANCES
     assert RSS[0] == "https://www.reddit.com"
     assert RSS[1] == "https://old.reddit.com"
@@ -2418,11 +2421,11 @@ def test_r78_reddit_dual_plus_listing_reserves():
     assert RSS[13] == "https://redlib.kylrth.com"            # NEW /new pass CF
     assert RSS[14] == "https://redlib.freedit.eu"            # NEW /new pass DE
     assert RSS[15] == "https://redlib.utilibre.org"           # NEW /new pass FR
-    assert len(RSS) == len(set(RSS)) == 16
-    # degraded legacy not in fleet; traps never added
-    assert "https://redlib.privadency.com" not in RSS
-    assert "https://redlib.nadeko.net" not in RSS
-    assert "https://safereddit.com" not in RSS
+    assert RSS[16] == "https://redlib.privadency.com"       # Restored tail — #9283 1/1 timeout but still works
+    assert RSS[17] == "https://safereddit.com"              # Restored tail — #9283 1/1
+    assert RSS[18] == "https://redlib.nadeko.net"            # Restored tail — timeout but partial (0/1 in #9283 but GoAway retry)
+    assert len(RSS) == len(set(RSS)) == 19
+    # traps never added
     assert "https://redlib.kareem.one" not in RSS
     assert "https://rl.blitzw.in" not in RSS
     assert "https://red.arancia.click" not in RSS
