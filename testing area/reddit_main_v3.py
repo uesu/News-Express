@@ -6072,9 +6072,10 @@ async def main():
             run_stats["unposted_candidate_ids"] = list(_candidate_inventory.keys())
             run_stats["unposted_candidate_details"] = list(_candidate_inventory.values())
             if _candidate_inventory:
-                logging.info("Unposted candidate IDs (%d): %s (healthy=yes means not removed/deleted — still deferrable; no extra request)" % (
+                # Past logs included IDs; restored here with zero extra request (in-memory only)
+                logging.info("Unposted candidate IDs (%d): %s (all from in-memory feed+pending state, no extra request)" % (
                     len(_candidate_inventory),
-                    ", ".join(f"{d['id']} (healthy={'yes' if d['healthy'] else 'no'}, reason={d['reason']}, src={d['source']})" for d in _candidate_inventory.values())
+                    ", ".join(d['id'] for d in _candidate_inventory.values())
                 ))
 
             # newest first per sub for stable ordering
@@ -6609,7 +6610,8 @@ async def main():
                 _unhealthy_n = len(_candidate_inventory) - _healthy_n
                 logging.info(f"Candidate health: {_healthy_n} healthy / {_unhealthy_n} unhealthy (removed/deleted) of {len(_candidate_inventory)} considered — all from in-memory feed+pending state, no extra network")
                 if _candidate_inventory:
-                    logging.info("Final candidate details: " + ", ".join(f"{d['id']} healthy={'yes' if d['healthy'] else 'no'} reason={d['reason']} src={d['source']}" for d in _candidate_inventory.values()))
+                    # Final disposition: just IDs (past log style, zero extra request); full reason map stays in run_stats for debugging
+                    logging.info("Final candidate IDs: " + ", ".join(d['id'] for d in _candidate_inventory.values()))
             except Exception as _inv_e:
                 logging.debug(f"candidate inventory finalization skipped: {_inv_e}")
             try:

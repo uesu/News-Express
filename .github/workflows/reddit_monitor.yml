@@ -396,16 +396,11 @@ jobs:
           candidates = data.get("unposted_candidate_details") or data.get("candidate_details") or []
           ids = data.get("unposted_candidate_ids") or []
           if candidates:
-              healthy_n = sum(1 for c in candidates if c.get("healthy"))
-              unhealthy_n = len(candidates) - healthy_n
-              print(f"- Candidates: {len(candidates)} total — {healthy_n} healthy / {unhealthy_n} unhealthy (healthy=no means removed/deleted)")
+              # Reddit: just IDs (past log style) — zero extra request, no healthy probe
+              print(f"- Candidates: {len(candidates)} IDs (all from in-memory feed+pending, no extra request)")
               for c in candidates:
                   cid = c.get("id") or c.get("candidate") or "unknown"
-                  reason = c.get("reason") or "unknown"
-                  src = c.get("source") or c.get("src") or "unknown"
-                  healthy = c.get("healthy")
-                  hstr = "yes" if healthy else "no" if healthy is False else "unknown"
-                  print(f"  - {cid} (healthy={hstr}, reason={reason}, src={src})")
+                  print(f"  - {cid}")
           elif ids:
               print(f"- Candidate IDs ({len(ids)}): " + ", ".join(str(x) for x in ids))
               # Provide hint about health when only IDs are present (legacy)
