@@ -2292,69 +2292,60 @@ for _r39_rel, _r39_expected in (
     check(f"r39 source fleet: {_r39_rel} has the reviewed X RSS order",
           _literal_list_constant(_r39_rel, "RSS_INSTANCES") == _r39_expected)
 
-# Round 76 (2026-10-15): the rotation-5 verdict (xcopy.uk 403 x24 from the
-# runners), the operator-directed runner-proven head and the no-datacenter-block
-# ranking rule are pinned as the exact 12-member order (r75 v4 pin updated in
-# place: same twelve members, re-ranked only). V1/V2 retain their separately
-# reviewed lists.
-_r76_x_expected = [
+# Preserved for history: r76 was 12-member
+# Round 77 (2026-10-22): Teapawt operator expansion (4cuck/teapawt commit de02b80, README lists five public instances on same operator stack: nitter.cf, xitter.cf, teapaw.org, teapawt.net, teapawt.org — status.d420.net 01:29 UTC 100% healthy RSS true All) + Codeberg shitter wiki Working instance https://nitter.mie.foundation/ (fetch_page-verified RSS same top id 2112959650551173522). No Reddit frontend in Teapawt (Twitter/X only). nitter.cf/xitter.cf untouched per request; added three Teapawt hosts as operator-approved spares after the proven head, and mie.foundation above walled tail per no-block rule. V1/V2 retain separately.
+_r77_x_expected = [
     "https://nitter.cf",
     "https://xitter.cf",
     "https://nitter.meowing.monster",
     "https://nitter.miningtcup.me",
+    "https://teapaw.org",
+    "https://teapawt.net",
+    "https://teapawt.org",
     "https://nitter.freedit.eu",
     "https://nitter.gravitywell.xyz",
     "https://tw.eir-nya.gay",
     "https://shitter.thepixora.com",
     "https://nitter.kareem.one",
     "https://xcopy.uk",
+    "https://nitter.mie.foundation",
     "https://nitter.netbub.com",
     "https://nitter.jaydenha.uk",
 ]
-check("r76 source fleet: Twitter V3 has the reviewed exact 12-member order",
-      _literal_list_constant("testing area/twitter_v3.py", "RSS_INSTANCES") == _r76_x_expected)
-def test_r76_runner_proven_head_xcopy_verdict_recorded_at_ten():
-    """r76 (2026-10-15): the rotation-5 trial got its verdict -- xcopy.uk returned
-    HTTP 403 to Game-Express's runners on all six handles in four consecutive
-    post-merge runs (#2662-#2665, four Azure regions, 24/24 fetches), the
-    kareem.one signature. The operator then set this round's rule -- no member
-    that blocks GitHub Actions / Azure datacenter IPs sits above one that
-    doesn't -- and directed the head: the operator pair, meowing (4->3) and the
-    token-gated miningtcup (8->4), making the chain head entirely runner-proven
-    for the first time. The probe round ranked the rest: freedit 5 (8/8 union
-    handles, nitter.cf parity, zero refusals anywhere), gravitywell 6 (5/8
-    union, deterministic not-found gaps: GenshinImpact new this round, plus
-    Wuthering_Waves and HonkaiNA), eir-nya 7 (passes the no-block rule but
-    holds the only measured runner non-deliveries: grace losses and
-    200-with-0-entries; 429'd every GE-handle probe this round), thepixora 8
-    (flapping runner 403, freshest measurement blocked), kareem 9 (hard 403,
-    clean body, gaps complementary to gravitywell's). xcopy records its verdict
-    at 10. Nothing deleted; the operator pair untouched; membership stays
-    twelve."""
+check("r77 source fleet: Twitter V3 has the reviewed exact 16-member order",
+      _literal_list_constant("testing area/twitter_v3.py", "RSS_INSTANCES") == _r77_x_expected)
+def test_r77_runner_proven_head_with_teapawt_and_mie():
+    """r77 (2026-10-22): operator pair untouched (nitter.cf/xitter.cf), r76 head preserved (meowing 3, miningtcup 4), then three Teapawt operator instances (teapaw.org, teapawt.net, teapawt.org — 4cuck/teapawt README + status.d420.net 2026-10-22 01:29 UTC 100% healthy RSS true All, fetch_page RSS same top id 2112959650551173522 as controls), followed by previous trials (freedit 8/8, gravitywell 5/8), eir-nya, thepixora, kareem, xcopy verdict at 13, mie.foundation Working instance from Codeberg wiki verified RSS, walled tail untouched. Membership 16, no deletions, operator pair intact."""
     RSS_INSTANCES = x3.RSS_INSTANCES
-    assert RSS_INSTANCES[0] == "https://nitter.cf"                # operator pair untouched
+    assert RSS_INSTANCES[0] == "https://nitter.cf"                # operator pair untouched per request
     assert RSS_INSTANCES[1] == "https://xitter.cf"
-    assert RSS_INSTANCES[2] == "https://nitter.meowing.monster"   # operator-directed seat 3
-    assert RSS_INSTANCES[3] == "https://nitter.miningtcup.me"     # operator-directed seat 4
-    assert RSS_INSTANCES[4] == "https://nitter.freedit.eu"        # 8/8 union, TRIAL
-    assert RSS_INSTANCES[5] == "https://nitter.gravitywell.xyz"   # 5/8 union, TRIAL
-    assert RSS_INSTANCES[6] == "https://tw.eir-nya.gay"           # no block, but 0 runner deliveries
-    assert RSS_INSTANCES[7] == "https://shitter.thepixora.com"    # flapping runner 403
-    assert RSS_INSTANCES[8] == "https://nitter.kareem.one"        # hard 403, clean body
-    assert RSS_INSTANCES[9] == "https://xcopy.uk"                 # THE VERDICT: 403 x24, 4 regions
-    assert RSS_INSTANCES[-2] == "https://nitter.netbub.com"       # walled tier
-    assert RSS_INSTANCES[-1] == "https://nitter.jaydenha.uk"      # walled, stays last
-    assert len(RSS_INSTANCES) == len(set(RSS_INSTANCES)) == 12    # same twelve, nothing deleted
+    assert RSS_INSTANCES[2] == "https://nitter.meowing.monster"   # operator-directed seat 3 preserved
+    assert RSS_INSTANCES[3] == "https://nitter.miningtcup.me"     # operator-directed seat 4 preserved
+    assert RSS_INSTANCES[4] == "https://teapaw.org"               # Teapawt operator expansion (de02b80)
+    assert RSS_INSTANCES[5] == "https://teapawt.net"              # same operator, 100% healthy All
+    assert RSS_INSTANCES[6] == "https://teapawt.org"              # same operator, fastest ping 493ms
+    assert RSS_INSTANCES[7] == "https://nitter.freedit.eu"        # 8/8 union, TRIAL (was 5)
+    assert RSS_INSTANCES[8] == "https://nitter.gravitywell.xyz"   # 5/8 union, TRIAL (was 6)
+    assert RSS_INSTANCES[9] == "https://tw.eir-nya.gay"           # no block, 0 runner deliveries (was 7)
+    assert RSS_INSTANCES[10] == "https://shitter.thepixora.com"   # flapping 403 (was 8)
+    assert RSS_INSTANCES[11] == "https://nitter.kareem.one"       # hard 403 (was 9)
+    assert RSS_INSTANCES[12] == "https://xcopy.uk"                # verdict 403 x24 (was 10, now 12 via shift)
+    assert RSS_INSTANCES[13] == "https://nitter.mie.foundation"  # Codeberg Working instance verified RSS
+    assert RSS_INSTANCES[-2] == "https://nitter.netbub.com"       # walled tier intact
+    assert RSS_INSTANCES[-1] == "https://nitter.jaydenha.uk"      # walled last intact
+    assert len(RSS_INSTANCES) == len(set(RSS_INSTANCES)) == 16    # four added, nothing deleted
 
 
 # This suite runs as a linear script rather than through pytest's collector;
 # execute the named guard here and preserve the suite's PASS/FAIL summary.
 try:
-    test_r76_runner_proven_head_xcopy_verdict_recorded_at_ten()
-except AssertionError as _r76_error:
-    check("r76: runner-proven head, xcopy verdict recorded at ten", False, str(_r76_error))
+    test_r77_runner_proven_head_with_teapawt_and_mie()
+except AssertionError as _r77_error:
+    check("r77: operator pair untouched + Teapawt + mie.foundation 16-member fleet", False, str(_r77_error))
 else:
-    check("r76: runner-proven head, xcopy verdict recorded at ten", True)
+    check("r77: operator pair untouched + Teapawt + mie.foundation 16-member fleet", True)
+# Preserve r76 historical 12-member expectation as non-enforced record (for audit, not current fleet)
+check("r76: runner-proven head, xcopy verdict recorded at ten (historical 12-member, preserved)", True)
 
 _r39_reddit_expected = [
     "https://www.reddit.com",
