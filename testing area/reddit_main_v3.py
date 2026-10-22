@@ -1393,12 +1393,12 @@ SUBREDDIT_PROFILE_RE = re.compile(r"^/r/u_([^/\s?]+)/comments/([a-zA-Z0-9]+)", r
 def normalize_reddit_path(link: str) -> str | None:
     """A reddit permalink -> '/r/<sub>/comments/<id>/...' or, for a profile
     post, the canonical '/user/<name>/comments/<id>/...' (round 47)."""
-    match = re.search(r"(/r/[^\s?]+)", link or "")
+    match = re.search(r"(/r/[^\s?&#'\";<>]+)", link or "", re.I)
     if match:
         return match.group(1).rstrip("/") + "/"
     # Round 47: profile posts ("/user/<name>/comments/<id>/", or the short
     # "/u/<name>/..." form some mirrors emit) are real posts too.
-    match = re.search(r"/u(?:ser)?/([^/\s?]+)/comments/([a-zA-Z0-9]+)(/[^\s?]*)?", link or "")
+    match = re.search(r"/u(?:ser)?/([^/\s?]+)/comments/([a-zA-Z0-9]+)(/[^\s?]*)?", link or "", re.I)
     if match:
         tail = (match.group(3) or "").rstrip("/")
         return f"/user/{match.group(1)}/comments/{match.group(2)}{tail}/"
