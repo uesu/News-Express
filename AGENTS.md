@@ -158,7 +158,7 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    answers the runners). The smoke suite pins the exact order, so every
    re-rank updates the guard in the same commit; V1/V2 keep their own,
    separately pinned lists. Reddit's `REDDIT_RSS_INSTANCES` is audited by
-   body too and has been intentionally unchanged since round 39.
+   body too — 19-member fleet as of 2026-10-22 (dual-path + listing-only reserves + tail restores per live #9283; see `testing area/reddit_main_v3.py` for exact order).
 
 ## Landmines — things that LOOK like bugs but are deliberate
 

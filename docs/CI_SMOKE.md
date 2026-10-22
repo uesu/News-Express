@@ -94,11 +94,12 @@ performance, automation, and rollback policy: [Python runtime policy](PYTHON_RUN
   Variable defaults, the Embeddit-rewrite Component-Embed page parser, and
   the Mastodon→component→unavailable mode machine).
 * **Listing fixtures (originally round 38e)** — the `/new` listing reads
-  behind the round-64 pristine listing confirmation and the round-44
-  retraction seatbelt are exercised offline. The real `_fetch_new_listing()`
-  runs against an in-memory listing document served by a fake session, which
-  pins the round-64 pristine request shape: a unique `_fresh=` cache-buster
-  per call plus `Cache-Control`/`Pragma` no-cache headers on every attempt.
+  behind the optional round-44 retraction seatbelt are exercised offline
+  (the former round-64 pristine listing confirmation used the same path with
+  a unique `_fresh=` cache-buster per call plus `Cache-Control`/`Pragma`
+  no-cache headers until its removal on 2026-10-21). The real
+  `_fetch_new_listing()` runs against an in-memory listing document served by
+  a fake session, which pins the current retraction listing request shape.
   What the engine does with that snapshot is covered by the decision checks
   in both suites — `listing_absence_proves_dead` and `retraction_decision`
   (span arithmetic, the two-proof rule, `edit`/`delete`/off) — and by the
