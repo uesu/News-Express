@@ -298,21 +298,6 @@ RSS_INSTANCES = [
     "https://nitter.jaydenha.uk",
 ]
 
-_nitter_reach: dict = {}
-
-def log_nitter_reachability() -> str:
-    """One NITTER-REACH line per run: ok/total per instance, worst first — zero extra request, reuse in-memory _nitter_reach."""
-    if not _nitter_reach:
-        return ""
-    parts = []
-    for instance, (ok, total) in sorted(_nitter_reach.items(), key=lambda kv: (kv[1][0] / kv[1][1] if kv[1][1] else 0, kv[0])):
-        parts.append(f"{instance.replace('https://', '')} {ok}/{total}")
-    alive = sum(1 for ok, _t in _nitter_reach.values() if ok)
-    line = f"NITTER-REACH: {alive}/{len(_nitter_reach)} instance(s) answered this run — " + ", ".join(parts)
-    import logging
-    logging.info(line)
-    return line
-
 # round 12 (2026-09-17): token-gated instances. nitter.miningtcup.me hides
 # its RSS behind a bot check; the operator emails out RSS tokens (request
 # sent to nitter-rss@miningtcup.me). When the token arrives, set it as the
@@ -1482,8 +1467,6 @@ async def fetch_working_feed(session: aiohttp.ClientSession, account: str):
                            "Authorization": f"Bearer {token}",
                            "User-Agent": f"Mozilla/5.0 {token}"}
             feed_url = f"{feed_url}?token={url_quote(token, safe='')}"
-        # Zero-cost tracking: ok/total per instance from in-memory counts, no extra request
-        _nitter_reach.setdefault(str(instance), [0, 0])[1] += 1
         try:
             async with session.get(feed_url, headers=req_headers,
                                    timeout=aiohttp.ClientTimeout(total=10)) as response:
@@ -1491,7 +1474,6 @@ async def fetch_working_feed(session: aiohttp.ClientSession, account: str):
                     content = await response.text()
                     feed = await asyncio.to_thread(feedparser.parse, content)
                     if feed.entries:
-                        _nitter_reach.setdefault(str(instance), [0, 0])[0] += 1
                         logging.info(f"[{account}] feed OK via {instance} — "
                                      f"{len(feed.entries)} entries.")
                         return feed
@@ -1689,28 +1671,6 @@ async def main():
         feeds = await asyncio.gather(*feeds_tasks)
 
         feed_pairs = list(zip(ACCOUNTS, feeds))
-
-        # Zero-cost candidate inventory: IDs from in-memory feed entries, no extra request (past log style)
-        _twitter_candidate_ids = []
-        for _acc, _feed in feed_pairs:
-            if not _feed or not getattr(_feed, 'entries', None):
-                continue
-            _entries = [_feed.entries[0]] if is_first_run else _feed.entries
-            for _ent in _entries:
-                try:
-                    _link = getattr(_ent, "link", "")
-                    _m = __import__('re').search(r"/status/(\d+)", _link or "")
-                    if not _m:
-                        continue
-                    _tid = _m.group(1)
-                    _uk = f"{_acc}_{_tid}"
-                    _twitter_candidate_ids.append(_uk)
-                except Exception:
-                    continue
-        if _twitter_candidate_ids:
-            logging.info(f"Twitter candidates: {len(_twitter_candidate_ids)} IDs: " + ", ".join(_twitter_candidate_ids) + " (all from in-memory feed, no extra request)")
-        else:
-            logging.info("Twitter candidates: 0 IDs (no feed entries this run)")
 
         # round 12 (2026-09-17): TEST_TWEET_ID — rebuild ONE specific tweet
         # WITHOUT the nitter feed (the nitter fleet was down/stale on
@@ -1931,28 +1891,6 @@ async def main():
 
         # Round 47: self-heal AFTER every post of this run — never before.
         await heal_unresolved_media(session, heal_queue)
-
-        # Instance inventory: used/active (contacted) vs not used — from in-memory _nitter_reach, no extra probe
-        # Used = any instance we actually tried this run (total>0); healthy=yes if it delivered entries (ok>0)
-        # Not used = never tried; no health shown to avoid extra probe
-        try:
-            _used = []
-            _unused = []
-            for inst, (ok, total) in sorted(_nitter_reach.items()):
-                if total and ok:
-                    _used.append(f"{inst.replace('https://', '')} (healthy=yes {ok}/{total})")
-                elif total:
-                    _used.append(f"{inst.replace('https://', '')} (tried {ok}/{total}, not healthy)")
-            for h in RSS_INSTANCES:
-                if h not in _nitter_reach:
-                    _unused.append(f"{h.replace('https://', '')} (not used this run — health unknown)")
-            if _used:
-                logging.info("Instances used/active this run: " + "; ".join(_used) + " (all from in-memory _nitter_reach, no extra request)")
-            if _unused:
-                logging.info("Instances not used this run (no extra request — health unknown): " + "; ".join(_unused))
-            log_nitter_reachability()
-        except Exception:
-            pass
 
     saved = save_posted_urls(posted_urls, frozenset(posted_urls - posted_urls_at_start))
     missing = (posted_urls - posted_urls_at_start) - saved

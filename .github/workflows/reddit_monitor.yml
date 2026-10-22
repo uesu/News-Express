@@ -391,40 +391,6 @@ jobs:
           if data.get('other_by_reason'):
               print(f"  - by reason: {dict_str(data.get('other_by_reason'))}")
           print()
-          print("### Unposted candidate details (zero extra request — IDs from in-memory feed+pending)")
-          # Zero-cost detail: IDs + health are from already-fetched feed entries + pending cache; no extra HTTP
-          candidates = data.get("unposted_candidate_details") or data.get("candidate_details") or []
-          ids = data.get("unposted_candidate_ids") or []
-          if candidates:
-              # Reddit: just IDs (past log style) — zero extra request, no healthy probe
-              print(f"- Candidates: {len(candidates)} IDs (all from in-memory feed+pending, no extra request)")
-              for c in candidates:
-                  cid = c.get("id") or c.get("candidate") or "unknown"
-                  print(f"  - {cid}")
-          elif ids:
-              print(f"- Candidate IDs ({len(ids)}): " + ", ".join(str(x) for x in ids))
-              # Provide hint about health when only IDs are present (legacy)
-              if data.get("known_pending_by_reason"):
-                  print(f"  - Health hint: see Known-rejected / Retry-backoff reasons above")
-          elif data.get("unposted_candidates_considered") not in (None, 0, "0", "unavailable"):
-              print(f"- Candidate details: unavailable in this run's result (legacy file — update the monitor script)")
-          else:
-              print(f"- No unposted candidates this run (0 considered)")
-          # Instance inventory: used/active vs not used — all from in-memory run_stats/feed results, no extra probe
-          inv = data.get("instance_inventory") or {}
-          if inv:
-              used = inv.get("used") or []
-              unused = inv.get("unused") or []
-              if used:
-                  print(f"- Instances used/active this run: " + "; ".join(str(x) for x in used))
-              if unused:
-                  print(f"- Instances not used (no extra request — health unknown unless previously observed): " + "; ".join(str(x) for x in unused))
-              print(f"- Instance health reflects only in-memory observations this run; unused hosts were not probed to avoid extra network/latency")
-          else:
-              # Fallback: show proxy warmup hint if inventory not yet present
-              if data.get("proxy_warmup_status") in ("ok", "failed", "disabled"):
-                  print(f"- Instance inventory: see Proxy warmup detail above; detailed used/unused list appears after the next monitor deploy")
-          print()
           print("### Providers and media")
           # Warmup: locally observed, no extra network (does not prove audio)
           warmup_status = data.get("proxy_warmup_status", "unavailable")
