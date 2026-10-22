@@ -50,9 +50,11 @@ You agree NOT to use the Service to:
 ## 4. Third-Party Dependencies
 
 The Service depends on free/community-run third parties — Nitter mirrors, Redlib (public Reddit
-RSS, post pages, and the public `/new` listings used by the pristine listing confirmation and the
-optional retraction seatbelt, including reddit.com's token-authenticated per-subreddit RSS listing
-(round 38e); the fallback fleet
+RSS, post pages, and — when the optional retraction seatbelt is enabled — the public `/new`
+listings it reads to confirm a delivered post is still visible, including reddit.com's
+token-authenticated per-subreddit RSS listing (round 38e); the former pristine listing
+confirmation (round 64, removed 2026-10-21) also read listings with a cache-busting `_fresh`
+parameter and `no-cache` headers; the fallback fleet
 may include catsarch, nadeko, privadency, miningtcup, safereddit, artemislena, and privacyredirect), FxTwitter/FxEmbed
 (primary tweet-data source, with its same-engine sister client fixupx.com as a stand-by), vxtwitter
 (BetterTwitFix — backup tweet-data API and its gifconvert.vxtwitter.com GIF converter), Arctic Shift
