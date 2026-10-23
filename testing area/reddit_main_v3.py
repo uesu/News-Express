@@ -4306,7 +4306,7 @@ def base_from_redlib_page(page_html: str | None, path: str) -> dict | None:
     title = ""
     if tm:
         h1_inner = re.sub(r'<a\b[^>]*class="[^"]*post_flair[^"]*"[^>]*>.*?</a>', "", tm.group(1), flags=re.S | re.I)
-        h1_inner = re.sub(r'<small\b[^>]*class="[^"]*(?:nsfw|spoiler)[^"]*"[^>]*>.*?</small>', "", h1_inner, flags=re.S | re.I)
+        h1_inner = re.sub(r"<small\b[^>]*>.*?</small>", "", h1_inner, flags=re.S | re.I)
         title = html_lib.unescape(re.sub(r"<[^>]+>", "", h1_inner)).strip()
     if not title:
         return None
