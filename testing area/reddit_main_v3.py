@@ -2123,6 +2123,9 @@ def _arctic_media_hint(post) -> bool:
     post can carry its text here without its media — the hint is
     what makes that detectable (1wj38fc posted media-less because
     none of that was visible at the time).
+    Round 83c: AutoModerator-held gallery posts (1xd8ppc/1xd8vra/1xd9pre)
+    have is_gallery=None, gallery_data=None, post_hint="link", url=
+    "https://www.reddit.com/gallery/<id>" — must also check gallery URL.
     """
     if not isinstance(post, dict):
         return False
@@ -2136,7 +2139,8 @@ def _arctic_media_hint(post) -> bool:
     for key in ("url", "url_overridden_by_dest"):
         u = post.get(key) or ""
         if re.match(r"https?://(?:i|preview|external-preview)\.redd\.it/", u) \
-                or "v.redd.it/" in u:
+                or "v.redd.it/" in u \
+                or "reddit.com/gallery/" in u.lower():
             return True
     return False
 
@@ -4232,10 +4236,23 @@ def extract_redlib_gallery(page_html: str | None) -> list[dict]:
     """
     Harvest redd.it media from a redlib post page (post area only), then
     apply the same dedupe/best-rendition rules as extract_native_media.
+    Round 83c: Redlib rewrites gallery images to relative /img/<file> and
+    /preview/(pre|external-pre)/<file> — must unwrap to https://i.redd.it / preview.redd.it
+    before matching REDDIT_MEDIA_URL_RE, otherwise 0 items even on live 9-photo galleries.
     """
     if not page_html:
         return []
-    return extract_native_media(_redlib_post_area(page_html))
+    area = _redlib_post_area(page_html)
+    # Unwrap Redlib-proxied image URLs to canonical redd.it URLs
+    # /img/<file> -> https://i.redd.it/<file> (full-res, idevicehacked.com etc)
+    # /preview/pre/<file>?... -> https://preview.redd.it/<file>?...
+    # /preview/external-pre/<file>?... -> https://external-preview.redd.it/<file>?...
+    import re as _re_redlib
+    # Must handle optional host prefix (https://redlib.host) + optional query
+    area = _re_redlib.sub(r'(?:https?://[^/"<>\s]+)?/img/([^?#"<>\s]+)', r'https://i.redd.it/\1', area)
+    area = _re_redlib.sub(r'(?:https?://[^/"<>\s]+)?/preview/external-pre/([^?#"<>\s]+)(\?[^"<>\s]*)?', r'https://external-preview.redd.it/\1\2', area)
+    area = _re_redlib.sub(r'(?:https?://[^/"<>\s]+)?/preview/pre/([^?#"<>\s]+)(\?[^"<>\s]*)?', r'https://preview.redd.it/\1\2', area)
+    return extract_native_media(area)
 
 
 # Round 38c (2026-09-30): a gallery post can carry a reddit-hosted VIDEO
@@ -4363,6 +4380,24 @@ async def fetch_test_post_base(session: aiohttp.ClientSession, path: str,
     return None
 
 
+def _is_redlib_error_page(html: str | None) -> bool:
+    """Round 83c: Redlib error pages return HTTP 200 but are not real posts.
+    Must be rejected before counting REDLIB-REACH 1/1 or caching — otherwise
+    verify_archive_post_live passes unapproved stubs and gallery enrichment
+    fails. Verified live: Failed to parse page JSON data / Reddit is rate
+    limiting / Reddit blocked this request / 502 Bad Gateway."""
+    if not html:
+        return False
+    low = html.lower()
+    return any(s in low for s in (
+        "failed to parse page json data",
+        "reddit is rate limiting this instance",
+        "reddit blocked this request",
+        "502 bad gateway",
+        "error: reddit is rate limiting",
+        "error: failed to parse",
+    ))
+
 async def _fetch_redlib_post_page(session: aiohttp.ClientSession, instance: str,
                                   path: str, timeout: int = 10) -> str | None:
     # Round 42: per-run memo. Successful page fetches are reused by the
@@ -4379,6 +4414,14 @@ async def _fetch_redlib_post_page(session: aiohttp.ClientSession, instance: str,
                                allow_redirects=True) as resp:
             if resp.status == 200 and "html" in (resp.headers.get("Content-Type") or "").lower():
                 text = await resp.text()
+                if text and not _is_redlib_error_page(text):
+                    _redlib_post_page_cache[key] = text
+                    _redlib_reach.setdefault(str(instance or ""), [0, 0])[0] += 1
+                    return text
+                # Error page: count as 0/1 (do not cache, do not count as 1/1)
+                if text and _is_redlib_error_page(text):
+                    logging.debug(f"[{instance}{path}] Redlib error page rejected (not counted as 1/1)")
+                    return None
                 if text:
                     _redlib_post_page_cache[key] = text
                     _redlib_reach.setdefault(str(instance or ""), [0, 0])[0] += 1
@@ -5039,7 +5082,11 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
             except Exception as e:
                 logging.info(f"[{label or 'stats'}] embeddit stats fetch failed: {e}")
 
-    if stats is None and arctic and all(isinstance(arctic.get(key), int)
+    # Round 83c: Do not stamp stale Arctic archived counts — clean card when
+    # stats unavailable (gate behind ALLOW_ARCHIVED_COUNTS=1 to re-enable).
+    # Previously rendered "1⬆️ · 0💬 · archived counts" from 13s-old snapshots
+    # on text-only fallback, overriding live stats.
+    if os.getenv("ALLOW_ARCHIVED_COUNTS", "0") == "1" and stats is None and arctic and all(isinstance(arctic.get(key), int)
                                       for key in ("ups", "num_comments")):
         stats = {"ups": arctic["ups"], "comments": arctic["num_comments"], "archived": True}
 
@@ -6289,18 +6336,33 @@ async def main():
                     # once the media is available (Arctic fields filled, or a
                     # proxy renders the og: tags) the full gallery posts. The
                     # 48h freshness window bounds the retries.
+                    # Round 83c: Mod-queued galleries (1xd8ppc/1xd8vra/1xd9pre) are
+                    # automod_filtered with url=reddit.com/gallery/<id> and no
+                    # gallery_data/media_metadata while queued — _arctic_media_hint
+                    # now checks gallery URL, and this gate also fires for RSS
+                    # gallery links and via child_arctic lookup, so the post waits
+                    # in pending (media_wait) until mods approve and images are live.
                     if (not TEST_POST_ID and not DRY_RUN and post_json is None
-                            and isinstance(entry, _ArcticEntry)
-                            and not data["media"]
-                            and _arctic_media_hint(getattr(entry, "_arctic_post", None))):
-                        mark_pending(pending, unique_key, "media_wait", now)
-                        run_stats["media_wait"] += 1
-                        logging.debug(f"[{unique_key}] archive record says this post "
-                                     f"has media (gallery/media_metadata) but no "
-                                     f"source served any yet (Arctic fills those "
-                                     f"asynchronously) — skipping, not cached "
-                                     f"(retries next run).")
-                        continue
+                            and not data["media"]):
+                        _hint = False
+                        if isinstance(entry, _ArcticEntry):
+                            _hint = _arctic_media_hint(getattr(entry, "_arctic_post", None))
+                        # Also check RSS gallery links and base content (covers
+                        # RSS posts linking to /gallery/ and child_arctic via
+                        # resolve_post_media's internal fetch)
+                        if not _hint:
+                            _base_content = str(base.get("content_html") or "") + str(base.get("body") or "")
+                            if "reddit.com/gallery/" in _base_content.lower():
+                                _hint = True
+                        if _hint:
+                            mark_pending(pending, unique_key, "media_wait", now)
+                            run_stats["media_wait"] += 1
+                            logging.debug(f"[{unique_key}] archive record says this post "
+                                         f"has media (gallery/media_metadata) but no "
+                                         f"source served any yet (Arctic fills those "
+                                         f"asynchronously) — skipping, not cached "
+                                         f"(retries next run).")
+                            continue
                     # Round 25: known partial archive galleries wait without caching.
                     # Unknown counts cannot gate; video cards intentionally use one tile.
                     if (not TEST_POST_ID and not DRY_RUN and post_json is None

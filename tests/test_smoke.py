@@ -638,7 +638,7 @@ async def round15_flows():
             {"kind": "image", "url": "https://example.com/screenshot.jpg"}], "stats": None, "body": ""})
         result = await v3.resolve_post_media(None, base, None, "/r/Sub/comments/cross1/title/")
         check("r15 screenshot rejected", result["media"] == [{"kind": "video", "url": "https://example.com/fallback.mp4"}])
-        check("r15 archived stats labelled", result["stats"].get("archived") is True)
+        check("r15 archived stats not shown (Round 83c: clean card, no stale Arctic archived counts)", result["stats"] is None)
     fake_proxy.fetch_proxy_post = AsyncMock(return_value={"service": "test", "media": items[:2],
                                                          "body": "FirstSecond", "stats": None})
     with patch.object(v3, "reddit_proxy", fake_proxy), patch.object(v3, "PROXY_MEDIA", True), \
