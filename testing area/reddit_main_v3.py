@@ -4214,7 +4214,9 @@ def _redlib_post_area(page_html: str) -> str:
     """HTML slice of the POST AREA (post title -> first comment) so sidebar,
     related posts and comment thumbnails can't leak into the harvest.
     Prefers the post_content element when the theme has one; the cut at the
-    first comment is made on the tag boundary (not mid-tag)."""
+    first comment is made on the tag boundary (not mid-tag).
+    Round 83c: also handles mitchross/redlib v2.3.6 <article> layout used by
+    redlib.vanillax.me which has no post_content/post_title classes."""
     m = REDDIL_POST_TITLE_RE.search(page_html)
     if m:
         rest = page_html[m.end():]
@@ -4223,6 +4225,16 @@ def _redlib_post_area(page_html: str) -> str:
     start = re.search(r'<(?:div|section)\s+class="post_content', page_html, re.I)
     if start:
         page_html = page_html[start.start():]
+    else:
+        # mitchross/redlib v2.3.6 uses <article> without post_content classes
+        art = re.search(r'<article[^>]*>', page_html, re.I)
+        if art:
+            page_html = page_html[art.start():]
+            # try to cut at closing article if present before comment markers
+            end_art = re.search(r'</article>', page_html, re.I)
+            if end_art:
+                # keep only article content, will still cut at comment markers below
+                pass
     for marker in ('id="comment-', 'class="comment"', '<section class="comments"'):
         idx = page_html.lower().find(marker.lower())
         if idx != -1:
@@ -4260,7 +4272,7 @@ def extract_redlib_gallery(page_html: str | None) -> list[dict]:
 # themes either inline a v.redd.it URL or link the instance's player page
 # (/link/<post>/video/<id>); both carry the same base62 id the DASH chain
 # resolves. (Markup verified live on safereddit, 2026-09-30.)
-REDDIL_PLAYER_VIDEO_RE = re.compile(r"/link/[a-z0-9]+/video/([a-z0-9]{5,20})")
+REDDIL_PLAYER_VIDEO_RE = re.compile(r"/(?:link/[a-z0-9]+/video|vid)/([a-z0-9]{5,20})")
 
 
 def extract_redlib_video_id(page_html: str | None) -> str | None:
@@ -4288,6 +4300,12 @@ def base_from_redlib_page(page_html: str | None, path: str) -> dict | None:
     area = _redlib_post_area(page_html)
     tm = re.search(r"<h1[^>]*post_title[^>]*>.*?<a[^>]*>([^<]+)</a>", page_html, re.S | re.I)
     title = html_lib.unescape(tm.group(1)).strip() if tm else ""
+    # Round 83c: mitchross/redlib v2.3.6 uses <article> without post_title class
+    if not title:
+        tm2 = re.search(r"<article[^>]*>.*?<h1[^>]*>(.*?)</h1>", page_html, re.S | re.I)
+        if tm2:
+            inner = re.sub(r"<[^>]+>", "", tm2.group(1))
+            title = html_lib.unescape(inner).strip()
     if not title:
         return None
     author = "unknown"
@@ -4295,6 +4313,11 @@ def base_from_redlib_page(page_html: str | None, path: str) -> dict | None:
                    page_html, re.I)
     if am:
         author = am.group(1)
+    else:
+        # Fallback for mitchross/redlib <article> layout: look for /u/<author>
+        am2 = re.search(r'/u/([A-Za-z0-9_\-]{2,20})', page_html, re.I)
+        if am2:
+            author = am2.group(1)
     og = (re.search(r'property="og:image"\s+content="([^"]+)"', page_html, re.I) or
           re.search(r'content="([^"]+)"\s+property="og:image"', page_html, re.I))
     return {
@@ -4403,6 +4426,10 @@ async def _fetch_redlib_post_page(session: aiohttp.ClientSession, instance: str,
     # Round 42: per-run memo. Successful page fetches are reused by the
     # liveness gate and media enrichment; misses
     # are deliberately not cached so a transient failure stays retryable.
+    # Round 83c fix: skip direct reddit.com hosts (not Redlib HTML) — they
+    # return Shreddit shells and would short-circuit gallery enrichment at [0..1].
+    if "reddit.com" in (instance or ""):
+        return None
     key = (str(instance or ""), str(path or ""))
     if key in _redlib_post_page_cache:
         return _redlib_post_page_cache[key]
@@ -4414,13 +4441,22 @@ async def _fetch_redlib_post_page(session: aiohttp.ClientSession, instance: str,
                                allow_redirects=True) as resp:
             if resp.status == 200 and "html" in (resp.headers.get("Content-Type") or "").lower():
                 text = await resp.text()
-                if text and not _is_redlib_error_page(text):
+                # Round 83c fix: require real post-page DOM marker before
+                # counting 1/1 — Anubis PoW / Cloudflare / JS splash pages
+                # return 200 HTML without error strings but with no post DOM.
+                has_post_dom = text and any(m in text for m in (
+                    'class="post_title', 'class="post_content', '<article', 'class="post-content'
+                ))
+                if text and has_post_dom and not _is_redlib_error_page(text):
                     _redlib_post_page_cache[key] = text
                     _redlib_reach.setdefault(str(instance or ""), [0, 0])[0] += 1
                     return text
-                # Error page: count as 0/1 (do not cache, do not count as 1/1)
-                if text and _is_redlib_error_page(text):
-                    logging.debug(f"[{instance}{path}] Redlib error page rejected (not counted as 1/1)")
+                # Error page or challenge splash: count as 0/1 (do not cache, do not count as 1/1)
+                if text and (_is_redlib_error_page(text) or not has_post_dom):
+                    if _is_redlib_error_page(text):
+                        logging.debug(f"[{instance}{path}] Redlib error page rejected (not counted as 1/1)")
+                    else:
+                        logging.debug(f"[{instance}{path}] Redlib challenge/splash page rejected (no post DOM, not counted as 1/1)")
                     return None
                 if text:
                     _redlib_post_page_cache[key] = text
