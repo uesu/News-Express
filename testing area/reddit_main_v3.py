@@ -4119,7 +4119,7 @@ def extract_native_media(content_html: str | None) -> list[dict]:
         return []
     best: dict[str, tuple[int, int, str, str]] = {}
     for order, m in enumerate(REDDIT_MEDIA_URL_RE.finditer(content_html)):
-        url = m.group(0).rstrip(".,;")
+        url = html_lib.unescape(m.group(0)).rstrip(".,;")
         host = url.split("/")[2].lower()
         key = _reddit_media_key(url)
         ext = key.rsplit(".", 1)[-1]
@@ -4210,13 +4210,30 @@ def op_comment_text(op: dict) -> str:
 REDDIL_POST_TITLE_RE = re.compile(r"<h1[^>]*post_title[^>]*>", re.I)
 
 
+def _unwrap_redlib_media_urls(text: str) -> str:
+    """Unwrap Redlib-proxied /img/ and /preview/(pre|external-pre)/ URLs
+    (relative or full host) to canonical redd.it URLs."""
+    text = re.sub(r'''(?:https?://[^/"'<>\s]+)?/img/([^?#"'<>\s]+)''', r'https://i.redd.it/\1', text)
+    text = re.sub(
+        r'''(?:https?://[^/"'<>\s]+)?/preview/external-pre/([^?#"'<>\s]+)(\?[^"'<>\s]*)?''',
+        lambda m: f"https://external-preview.redd.it/{m.group(1)}{m.group(2) or ''}",
+        text,
+    )
+    text = re.sub(
+        r'''(?:https?://[^/"'<>\s]+)?/preview/pre/([^?#"'<>\s]+)(\?[^"'<>\s]*)?''',
+        lambda m: f"https://preview.redd.it/{m.group(1)}{m.group(2) or ''}",
+        text,
+    )
+    return text
+
+
 def _redlib_post_area(page_html: str) -> str:
     """HTML slice of the POST AREA (post title -> first comment) so sidebar,
     related posts and comment thumbnails can't leak into the harvest.
     Prefers the post_content element when the theme has one; the cut at the
     first comment is made on the tag boundary (not mid-tag).
-    Round 83c: also handles mitchross/redlib v2.3.6 <article> layout used by
-    redlib.vanillax.me which has no post_content/post_title classes."""
+    Round 83c: also handles <article> feed/post layouts and cuts cleanly at
+    closing </article> or comment section boundaries."""
     m = REDDIL_POST_TITLE_RE.search(page_html)
     if m:
         rest = page_html[m.end():]
@@ -4226,16 +4243,13 @@ def _redlib_post_area(page_html: str) -> str:
     if start:
         page_html = page_html[start.start():]
     else:
-        # mitchross/redlib v2.3.6 uses <article> without post_content classes
         art = re.search(r'<article[^>]*>', page_html, re.I)
         if art:
             page_html = page_html[art.start():]
-            # try to cut at closing article if present before comment markers
             end_art = re.search(r'</article>', page_html, re.I)
             if end_art:
-                # keep only article content, will still cut at comment markers below
-                pass
-    for marker in ('id="comment-', 'class="comment"', '<section class="comments"'):
+                page_html = page_html[:end_art.start()]
+    for marker in ('id="comment-', 'class="comment"', '<section class="comments"', 'id="comments"'):
         idx = page_html.lower().find(marker.lower())
         if idx != -1:
             lt = page_html.rfind("<", 0, idx)
@@ -4248,22 +4262,10 @@ def extract_redlib_gallery(page_html: str | None) -> list[dict]:
     """
     Harvest redd.it media from a redlib post page (post area only), then
     apply the same dedupe/best-rendition rules as extract_native_media.
-    Round 83c: Redlib rewrites gallery images to relative /img/<file> and
-    /preview/(pre|external-pre)/<file> — must unwrap to https://i.redd.it / preview.redd.it
-    before matching REDDIT_MEDIA_URL_RE, otherwise 0 items even on live 9-photo galleries.
     """
     if not page_html:
         return []
-    area = _redlib_post_area(page_html)
-    # Unwrap Redlib-proxied image URLs to canonical redd.it URLs
-    # /img/<file> -> https://i.redd.it/<file> (full-res, idevicehacked.com etc)
-    # /preview/pre/<file>?... -> https://preview.redd.it/<file>?...
-    # /preview/external-pre/<file>?... -> https://external-preview.redd.it/<file>?...
-    import re as _re_redlib
-    # Must handle optional host prefix (https://redlib.host) + optional query
-    area = _re_redlib.sub(r'(?:https?://[^/"<>\s]+)?/img/([^?#"<>\s]+)', r'https://i.redd.it/\1', area)
-    area = _re_redlib.sub(r'(?:https?://[^/"<>\s]+)?/preview/external-pre/([^?#"<>\s]+)(\?[^"<>\s]*)?', r'https://external-preview.redd.it/\1\2', area)
-    area = _re_redlib.sub(r'(?:https?://[^/"<>\s]+)?/preview/pre/([^?#"<>\s]+)(\?[^"<>\s]*)?', r'https://preview.redd.it/\1\2', area)
+    area = _unwrap_redlib_media_urls(_redlib_post_area(page_html))
     return extract_native_media(area)
 
 
@@ -4280,7 +4282,7 @@ def extract_redlib_video_id(page_html: str | None) -> str | None:
     (post area only), or None when the page has no video."""
     if not page_html:
         return None
-    area = _redlib_post_area(page_html)
+    area = _unwrap_redlib_media_urls(_redlib_post_area(page_html))
     vid = extract_vreddit_id(area)
     if vid:
         return vid
@@ -4297,15 +4299,15 @@ def base_from_redlib_page(page_html: str | None, path: str) -> dict | None:
     """
     if not page_html:
         return None
-    area = _redlib_post_area(page_html)
-    tm = re.search(r"<h1[^>]*post_title[^>]*>.*?<a[^>]*>([^<]+)</a>", page_html, re.S | re.I)
-    title = html_lib.unescape(tm.group(1)).strip() if tm else ""
-    # Round 83c: mitchross/redlib v2.3.6 uses <article> without post_title class
-    if not title:
-        tm2 = re.search(r"<article[^>]*>.*?<h1[^>]*>(.*?)</h1>", page_html, re.S | re.I)
-        if tm2:
-            inner = re.sub(r"<[^>]+>", "", tm2.group(1))
-            title = html_lib.unescape(inner).strip()
+    area = _unwrap_redlib_media_urls(_redlib_post_area(page_html))
+    tm = re.search(r"<h1[^>]*post_title[^>]*>(.*?)</h1>", page_html, re.S | re.I)
+    if not tm:
+        tm = re.search(r"<article[^>]*>.*?<h1[^>]*>(.*?)</h1>", page_html, re.S | re.I)
+    title = ""
+    if tm:
+        h1_inner = re.sub(r'<a\b[^>]*class="[^"]*post_flair[^"]*"[^>]*>.*?</a>', "", tm.group(1), flags=re.S | re.I)
+        h1_inner = re.sub(r'<small\b[^>]*class="[^"]*(?:nsfw|spoiler)[^"]*"[^>]*>.*?</small>', "", h1_inner, flags=re.S | re.I)
+        title = html_lib.unescape(re.sub(r"<[^>]+>", "", h1_inner)).strip()
     if not title:
         return None
     author = "unknown"
@@ -4314,21 +4316,23 @@ def base_from_redlib_page(page_html: str | None, path: str) -> dict | None:
     if am:
         author = am.group(1)
     else:
-        # Fallback for mitchross/redlib <article> layout: look for /u/<author>
-        am2 = re.search(r'/u/([A-Za-z0-9_\-]{2,20})', page_html, re.I)
+        am2 = re.search(r'/(?:u|user)/([A-Za-z0-9_\-]{2,20})', page_html, re.I)
         if am2:
             author = am2.group(1)
     og = (re.search(r'property="og:image"\s+content="([^"]+)"', page_html, re.I) or
           re.search(r'content="([^"]+)"\s+property="og:image"', page_html, re.I))
+    thumb = _unwrap_redlib_media_urls(html_lib.unescape(og.group(1))) if og else None
+    body_m = re.search(r'<div\s+class="post_body[^"]*"[^>]*>(.*?)</div>\s*<div\s+class="post_(?:score|footer)', area, re.S | re.I)
+    body_src = body_m.group(1) if body_m else area
     return {
         "title": _clean_post_title(title),
         "author": _clean_author_name(author),
         "content_html": area,
-        "thumb": og.group(1) if og else None,
+        "thumb": thumb,
         # Round 65 audit: this body's HTML entities are unescaped exactly
         # once — inside clean_rss_body (the round-16 fixpoint the feed's
         # double-escaping requires).
-        "body": clean_rss_body(area),
+        "body": clean_rss_body(body_src),
         "crosspost_orig_path": find_crosspost_original_path(area, path),
         "vred_id": extract_vreddit_id(area),
         "redgifs_url": extract_redgifs_url(area),
