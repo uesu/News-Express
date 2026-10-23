@@ -38,6 +38,10 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-23 — Round 80: emoji outside link (Discord forward fidelity).**
+
+  AnantaLeaks `1xd1tks` `"You'll never guess where the game starts😂"` posted as `### […😂](url)` — renders in-channel but Forward shows raw `([https://…/… ) *by` leak (Discord Components V2 `### [title](url)` strict). Trailing emoji now outside the markdown link: `### [clean](url) 😂` for **all future posts** (every sub, every title) via `_split_trailing_emoji80` (`unicodedata So/Sk` + `ZWJ/VS/skin-tone/flag` sequences, `clean.rstrip()`); empty-title guard keeps `😂`-only titles inside. Original HTML/JSON/sources untouched, presentation-only, 0 extra req, no perf loss. `compileall OK`, `SMOKE TEST: ALL PASS` (emoji helper unit + full suite).
+
 * **2026-10-23 — Round 79: token-powered JSON-first instant fallback + no-ghost text-only re-check.**
 
   JSON-first: `REDDIT_FEED_TOKEN` on `auto` (default) now powers `www.reddit.com/comments/{id}.json?limit=25&raw_json=1&{feed_q}` FIRST (host/path-agnostic `format_reddit_feed_query`, `BROWSER_HEADERS`), instant 1-request fallback to combined `.rss` on datacenter 403. Stagger capped `min(FEEDTOKEN_JSON_STAGGER,2)` for token tier vs `65 s` anonymous, 403 remembered per run (`_feedtoken_json_failed`), ≤1 JSON req/run (first new post only, memoized). No Secret/Variable change needed (`auto` valid token = enabled, empty/invalid = OFF per r31, `force`/`off` unchanged); header `1b` wording updated from stale Round-31-only to Round 79.
