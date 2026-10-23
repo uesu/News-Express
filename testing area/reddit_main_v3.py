@@ -6317,53 +6317,6 @@ async def main():
                                          f"skipping, not cached (retries next run).")
                             continue
                     posted_ts = int(max(published_ts, activity_ts))
-                    # ------------------------------------------------------------------
-                    # ■ ROUND 79 (2026-10-23): strict live-gate for re-appearing
-                    # removal_notice text-only — no-ghost invariant.
-                    # A `removal_notice`/`title marker` text-only post that was
-                    # pending for ~8 h (Genshin 1xcjoqu: created 14:11Z,
-                    # delivered 21:50Z as ghosts while already deleted) must NOT
-                    # post its Discord text if Reddit has already deleted it.
-                    # Only re-appearing pendings with media.kind == none are
-                    # checked (all proxies text-only + redlib 0/1), so a fresh
-                    # text post like Wuthering 1xcofgc (no prior pending) still
-                    # posts in 2-6 min. One live verify (proxy+redlib, feed_ok=
-                    # False, 0-2 s extra only on ghost candidates, else 0 extra
-                    # requests) — legitimate text posts unaffected.
-                    # ------------------------------------------------------------------
-                    if (not TEST_POST_ID and not DRY_RUN and unique_key in pending
-                            and str(pending[unique_key].get("reason") or "") in _NO_RECHECK_REASONS
-                            and not isinstance(entry, _ArcticEntry)
-                            and not data.get("media")):
-                        _live2, _why2 = await verify_archive_post_live(
-                            session, path, label=f"{unique_key} ghost-check", feed_ok=False)
-                        if not _live2:
-                            mark_pending(pending, unique_key, "removal_notice", now,
-                                         source=_entry_source36, title=str(base.get("title") or "")[:200],
-                                         published_ts=published_ts)
-                            run_stats["liveness_not_verified"] += 1
-                            _inc_reason(run_stats["liveness_by_reason"], f"ghost-text-only:{_why2}")
-                            logging.info(f"[{unique_key}] re-appearing removal_notice text-only not verified live ({_why2}) — keeping pending (no ghost text).")
-                            continue
-                    # ZZZ pending-approval ghost via Arctic (2026-10-23 08:55 1xd8ppc:
-                    # "Post is awaiting moderator approval" posted with archived counts
-                    # while still queued — like Genshin 1xcjoqu ghost but via Arctic
-                    # text-only path, no prior pending so R79 re-appearing gate didn't
-                    # apply). Arctic text-only (native 0 media, no proxy media) must be
-                    # live-verified (proxy+redlib feed_ok=False) else keep pending.
-                    if (not TEST_POST_ID and not DRY_RUN and isinstance(entry, _ArcticEntry)
-                            and not data.get("media") and post_json is None):
-                        _live3, _why3 = await verify_archive_post_live(
-                            session, path, label=f"{unique_key} arctic-ghost-check", feed_ok=False)
-                        if not _live3:
-                            mark_pending(pending, unique_key, "pending approval", now,
-                                         source=_entry_source36, title=str(base.get("title") or "")[:200],
-                                         published_ts=published_ts)
-                            run_stats["liveness_not_verified"] += 1
-                            _inc_reason(run_stats["liveness_by_reason"], f"arctic-text-only:{_why3}")
-                            logging.info(f"[{unique_key}] Arctic text-only not verified live ({_why3}) — keeping pending (no archived ghost).")
-                            continue
-
 
                     # Round 66: the body beyond the card budget is continued in
                     # follow-up messages (see build_continuation_payloads).

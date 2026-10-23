@@ -38,10 +38,6 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
-* **2026-10-23 — Round 83: Arctic text-only pending-approval ghost (ZZZ pending, like Genshin archived ghost).**
-
-  `Zenlesszonezeroleaks__1xd8ppc` `[ZZZ 3.4] Sunbringer Outfit 3D Model Renders` posted `08:55` via Arctic `text | native | 0 items` `archived counts` while still `Post is awaiting moderator approval` (1⬆·0💬, like Genshin `1xcjoqu` `455 min` archived ghost). R79 `ghost-check` only covered re-appearing `removal_notice` via RSS (`!ArcticEntry && pending`); fresh Arctic text-only bypassed it and `verify_archive_post_live` still returned `live via redlib` (queued page exists). Added `arctic-ghost-check` for Arctic text-only native: `ArcticEntry && !media && post_json is None` → `verify_archive_post_live(..., feed_ok=False)` else `mark_pending(pending approval)` + `liveness_not_verified` `arctic-text-only:{why}` (posts once approved+verified, 0 req for media posts). Tests: `5→6` `mark_pending`, `SMOKE TEST: ALL PASS`.
-
 * **2026-10-23 — Round 82: Reddit fleet expansion (19 → 23, Game-Express PR #63 parity).**
 
   Adopt Game-Express PR #63 `fabbe4c` live-verified 2026-10-23 Redlib fleet: `19 → 23` entries with **zero hosts deleted** (keep `redlib.nohost.network` + `redlib.kylrth.com` which Game-Express excludes as traps/Azure-gated). **Round 83b fix:** preserve R78 19-member order exactly (`www`/`old`/`miningtcup`/`catsarch`/`privacyredirect`/`snoo`/…/`nadeko` 0-18) and **append** 4 new hosts at tail (19-22: `mint.lgbt`, `jeremyh.xyz`, `jeikobu.net`, `vanillax.me`) so they do not affect prior 19 priority — PR #76 had moved `mint.lgbt` to head and `www`/`old` to Tier 3, causing `REDLIB-REACH 11/23` with `catsarch`/`snoo`/`miningtcup`/`nohost`/`idevicehacked` `0/1` → `redlib gallery enrichment failed (all instances)` → every post `archived counts` with `media=text|native|0` (observed #9560/#9563 `HonkaiStarRail_leaks` `1xd8ofn`/`1xd8vra`, ZZZ `1xd8ppc`). Appended tail restores media (`catsarch` etc. priority unchanged) while keeping new hosts for redundancy (R78 order verbatim; `privacyredirect` stays at #4). **Savings/calls unchanged:** concurrent first-win `_fetch_new_listing` (8 s) + combined RSS `1 req/run` + `REDDIT_FEED_TOKEN` memoization `≤1 JSON req/run` — Tier 3 tail 0 hits while Tier 1 healthy. Tests: `R78 19 preserved 0-18`, `r82 23-member appended tail` + `no-deletion` 19→23, `SMOKE TEST: ALL PASS`.
@@ -50,11 +46,12 @@ rewritten when that happens, only relocated.
 
   AnantaLeaks `1xd1tks` `"You'll never guess where the game starts😂"` posted as `### […😂](url)` — renders in-channel but Forward shows raw `([https://…/… ) *by` leak (Discord Components V2 `### [title](url)` strict). Trailing emoji now outside the markdown link: `### [clean](url) 😂` for **all future posts** (every sub, every title) via `_split_trailing_emoji80` (`unicodedata So/Sk` + `ZWJ/VS/skin-tone/flag` sequences, `clean.rstrip()`); empty-title guard keeps `😂`-only titles inside. Original HTML/JSON/sources untouched, presentation-only, 0 extra req, no perf loss. `compileall OK`, `SMOKE TEST: ALL PASS` (emoji helper unit + full suite).
 
-* **2026-10-23 — Round 79: token-powered JSON-first instant fallback + no-ghost text-only re-check.**
+* **2026-10-23 — Round 79: token-powered JSON-first instant fallback.**
 
   JSON-first: `REDDIT_FEED_TOKEN` on `auto` (default) now powers `www.reddit.com/comments/{id}.json?limit=25&raw_json=1&{feed_q}` FIRST (host/path-agnostic `format_reddit_feed_query`, `BROWSER_HEADERS`), instant 1-request fallback to combined `.rss` on datacenter 403. Stagger capped `min(FEEDTOKEN_JSON_STAGGER,2)` for token tier vs `65 s` anonymous, 403 remembered per run (`_feedtoken_json_failed`), ≤1 JSON req/run (first new post only, memoized). No Secret/Variable change needed (`auto` valid token = enabled, empty/invalid = OFF per r31, `force`/`off` unchanged); header `1b` wording updated from stale Round-31-only to Round 79.
 
-  No-ghost: `Genshin_Impact_Leaks_1xcjoqu` (text-only `[removed] automod_filtered`, created `2026-10-22 14:11:53Z=1792678313`, delivered `21:50Z` after `455.1 min` hold as `removal_notice` via `archived counts` while already deleted, latency `458.8 min`) no longer ghosts: re-appearing `removal_notice`/`title marker`/… text-only (`!ArcticEntry && !media`, all proxies text-only + `redlib gallery 0/1`) is strict-live-gated `verify_archive_post_live(..., feed_ok=False, label="ghost-check") → ghost-text-only:{why} → keep pending` (0 req for fresh posts like `WutheringWavesLeaks_1xcofgc 2.1–6.2 min`, 1 live verify only on rare ghost candidates). Applies to all 6 subs; deleted posts purge after 48 h, approved restores still post. Tests: r30 `4→5` ghost guard, R25 extraction outside `await`, `SMOKE TEST: ALL PASS`.
+
+  Tests: `r31 auto without app OFF` preserved, R25 extraction intact, `SMOKE TEST: ALL PASS`.
 
 * **2026-10-22 — Fleet refresh: 16-member Twitter + 19-member Reddit fleets + docs cleanup.**
 
