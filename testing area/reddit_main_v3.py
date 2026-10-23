@@ -840,34 +840,42 @@ async def _fetch_new_listing(session, subreddit):
 # News-Express: 0 deletions (keep redlib.nohost.network + redlib.kylrth.com
 # which Game-Express excludes), arrange into 3-tier ranking (Tier 1 dual-path
 # + Tier 2 listing-only + Tier 3 token/legacy tail). 19 -> 23 entries.
+# Round 83b (2026-10-23 17:00 UTC): restore pre-#76 arrangement for media:
+# PR #76 moved www/old/miningtcup from front to Tier3 and mint.lgbt to #0,
+# breaking gallery enrichment (REDLIB-REACH 11/23 but catsarch/snoo/miningtcup/
+# nohost/idevicehacked 0/1 → redlib gallery enrichment failed (all instances)
+# → every post archived counts, no photo/video, observed #9560 #9561 #9563
+# HonkaiStarRail_leaks 1xd8ofn/1xd8vra + ZZZ 1xd8ppc). Keep original 19 order
+# intact, append new hosts at tail so they don't affect prior priority.
 REDDIT_RSS_INSTANCES = [
-    # Tier 1 — Active healthy dual-path + token-gated (9 hosts: 200 OK on
-    # /r/<sub>/new, /user/<acct> AND /r/<sub>/comments/<id>/, zero challenge):
-    "https://redlib.mint.lgbt",            # NEW #0 — Redlib 0.36.0 0baefabf Shreddit build, deployed 2026-10-21, inline CMAF/1080.mp4
-    "https://reddit.idevicehacked.com",    # NEW #1 — Redlib 0.40.0 848f3013, inline full gallery on /new, deployed 2026-10-23
-    "https://redlib.catsarch.com",         # Existing healthy dual #1
-    "https://snoo.habedieeh.re",           # NEW dual — up-to-date #592, inline CMAF MP4 (v3.0.0)
-    "https://redlib.miningtcup.me",        # Private token-gated (NITTER_RSS_TOKEN)
-    "https://redlib.tiekoetter.com",       # NEW dual — DE dedicated, fast
-    "https://redlib.nohost.network",       # Existing dual — inline CMAF + full comments (kept, not deleted)
-    "https://redlib-1.privadency.com",     # NEW dual — direct backend bypassing 2s splash
-    "https://redlib-2.privadency.com",     # NEW dual — direct backend #2
-    # Tier 2 — Verified /new + /user/ listing-only (8 hosts: pre-#592/#599 on /comments/, recover after v3.0.0):
-    "https://reddit.jeremyh.xyz",          # NEW — Redlib 0.31.0 redlib-instances#118, US direct /new + /user/ 200 OK
-    "https://redlib.jeikobu.net",          # NEW — Redlib 0.36.0 fca8b45c /new + /user/ 200 OK
-    "https://redlib.vanillax.me",          # NEW — mitchross/redlib v2.3.6 abd6ba24 /new + /user/ 200 OK
-    "https://red.artemislena.eu",          # Existing /new pass (pre-#592)
-    "https://rl.awy.one",                  # NEW /new pass — zero challenge
-    "https://redlib.kylrth.com",           # Existing /new pass — CF, 301 from libreddit.kylrth.com (kept, not deleted)
-    "https://redlib.freedit.eu",           # NEW /new pass — DE direct
-    "https://redlib.utilibre.org",         # NEW /new pass — FR collective
-    # Tier 3 — Token-promoted official origins + demoted/legacy tail (6 hosts, 0 hits while Tier 1 answers):
-    "https://www.reddit.com",              # Promoted to head when REDDIT_FEED_TOKEN is set (403 unauth on Actions IPs)
-    "https://old.reddit.com",              # Official RSS fallback origin
-    "https://redlib.privacyredirect.com",  # Demoted (2026-10-23): 403 error page on /new & /comments/ — 1 wasted req eliminated
-    "https://redlib.privadency.com",       # Restored tail — privadency.com root 1/1 in #9283
-    "https://safereddit.com",              # Restored tail — safereddit 1/1 in #9283 (rate-limit transient)
-    "https://redlib.nadeko.net",           # Restored tail — nadeko GoAway timeout but partial works on retry
+    # Restored R78 19-member order exactly (pre-#76) + 4 new appended at tail
+    # so new hosts never affect prior 19 priority. Fixes #9560/#9563 archived
+    # counts (mint.lgbt head + www/old Tier3 demotion caused catsarch/snoo/
+    # miningtcup 0/1 → gallery enrichment failed (all instances) → text|native|0).
+    "https://www.reddit.com",              # [0] Primary w/ REDDIT_FEED_TOKEN
+    "https://old.reddit.com",              # [1] Auth alt origin (same token)
+    "https://redlib.miningtcup.me",        # [2] Private token-gated
+    "https://redlib.catsarch.com",         # [3] Existing healthy dual #1
+    "https://redlib.privacyredirect.com",  # [4] Restored R78 pos — 403 \"20 commits old\" but kept for order; tail appended hosts provide cover
+    "https://snoo.habedieeh.re",           # [5] Up-to-date #592, inline CMAF MP4 (v3.0.0)
+    "https://redlib.tiekoetter.com",       # [6] DE dedicated, fast
+    "https://redlib.nohost.network",       # [7] Existing dual — inline CMAF + full comments (kept)
+    "https://redlib-1.privadency.com",     # [8] Direct backend bypassing 2s splash
+    "https://redlib-2.privadency.com",     # [9] Direct backend #2
+    "https://reddit.idevicehacked.com",    # [10] Existing dual — US, inline gallery on /new (preserved pos)
+    "https://red.artemislena.eu",          # [11] Existing /new pass (pre-#592)
+    "https://rl.awy.one",                  # [12] NEW /new pass — zero challenge
+    "https://redlib.kylrth.com",           # [13] NEW /new pass — CF, 301 from libreddit.kylrth.com (kept)
+    "https://redlib.freedit.eu",           # [14] NEW /new pass — DE direct
+    "https://redlib.utilibre.org",         # [15] NEW /new pass — FR collective
+    "https://redlib.privadency.com",       # [16] Restored tail — privadency.com root 1/1 in #9283
+    "https://safereddit.com",              # [17] Restored tail — safereddit 1/1 in #9283 (rate-limit transient)
+    "https://redlib.nadeko.net",           # [18] Restored tail — nadeko GoAway timeout but partial works on retry
+    # Appended new (4) at tail — do not affect prior 19 priority
+    "https://redlib.mint.lgbt",            # [19] NEW — Redlib 0.36.0 0baefabf Shreddit (appended, not front)
+    "https://reddit.jeremyh.xyz",          # [20] NEW — Redlib 0.31.0 redlib-instances#118 (appended)
+    "https://redlib.jeikobu.net",          # [21] NEW — Redlib 0.36.0 fca8b45c (appended)
+    "https://redlib.vanillax.me",          # [22] NEW — mitchross/redlib v2.3.6 abd6ba24 (appended)
 ]
 
 RATE_LIMIT_RETRY_DELAY_1 = 6

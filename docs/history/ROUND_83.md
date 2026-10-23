@@ -27,13 +27,19 @@
 
 * `tests/test_smoke.py`: `mark_pending` count `5→6`, adds `"pending approval"` + `"arctic-ghost-check"` asserts.
 
+## Round 83b — Fleet regression fix (R78 order preserved, 17:00 UTC)
+
+* PR #76 `19→23` had moved `mint.lgbt` to head `#0` and `www`/`old`/`miningtcup` to Tier 3 tail, breaking gallery enrichment: `#9560`/`#9563` `REDLIB-REACH 11/23` with `catsarch`/`miningtcup`/`snoo`/`idevicehacked`/`vanillax`/`nohost`/`www`/`old` `0/1` → `redlib gallery enrichment failed (all instances)` → `HonkaiStarRail_leaks 1xd8ofn/1xd8vra` delivered `text|native|0 archived counts` (webhook `1547613015258439793` `t:1792745284/1792746040` `1💬1👍`/`0💬1👍 accent 16729344`), ZZZ `1xd8ppc` same, `HSR v4.6.54 Rev.16932918` `Chinese/English Changes(Full)` continuation with no photo/video.
+* Fix: keep R78 19 order `0-18` intact (`www`/`old`/`miningtcup`/`catsarch`/`privacyredirect`/`snoo`/`tiekoetter`/`nohost`/`1-privadency`/`2-privadency`/`idevicehacked`/`artemislena`/`rl.awy`/`kylrth`/`freedit`/`utilibre`/`privadency`/`safereddit`/`nadeko`) exactly as pre-#76, append 4 new at `19-22` (`mint.lgbt` `jeremyh.xyz` `jeikobu.net` `vanillax.me`) so they never affect prior 19 priority (restores media: `catsarch`/`snoo`/`miningtcup` etc. priority unchanged; `privacyredirect` stays at `#4` per original order).
+* Also covers `HonkaiStarRail_leaks 1xd8vra` (`LuciferMS7777` `t:1792746040` awaiting approval `1⬆·1💬` red box) — same `arctic-ghost-check` class (`ArcticEntry && !media && post_json is None → feed_ok=False` else pending approval).
+
 ## Verification
 
 * `python -m py_compile` / `compileall -q` OK
-* `tests/test_smoke.py` SMOKE TEST: ALL PASS (6 pendings)
+* `tests/test_smoke.py` SMOKE TEST: ALL PASS (6 pendings, fleet `R78 19 preserved + 4 appended tail`)
 * `tests/test_reddit_signals.py` 96 pass ; `test_twitter_media.py` ALL PASS
-* Manual: `len(REDDIT_RSS_INSTANCES)==23` unchanged, `len(set)==23`, head `mint.lgbt`, traps absent.
+* Manual: `len(REDDIT_RSS_INSTANCES)==23` unchanged, `len(set)==23`, head `www.reddit.com` (R78 preserved), traps absent; `mint.lgbt` now `18` tail not head.
 
 ## References
 
-Monitor #9561 `aea7586→a5515bd`, pending approval screenshot `Fender-Ali 1 upvote`, R79 `1xcjoqu` ghost fix, PR #74, PR #76 `d138e3d`.
+Monitor #9560/#9561/#9563 `aea7586→a5515bd`, webhook `1547613015258439793`, pending approval screenshots `Fender-Ali 1⬆0💬` / `LuciferMS7777 1⬆1💬` + `HSR 1xd8ofn 1xd8vra` `5:05PM Phantasmoon` `4:50PM Citlali v4.6.54`, R79 `1xcjoqu` ghost fix, PR #74, PR #76 `d138e3d` `fabbe4c`.
