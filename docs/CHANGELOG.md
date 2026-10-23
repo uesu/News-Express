@@ -38,6 +38,10 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-23 — Round 82: Reddit fleet expansion (19 → 23, Game-Express PR #63 parity).**
+
+  Adopt Game-Express PR #63 `fabbe4c` live-verified 2026-10-23 Redlib fleet: `19 → 23` entries with **zero hosts deleted** (keep `redlib.nohost.network` + `redlib.kylrth.com` which Game-Express excludes as traps/Azure-gated), arranged into 3-tier ranking — **Tier 1** dual-path healthy (9 hosts: `redlib.mint.lgbt` 0.36.0 Shreddit NEW #0 + `reddit.idevicehacked.com` 0.40.0 inline-gallery promoted #1 + `catsarch`/`snoo`/`miningtcup`/`tiekoetter`/`nohost`/`1-privadency`/`2-privadency`), **Tier 2** listing-only (8 hosts: `reddit.jeremyh.xyz` 0.31.0 NEW + `redlib.jeikobu.net` 0.36.0 NEW + `redlib.vanillax.me` mitchross/redlib v2.3.6 NEW + `artemislena`/`rl.awy`/`kylrth`/`freedit`/`utilibre`), **Tier 3** token/legacy tail (6 hosts: `www.reddit.com`/`old.reddit.com` + demoted `redlib.privacyredirect.com` #4→#19 after `403 ... 20 commits old` + `privadency.com`/`safereddit`/`nadeko`). Traps never added. **Savings/calls unchanged:** concurrent first-win `_fetch_new_listing` (8 s) + combined RSS `1 req/run` + `REDDIT_FEED_TOKEN` memoization `≤1 JSON req/run` — Tier 3 tail 0 hits while Tier 1 healthy, demotion eliminates 1 wasted 403/req per cold batch. Tests: `post-rss` head now `mint.lgbt`, `r82 23-member` + `no-deletion` 19→23, `SMOKE TEST: ALL PASS`.
+
 * **2026-10-23 — Round 80: emoji outside link (Discord forward fidelity).**
 
   AnantaLeaks `1xd1tks` `"You'll never guess where the game starts😂"` posted as `### […😂](url)` — renders in-channel but Forward shows raw `([https://…/… ) *by` leak (Discord Components V2 `### [title](url)` strict). Trailing emoji now outside the markdown link: `### [clean](url) 😂` for **all future posts** (every sub, every title) via `_split_trailing_emoji80` (`unicodedata So/Sk` + `ZWJ/VS/skin-tone/flag` sequences, `clean.rstrip()`); empty-title guard keeps `😂`-only titles inside. Original HTML/JSON/sources untouched, presentation-only, 0 extra req, no perf loss. `compileall OK`, `SMOKE TEST: ALL PASS` (emoji helper unit + full suite).
