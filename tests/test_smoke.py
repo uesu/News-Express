@@ -1845,13 +1845,15 @@ check("r30/round-18/round-20/32/r63/r67 gates: all skip paths record a pending "
       "entry (settle/mod-queue/dup-media/repost gates removed round 63; the "
       "content gate's call removed round 67 -- only removed-post-reason, "
       "archive-liveness, media-wait/partial-gallery + round-79 ghost text-only remain)",
-      _r30_main.count("mark_pending(pending, unique_key") == 5
+      _r30_main.count("mark_pending(pending, unique_key") == 6
       and "mark_pending(pending, unique_key, _removed, now" in _r30_main
       and "mark_pending(pending, unique_key,\n" in _r30_main
       and 'mark_pending(pending, unique_key, "media_wait", now)' in _r30_main
       and 'mark_pending(pending, unique_key, "partial_gallery", now)' in _r30_main
       and 'mark_pending(pending, unique_key, "removal_notice", now' in _r30_main
+      and 'mark_pending(pending, unique_key, "pending approval"' in _r30_main
       and "ghost-check" in _r30_main
+      and "arctic-ghost-check" in _r30_main
       and "ghost-text-only" in _r30_main,
       str(_r30_main.count("mark_pending(pending, unique_key")))
 check("r30 posted: a successful post clears the pending entry",

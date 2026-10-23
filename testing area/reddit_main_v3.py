@@ -6337,6 +6337,24 @@ async def main():
                             _inc_reason(run_stats["liveness_by_reason"], f"ghost-text-only:{_why2}")
                             logging.info(f"[{unique_key}] re-appearing removal_notice text-only not verified live ({_why2}) — keeping pending (no ghost text).")
                             continue
+                    # ZZZ pending-approval ghost via Arctic (2026-10-23 08:55 1xd8ppc:
+                    # "Post is awaiting moderator approval" posted with archived counts
+                    # while still queued — like Genshin 1xcjoqu ghost but via Arctic
+                    # text-only path, no prior pending so R79 re-appearing gate didn't
+                    # apply). Arctic text-only (native 0 media, no proxy media) must be
+                    # live-verified (proxy+redlib feed_ok=False) else keep pending.
+                    if (not TEST_POST_ID and not DRY_RUN and isinstance(entry, _ArcticEntry)
+                            and not data.get("media") and post_json is None):
+                        _live3, _why3 = await verify_archive_post_live(
+                            session, path, label=f"{unique_key} arctic-ghost-check", feed_ok=False)
+                        if not _live3:
+                            mark_pending(pending, unique_key, "pending approval", now,
+                                         source=_entry_source36, title=str(base.get("title") or "")[:200],
+                                         published_ts=published_ts)
+                            run_stats["liveness_not_verified"] += 1
+                            _inc_reason(run_stats["liveness_by_reason"], f"arctic-text-only:{_why3}")
+                            logging.info(f"[{unique_key}] Arctic text-only not verified live ({_why3}) — keeping pending (no archived ghost).")
+                            continue
 
 
                     # Round 66: the body beyond the card budget is continued in
