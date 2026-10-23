@@ -17,14 +17,15 @@
 #        2026 note: new API access may require Reddit's approval form
 #        (Responsible Builder Policy) — not guaranteed, so V3 never depends
 #        on it. If you get one, just add the two secrets; no code change.
-#     b) FEED TOKEN ON .json (ROUND 31: only when the OAuth app above exists,
-#        or REDDIT_JSON_PROBE=force — see JSON_PROBE_MODE below):
-#        www.reddit.com/comments/<id>.json?…&feed=<REDDIT_FEED_TOKEN>.
-#        Anonymous .json is 403 from datacenters (verified 2026-09-20), and
-#        the feed token's documented role is the RSS rate tier — so without
-#        an OAuth app the attempt is pure 65 s + a 403 log line per run with
-#        new posts, and auto mode skips it entirely. A 403 result is
-#        remembered for that run.
+#     b) FEED TOKEN ON .json (ROUND 79: auto now powers .json FIRST when a
+#        valid REDDIT_FEED_TOKEN exists — see feedtoken_probe_enabled()
+#        below; anonymous .json is still 403 from datacenters, verified
+#        2026-09-20 — stagger capped to ≤2 s for the token tier vs 65 s
+#        anonymous, instant 1-request RSS fallback, 403 remembered for the run):
+#        www.reddit.com/comments/<id>.json?limit=25&raw_json=1&{feed_q}
+#        (feed_q = format_reddit_feed_query(REDDIT_FEED_TOKEN); host/path-
+#        agnostic — old.reddit.com/.rss?feed=… etc; auto OFF when token
+#        empty/invalid, force=always, off=never).
 #     FULL MODE adds: every photo (20-photo posts → 2nd container),
 #     upvotes/comments stats, video fallback_url (with audio), and true
 #     crosspost full-embeds (fetches the original post, 1 level).
