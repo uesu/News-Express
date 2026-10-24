@@ -38,6 +38,11 @@ rewritten when that happens, only relocated.
 
 ## Unreleased / current
 
+* **2026-10-24 — Round 87: Automated dev → prod repository sync (`.github/workflows/sync_prod.yml` + `.github/scripts/sync_prod.py` → `uesu/7jkxmy9nvbc` & `uesu/wvkhabh2s22`).**
+
+  - **Automated atomic multi-repo sync:** Runs `compileall` and all three offline suites (`test_smoke.py`, `test_reddit_signals.py`, `test_twitter_media.py`) on every push to `main` (and on manual `workflow_dispatch`) before atomically syncing `testing area/`, `tests/`, `.github/scripts/`, `.github/workflows/{ci,dependabot_auto_merge,python_version_bump,reddit_monitor,twitter_monitor}.yml`, `.github/dependabot.yml`, `.gitignore`, and `requirements.txt` to both `uesu/7jkxmy9nvbc` (Reddit prod) and `uesu/wvkhabh2s22` (Twitter prod) in a single commit per repo — eliminating the Round-75 "smoke guard landed before engine" manual upload race.
+  - **Strict live cache protection & concurrent monitor retry:** Never creates, overwrites, stages, or deletes `posted_reddit.json`, `pending_reddit.json`, `proxy_health.json`, `posted_tweets.json`, or `posted_messages.json`; excludes dev-only docs (`docs/`, `README.md`, `AGENTS.md`, `.env.example`) and `sync_prod.yml` itself from production; retries with `git fetch` + `reset --hard FETCH_HEAD` if a 5-minute monitor cache commit lands mid-push; and falls back to non-workflow sync with a clear warning if the token (`secrets.PROD_SYNC_PAT || secrets.BUMP_PAT`) lacks `workflow` scope.
+
 * **2026-10-24 — Round 86: Reddit fleet expansion (23 → 25), `REDLIB-REACH:` Step Summary, and 6 production log fixes (`#9626`, `#9651`, `#9659`, `#9662`, `#9669`, `#9677`).**
 
   - **Reddit fleet expansion (`23 → 25`):** Appends `https://redlib.reallyaweso.me` (`[23]`, live-verified `200 OK` on `/r/<sub>/new`, `/user/<acct>`, and `/r/<sub>/comments/<id>/`) and `https://redlib.ducks.party` (`[24]`, `v0.40.0` `200 OK` `/r/<sub>/new` listing with inline gallery carousels) at the tail of `REDDIT_RSS_INSTANCES`, preserving indices `0..22` with zero deletions.

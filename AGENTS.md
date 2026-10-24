@@ -55,15 +55,18 @@ by an external cron (cron-job.org) via `workflow_dispatch`.
 | `uesu/7jkxmy9nvbc` (public) | **Reddit production.** Runs `reddit_monitor.yml` live. |
 | `uesu/wvkhabh2s22` (public) | **Twitter production.** Runs `twitter_monitor.yml` live. |
 
-Deployment is **manual**: merge a PR here, then the maintainer uploads the
-production-relevant files to the prod repo(s) through the GitHub web UI. Agents
-work on their session branch: open the PR from it when the platform lets you
-push, otherwise deliver local commits and the maintainer opens the PR. Typical
-upload set per fix: the engine file + `tests/test_smoke.py` + the touched
-workflow yml, **engine file first** (a guard that lands before its engine turns
-the prod smoke check red — the round-75 deploy lesson). Do **not** copy this
-repository's development documentation, historical audit records, or agent
-onboarding files into production unless a task explicitly asks for that.
+Deployment is **automated via `.github/workflows/sync_prod.yml` (`.github/scripts/sync_prod.py`)**
+whenever a PR merges to `main` (or via manual `workflow_dispatch`): after running `compileall` and
+all three offline test suites (`test_smoke.py`, `test_reddit_signals.py`, `test_twitter_media.py`),
+`sync_prod.py` atomically syncs `testing area/`, `tests/`, `.github/scripts/`,
+`.github/workflows/{ci,dependabot_auto_merge,python_version_bump,reddit_monitor,twitter_monitor}.yml`,
+`.github/dependabot.yml`, `.gitignore`, and `requirements.txt` to **both** `uesu/7jkxmy9nvbc` and
+`uesu/wvkhabh2s22` in a single commit (using `secrets.PROD_SYNC_PAT || secrets.BUMP_PAT`), while
+never touching live deduplication/pending/health JSON caches (`posted_reddit.json`,
+`pending_reddit.json`, `proxy_health.json`, `posted_tweets.json`, `posted_messages.json`) and never
+copying development documentation (`docs/`, `README.md`, `AGENTS.md`, `.env.example`, or
+`sync_prod.yml` itself). Manual web-UI upload remains a fallback if needed (**engine file first**
+when uploading manually).
 
 Both prod repos intentionally contain BOTH monitors' files. They are NOT
 leftovers. Never advise deleting the "other" platform's files.

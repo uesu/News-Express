@@ -8853,6 +8853,97 @@ async def _check_r86_all_fixes():
 
 asyncio.run(_check_r86_all_fixes())
 
+# ===========================================================================
+# Automated dev -> prod repository sync guards (.github/scripts/sync_prod.py
+# + .github/workflows/sync_prod.yml)
+# ===========================================================================
+import importlib.util as _sync_importlib
+import tempfile as _sync_tempfile
+from pathlib import Path as _SyncPath
+
+_sync_script_path = _SyncPath(ROOT) / ".github" / "scripts" / "sync_prod.py"
+check("r87 sync_prod: .github/scripts/sync_prod.py exists", _sync_script_path.is_file())
+_sync_spec = _sync_importlib.spec_from_file_location("ne_sync_prod", _sync_script_path)
+_sync_mod = _sync_importlib.module_from_spec(_sync_spec)
+_sync_spec.loader.exec_module(_sync_mod)
+
+_sync_secret = "ghp_SuperSecretTokenValue9876543210"
+_sync_redacted = _sync_mod._redact(
+    f"https://x-access-token:{_sync_secret}@github.com/uesu/7jkxmy9nvbc.git ({_sync_secret})",
+    _sync_secret,
+)
+check("r87 sync_prod: _redact strips raw token and x-access-token URL credentials",
+      _sync_secret not in _sync_redacted and "x-access-token:***@github.com" in _sync_redacted)
+check("r87 sync_prod: default target repos cover both Reddit and Twitter prod repos",
+      _sync_mod.parse_target_repos("") == ["uesu/7jkxmy9nvbc", "uesu/wvkhabh2s22"])
+
+with _sync_tempfile.TemporaryDirectory(prefix="ne-sync-test-") as _sync_tmp:
+    _prod_dir = _SyncPath(_sync_tmp) / "prod"
+    (_prod_dir / "testing area").mkdir(parents=True)
+    (_prod_dir / ".github" / "workflows").mkdir(parents=True)
+    _live_caches = {
+        "posted_reddit.json": b'["HonkaiStarRail_leaks_1abc"]\n',
+        "pending_reddit.json": b'{"HonkaiStarRail_leaks_1def": {"first_seen": 1790000000}}\n',
+        "proxy_health.json": b'{"vxreddit": {"ok": 10}}\n',
+        "posted_tweets.json": b'["2099440781115211916"]\n',
+        "posted_messages.json": b'{"HonkaiStarRail_leaks_1abc": {"id": "123"}}\n',
+    }
+    for _cname, _cbytes in _live_caches.items():
+        (_prod_dir / _cname).write_bytes(_cbytes)
+    (_prod_dir / "testing area" / "obsolete_engine.py").write_text("# stale\n", encoding="utf-8")
+    (_prod_dir / ".github" / "workflows" / "sync_prod.yml").write_text("# accidental\n", encoding="utf-8")
+
+    _sync_res = _sync_mod.sync_tree(_SyncPath(ROOT), _prod_dir, include_workflows=True)
+    check("r87 sync_prod: sync_tree removes obsolete engine files and dev-only sync_prod.yml",
+          "testing area/obsolete_engine.py" in _sync_res["removed"]
+          and ".github/workflows/sync_prod.yml" in _sync_res["removed"]
+          and not (_prod_dir / ".github" / "workflows" / "sync_prod.yml").exists())
+    check("r87 sync_prod: sync_tree preserves all 5 live prod JSON cache files byte-for-byte",
+          all((_prod_dir / _k).read_bytes() == _v for _k, _v in _live_caches.items())
+          and sorted(_sync_res["preserved"]) == sorted(_live_caches.keys()))
+    check("r87 sync_prod: sync_tree never copies dev-only docs/, README.md, AGENTS.md, or .env.example",
+          not (_prod_dir / "docs").exists()
+          and not (_prod_dir / "README.md").exists()
+          and not (_prod_dir / "AGENTS.md").exists()
+          and not (_prod_dir / ".env.example").exists())
+    check("r87 sync_prod: sync_tree copies both engines, tests, and sync_prod.py atomically",
+          (_prod_dir / "testing area" / "reddit_main_v3.py").is_file()
+          and (_prod_dir / "testing area" / "twitter_v3.py").is_file()
+          and (_prod_dir / "tests" / "test_smoke.py").is_file()
+          and (_prod_dir / ".github" / "scripts" / "sync_prod.py").is_file())
+
+    _sync_res2 = _sync_mod.sync_tree(_SyncPath(ROOT), _prod_dir, include_workflows=True)
+    check("r87 sync_prod: second sync_tree run is idempotent with zero updates",
+          _sync_res2["updated"] == [] and _sync_res2["removed"] == [])
+
+    # Git staging seatbelt: _stage_and_verify never stages any protected cache file
+    _sync_mod._run_git(["init", "-q"], cwd=_prod_dir)
+    _sync_mod._run_git(["config", "user.name", "test"], cwd=_prod_dir)
+    _sync_mod._run_git(["config", "user.email", "test@example.com"], cwd=_prod_dir)
+    _sync_mod._run_git(["add", "-f", *list(_live_caches.keys()), "requirements.txt"], cwd=_prod_dir)
+    _sync_mod._run_git(["commit", "-q", "-m", "init"], cwd=_prod_dir)
+    (_prod_dir / "posted_reddit.json").write_bytes(b'["corrupted"]\n')
+    _staged_list = _sync_mod._stage_and_verify(_prod_dir)
+    check("r87 sync_prod: _stage_and_verify unstages and restores any touched live cache file",
+          not any(_k in _staged_list for _k in _live_caches)
+          and (_prod_dir / "posted_reddit.json").read_bytes() == _live_caches["posted_reddit.json"])
+
+_sync_wf_path = _SyncPath(ROOT) / ".github" / "workflows" / "sync_prod.yml"
+if _sync_wf_path.is_file():
+    _sync_wf_src = _sync_wf_path.read_text(encoding="utf-8")
+    _sync_wf_uses = _r57_uses_re.findall(_sync_wf_src)
+    check("r87 sync_prod workflow: every uses: is SHA-pinned",
+          len(_sync_wf_uses) >= 2 and all(_r57_sha_re.search(u) for u in _sync_wf_uses))
+    check("r87 sync_prod workflow: guards repository, concurrency queue, timeout, and offline test gates",
+          "if: github.repository == 'uesu/News-Express'" in _sync_wf_src
+          and "cancel-in-progress: false" in _sync_wf_src
+          and "timeout-minutes: 15" in _sync_wf_src
+          and "persist-credentials: false" in _sync_wf_src
+          and "python tests/test_smoke.py" in _sync_wf_src
+          and "python tests/test_reddit_signals.py" in _sync_wf_src
+          and "python tests/test_twitter_media.py" in _sync_wf_src
+          and "python .github/scripts/sync_prod.py" in _sync_wf_src)
+
 if failures:
     print(f"SMOKE TEST FAILURES ({len(failures)}): {failures}")
     sys.exit(1)
