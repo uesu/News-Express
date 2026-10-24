@@ -158,7 +158,7 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    answers the runners). The smoke suite pins the exact order, so every
    re-rank updates the guard in the same commit; V1/V2 keep their own,
    separately pinned lists. Reddit's `REDDIT_RSS_INSTANCES` is audited by
-   body too — 23-member fleet as of 2026-10-23 (dual-path + listing-only reserves + tail restores + 4 appended tail mirrors per live #9283; see `testing area/reddit_main_v3.py` for exact order).
+   body too — 25-member fleet as of 2026-10-24 (dual-path + listing-only reserves + tail restores + 6 appended tail mirrors per live #9283; see `testing area/reddit_main_v3.py` for exact order).
 
 ## Landmines — things that LOOK like bugs but are deliberate
 
@@ -211,7 +211,8 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   (webhook/token/Auth redaction, bounded 500 chars, preserves
   operation/type/category) and do not leak secrets in JSON/summary/logs;
   provider diagnostics are retained locally without extra network calls and
-  reported separately when observed: proxy warmup
+  reported separately when observed: instance reachability (`REDLIB-REACH:`),
+  proxy warmup
   (available/unavailable with service map), video quality mode (`balanced`
   default, `highest`/`compatibility`), media resolved via provider, final
   media endpoint/hosting category, final card media kind and tile count,

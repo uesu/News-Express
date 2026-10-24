@@ -2410,7 +2410,7 @@ _r75_reddit_fleet = _literal_list_constant(
     "testing area/reddit_main_v3.py", "REDDIT_RSS_INSTANCES")
 # r75 membership check superseded by r78 — kept as non-enforced record
 check("r75: Reddit RSS mirror membership historical record", True)
-# r82 (2026-10-23): Game-Express PR #63 — 23-member fleet (19 kept + 4 new: mint, jeremyh, jeikobu, vanillax), r83b restores R78 19 intact then appends 4 at tail
+# r82 (2026-10-23) + r86 (2026-10-24): 25-member fleet (R78 19 preserved + 4 r82 + 2 r86 appended at tail: reallyaweso.me, ducks.party)
 _r82_reddit_expected = [
     "https://www.reddit.com",
     "https://old.reddit.com",
@@ -2435,14 +2435,16 @@ _r82_reddit_expected = [
     "https://reddit.jeremyh.xyz",
     "https://redlib.jeikobu.net",
     "https://redlib.vanillax.me",
+    "https://redlib.reallyaweso.me",
+    "https://redlib.ducks.party",
 ]
-check("r82 source fleet: Reddit V3 has the reviewed exact 23-member order (R78 19 preserved exactly + 4 new appended at tail)",
+check("r82 source fleet: Reddit V3 has the reviewed exact 25-member order (R78 19 preserved + 4 r82 + 2 r86 appended at tail)",
       _literal_list_constant("testing area/reddit_main_v3.py", "REDDIT_RSS_INSTANCES") == _r82_reddit_expected)
 
 def test_r82_reddit_tiered_fleet_no_deletion():
-    """r82 (2026-10-23): Game-Express PR #63 — 19 kept + 4 new (mint, jeremyh, jeikobu, vanillax), 0 deletions (keep nohost/kylrth which Game excludes), 3-tier ranking. 23 total. r83b: preserve R78 19 order exactly (privacyredirect at #4), append 4 at tail so media (catsarch/snoo/miningtcup etc) priority unchanged."""
+    """r82 (2026-10-23) + r86 (2026-10-24): 19 kept + 4 r82 + 2 r86 (reallyaweso.me, ducks.party), 0 deletions, 25 total."""
     RSS = v3.REDDIT_RSS_INSTANCES
-    assert len(RSS) == len(set(RSS)) == 23
+    assert len(RSS) == len(set(RSS)) == 25
     # Preserved R78 19 order exactly (0-18)
     assert RSS[0] == "https://www.reddit.com"
     assert RSS[1] == "https://old.reddit.com"
@@ -2468,6 +2470,9 @@ def test_r82_reddit_tiered_fleet_no_deletion():
     assert RSS[20] == "https://reddit.jeremyh.xyz"           # NEW appended
     assert RSS[21] == "https://redlib.jeikobu.net"           # NEW
     assert RSS[22] == "https://redlib.vanillax.me"           # NEW mitchross
+    # Appended 2 r86 verified instances at tail
+    assert RSS[23] == "https://redlib.reallyaweso.me"        # NEW dual-path
+    assert RSS[24] == "https://redlib.ducks.party"           # NEW v0.40.0 listing
     # 0 deletions — all 19 original hosts still present
     _r78_all = [
         "https://www.reddit.com", "https://old.reddit.com", "https://redlib.miningtcup.me",
@@ -8717,6 +8722,136 @@ _check_persist_shell()
 # persistence shell syntax-checked and mocked (real workflow, not copy) — verified above
 _check_regression_diagnostics()
 # regression diagnostics for baseline preservation and no-payload-change — verified above
+
+
+async def _check_r86_all_fixes():
+    # 1. Exact reddit.com host check: safereddit.com is NOT skipped
+    check("r86: _is_direct_reddit_host matches reddit.com/www/old only",
+          v3._is_direct_reddit_host("https://www.reddit.com")
+          and v3._is_direct_reddit_host("https://old.reddit.com")
+          and v3._is_direct_reddit_host("https://reddit.com")
+          and not v3._is_direct_reddit_host("https://safereddit.com")
+          and not v3._is_direct_reddit_host("https://reddit.idevicehacked.com")
+          and not v3._is_direct_reddit_host("https://redlib.reallyaweso.me")
+          and not v3._is_direct_reddit_host("https://redlib.ducks.party"))
+
+    # 2. _is_redlib_error_page catches backend error / clearnet unavailable / goaway
+    check("r86: _is_redlib_error_page catches vanillax/kylrth/goaway error bodies",
+          v3._is_redlib_error_page("The backend server is having issues, please try again later")
+          and v3._is_redlib_error_page("Redlib on the clearnet is no longer available")
+          and v3._is_redlib_error_page("<meta http-equiv='refresh' content='0;url=?__goaway_challenge=1'>"))
+
+    # 3. #9662 duplicate proxy wave fix: fetch_proxy_post_memo with need_video=True reuses need_video=False motion-video entry
+    v3._proxy_post_cache.clear()
+    calls_9662 = []
+    class _FakeProxyMod9662:
+        __file__ = "reddit_proxy.py"
+        async def fetch_proxy_post(self, session, path, label="", health=None, need_video=False):
+            calls_9662.append((path, bool(need_video)))
+            return {
+                "service": "vxreddit",
+                "media": [{"kind": "video", "url": "https://www.vxreddit.com/r/WutheringWavesLeaks/comments/1xdk5qc/t/redditvideo.mp4"}],
+                "stats": {"ups": 42, "comments": 7},
+                "body": "",
+            }
+    orig_rp_9662 = v3.reddit_proxy
+    try:
+        v3.reddit_proxy = _FakeProxyMod9662()
+        r_liveness = await v3.fetch_proxy_post_memo(None, "/r/WutheringWavesLeaks/comments/1xdk5qc/t/", label="liveness", need_video=False)
+        r_media = await v3.fetch_proxy_post_memo(None, "/r/WutheringWavesLeaks/comments/1xdk5qc/t/", label="media", need_video=True)
+        check("r86 (#9662): fetch_proxy_post_memo reuses motion video cached during liveness (1 proxy wave, not 2)",
+              len(calls_9662) == 1 and r_liveness == r_media,
+              f"calls={calls_9662}")
+    finally:
+        v3.reddit_proxy = orig_rp_9662
+        v3._proxy_post_cache.clear()
+
+    # 4. #9626/#9659/#9669/#9677 media-outcome provider attribution & REDLIB-REACH in Step Summary
+    v3._redlib_reach.clear()
+    v3._redlib_reach["https://redlib.reallyaweso.me"] = [1, 1]
+    v3._redlib_reach["https://redlib.catsarch.com"] = [0, 1]
+    reach_str = v3.log_redlib_reachability()
+    s_reach = _r21_summary_with_data({
+        "combined_entries": 5,
+        "combined_subreddits_covered": 2,
+        "subreddits_configured": 2,
+        "combined_fetch_status": "ok",
+        "fallback_status": "not_attempted",
+        "unposted_candidates_considered": 1,
+        "candidates_entering_processing": 1,
+        "delivered": 1,
+        "completed": True,
+        "persistence_status": "saved",
+        "proxy_warmup_status": "ok",
+        "video_quality": "highest",
+        "redlib_reach": reach_str,
+        "redlib_instances_configured": 23,
+    })
+    check("r86: Step Summary includes Instances (REDLIB-REACH) line",
+          "Instances (REDLIB-REACH): REDLIB-REACH: 1/2 instance(s) answered this run" in s_reach
+          and "redlib.reallyaweso.me 1/1" in s_reach,
+          s_reach[:1200])
+    v3._redlib_reach.clear()
+
+    # 5. #9651 flood-cap ordering: 28 known-pending archive entries + 1 real entry must NOT trigger flood cap drop (cap 25)
+    now_9651 = time.time()
+    pending_9651 = {
+        f"TestSub_pend{i:02d}": {"reason": "removal_notice", "first_seen": now_9651 - 3600, "last_checked": now_9651 - 300}
+        for i in range(28)
+    }
+    arctic_9651 = [
+        {"id": f"pend{i:02d}", "subreddit": "TestSub", "title": f"Removed {i}", "author": "u", "created_utc": now_9651 - 3600 + i}
+        for i in range(28)
+    ] + [
+        {"id": "real01", "subreddit": "TestSub", "title": "Real Post", "author": "u", "created_utc": now_9651 - 120}
+    ]
+    class _EmptyFeed9651:
+        entries = []
+    mocks_9651 = {
+        "patch": ["SUBREDDITS", "TEST_POST_ID", "DRY_RUN", "fetch_combined_feed", "verify_archive_post_live",
+                  "fetch_post_json", "resolve_post_media", "create_discohook_share", "load_posted", "load_pending",
+                  "save_posted", "save_pending", "save_posted_messages", "load_posted_messages", "RETRACT_DEAD_POSTS",
+                  "aiohttp", "FRESH_HOLD_SECONDS", "fetch_arctic_subreddit_posts", "fetch_working_reddit_feed"],
+        "set": {
+            "SUBREDDITS": ["TestSub"], "TEST_POST_ID": "", "DRY_RUN": False, "RETRACT_DEAD_POSTS": False,
+            "FRESH_HOLD_SECONDS": 0,
+            "fetch_combined_feed": lambda s: asyncio.sleep(0, result=_EmptyFeed9651()),
+            "fetch_working_reddit_feed": lambda s, sub: asyncio.sleep(0, result=_EmptyFeed9651()),
+            "verify_archive_post_live": lambda s, p, label="", feed_ok=True: asyncio.sleep(0, result=(True, "live")),
+            "fetch_post_json": lambda s, pid, use_oauth=False: asyncio.sleep(0, result=None),
+            "resolve_post_media": lambda s, b, p, path="", label="": asyncio.sleep(
+                0,
+                result={
+                    "title": "Real Post", "author": "u", "body": "b",
+                    "media": [{"kind": "image", "url": "https://i.redd.it/real01.jpg"}],
+                    "stats": {"ups": 10, "comments": 2}, "crosspost": None, "op_comment": None,
+                    "youtube_url": None, "youtube_id": None, "youtube_live": False,
+                    "full_mode": False, "media_provider": "vxreddit", "proxy_media_used": True,
+                },
+            ),
+            "create_discohook_share": lambda s, p, l: asyncio.sleep(0, result=None),
+            "load_posted": lambda: {"TestSub_seed00"},
+            "load_pending": lambda: dict(pending_9651),
+            "save_posted": lambda posted, keep_newest=frozenset(): set(posted),
+            "save_pending": lambda p: None,
+            "load_posted_messages": lambda: {},
+            "save_posted_messages": lambda m: None,
+            "fetch_arctic_subreddit_posts": lambda s, sub, after_epoch=None, label="": asyncio.sleep(0, result=list(arctic_9651)),
+        },
+        "env": {"DISCORD_WEBHOOK_URL": "https://discord.test/webhook", "WEBHOOK_REDDIT_TESTSUB": "https://discord.test/webhook"},
+        "cache_result": "saved",
+    }
+    data_9651, summary_9651, logs_9651, exc_9651 = await _r21_run_and_capture("r86_9651", mocks_9651)
+    check("r86 (#9651): 28 known-pending + 1 real post has flood_cap_dropped=0 and known_pending_suppressed=28",
+          data_9651.get("flood_cap_dropped") == 0
+          and data_9651.get("known_pending_suppressed") == 28
+          and data_9651.get("delivered") == 1,
+          str(data_9651))
+    check("r86 (#9626/#9669): Reddit V3 Posted logs proxy: vxreddit for proxy-resolved image card",
+          "media=image | proxy: vxreddit | 1 item(s)" in logs_9651,
+          logs_9651[-800:])
+
+asyncio.run(_check_r86_all_fixes())
 
 if failures:
     print(f"SMOKE TEST FAILURES ({len(failures)}): {failures}")
