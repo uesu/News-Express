@@ -1,0 +1,92 @@
+name: Sync to Production (7jkxmy9nvbc + wvkhabh2s22)
+
+# Automatically synchronizes the validated runtime subset from uesu/News-Express (dev)
+# to BOTH live production repositories (`uesu/7jkxmy9nvbc` Reddit + `uesu/wvkhabh2s22`
+# Twitter) whenever changes land on `main`, or on manual workflow_dispatch.
+#
+# Safety guarantees:
+#   1. Runs the full offline test + syntax gate BEFORE touching either production repo.
+#   2. Never touches live deduplication / pending / health JSON caches (`posted_reddit.json`,
+#      `pending_reddit.json`, `proxy_health.json`, `posted_tweets.json`, `posted_messages.json`).
+#   3. Commits engine files (`testing area/**`) and test suites (`tests/**`) atomically in a
+#      single git commit, eliminating the Round-75 "guard landed before engine" race.
+#   4. Never copies dev-only documentation (`docs/`, `README.md`, `AGENTS.md`, `.env.example`)
+#      or this `sync_prod.yml` workflow into the production repositories.
+#   5. Uses `cancel-in-progress: false` and fetch+reset retry so concurrent 5-minute monitor
+#      cache commits on production never collide with a sync push.
+#
+# Credentials:
+#   Uses `secrets.PROD_SYNC_PAT` if set, otherwise falls back to `secrets.BUMP_PAT`.
+#   Grant that token `Contents: Read and write` and `Workflows: Read and write` on
+#   `uesu/7jkxmy9nvbc` and `uesu/wvkhabh2s22`.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_repos:
+        description: 'Target production repo(s), comma-separated (default: uesu/7jkxmy9nvbc,uesu/wvkhabh2s22)'
+        required: false
+        default: 'uesu/7jkxmy9nvbc,uesu/wvkhabh2s22'
+      dry_run:
+        description: 'Dry run only (compute diff and summary without pushing to prod)'
+        type: boolean
+        default: false
+      skip_ci:
+        description: 'Append [skip ci] to the production sync commit message'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-prod-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Validate & sync runtime to production
+    if: github.repository == 'uesu/News-Express'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out development repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 — SHA-pinned (immutable supply chain)
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7 — SHA-pinned
+        with:
+          python-version: '3.14.8'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Pre-sync gate — compile every .py file
+        run: python -m compileall -q "testing area" tests .github/scripts
+
+      - name: Pre-sync gate — offline smoke test
+        run: python tests/test_smoke.py
+
+      - name: Pre-sync gate — Reddit signal unit tests
+        run: python tests/test_reddit_signals.py
+
+      - name: Pre-sync gate — Twitter media unit tests
+        run: python tests/test_twitter_media.py
+
+      - name: Sync validated runtime subset to production repositories
+        env:
+          SOURCE_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+          TARGET_REPOS: ${{ inputs.target_repos || vars.PROD_REPOS || 'uesu/7jkxmy9nvbc,uesu/wvkhabh2s22' }}
+          SYNC_PAT: ${{ secrets.PROD_SYNC_PAT || secrets.BUMP_PAT }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          SKIP_CI: ${{ inputs.skip_ci && '1' || vars.SKIP_PROD_CI || '0' }}
+          STRICT_AUTH: ${{ (github.event_name == 'workflow_dispatch' || vars.REQUIRE_PROD_SYNC == '1') && '1' || '0' }}
+        run: python .github/scripts/sync_prod.py
