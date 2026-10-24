@@ -35,7 +35,7 @@ successful `saved`, never-ran `not-reached`) and repository persistence
 with repository push; preparation/copying/recovery-reset/staging/commit/push
 failures all `failed` and are covered in tests of the actual workflow shell
 `bash -n` + mock `unchanged`/`saved`/`recovered`/`failed`), feed and
-delivery counters, proxy warmup health/services, video quality mode
+delivery counters, instance reachability (`REDLIB-REACH:`), proxy warmup health/services, video quality mode
 (`balanced` default, `highest`/`compatibility`), media resolved via provider,
 final media endpoint/hosting category, final card media kind and tile count,
 optional quality candidate result, whether validated base was retained,
