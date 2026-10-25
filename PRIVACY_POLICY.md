@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective date:** October 24, 2026
+**Effective date:** October 25, 2026
 **Applies to:** the *News Express* / *Citlali News* X (Twitter) + Reddit → Discord monitor
 ("the Service"), an open-source, self-hosted automation tool.
 
@@ -22,7 +22,7 @@ operated by the author.
 | Data | Where it lives | Why | Shared with anyone? |
 |---|---|---|---|
 | Delivery-state records: post/tweet IDs (e.g. `TYPEII_EN_2098063866303504597`), pending reasons, and proxy health | `posted_tweets.json`, `posted_reddit.json`, `pending_reddit.json`, and `proxy_health.json` **inside your own repository**, committed by `github-actions[bot]` | Deduplication, safe re-checks, and proxy fallback health | GitHub and anyone who can access your repository; a public repository makes these records public. They do not contain Discord member data or webhook URLs. |
-| Optional retraction records: Reddit post path, Discord message ID, delivery/publish timestamps, and the rendered card payload | `posted_messages.json` **inside your own repository**, created only when `RETRACT_DEAD_POSTS=1` and committed by `github-actions[bot]` | Lets the optional dead-post retraction pass edit or delete the exact Discord message; records are pruned after `RETRACT_WINDOW_SECONDS` and marked retracted records are removed | GitHub and anyone who can access your repository; a public repository makes these records public. The payload is the same public card sent to Discord and does not contain member data or webhook URLs. |
+| Retraction and long-body delivery records: Reddit post path, Discord message IDs, timestamps, rendered payloads, continuation progress, retry times and reconciliation holds | `posted_messages.json` **inside your own repository**, used for long-body continuations even when retraction is disabled, and committed by `github-actions[bot]` | Resumes confirmed-unsent text pages and supports optional retraction. Completed records use `RETRACT_WINDOW_SECONDS` retention from their final page; unfinished continuation records remain until completed or reconciled. Marked retracted records are removed | GitHub and anyone who can access your repository; a public repository makes these records public. The payload is the same public card sent to Discord and does not contain member data or webhook URLs. |
 | Webhook URLs, API keys & optional feed/RSS tokens | GitHub **encrypted repository secrets** in *your* repository | Authentication to Discord, EmbedEZ, Reddit, or a token-gated mirror | GitHub stores the secrets. A value is sent only to its intended service when needed (for example, a webhook to Discord, a Reddit feed token to Reddit, or the Nitter token to miningtcup); the Service must not intentionally publish it. Output redaction and GitHub masking are safeguards, not guarantees; review logs before sharing them. |
 | Public post content (titles, text, author names/handles, media URLs, stats) | Processed **in memory** during a run; rendered content is retained by the Discord channel under your control | Rendering the Discord message | Discord receives the rendered public content through the webhook(s) you configure. Relevant source services receive the public URL/account/subreddit requested. |
 
@@ -33,7 +33,7 @@ No analytics, no tracking, no cookies, no separate database, no telemetry, and n
 ## 3. Data the Service Does NOT Collect
 
 * Discord user information (usernames, IDs, messages of server members) — the Service cannot read
-  any of it; webhooks are **one-way, post-only**.
+  any of it; webhook access is limited to the bot’s own generated cards (create/read/edit/delete), not Discord members’ messages.
 * X/Twitter or Reddit account credentials — only **public** posts are fetched via public RSS/API
   endpoints; no login is used or stored. (The optional Reddit *feed token* is a public-read
   credential for RSS only — it grants no access to your account, DMs, or profile, and can be
@@ -52,7 +52,7 @@ public URL being looked up):
 | Service | Purpose | Their policy |
 |---|---|---|
 | **GitHub Actions** | Hosts and runs the scripts | https://docs.github.com/en/site-policy/privacy-policies |
-| **Discord (webhooks)** | Delivers the generated messages; when optional dead-post retraction is enabled, the webhook response supplies a message ID and the monitor may later edit or delete that public card after two removal signals | https://discord.com/privacy |
+| **Discord (webhooks)** | Delivers generated messages and returns their IDs. Recovery reads/edits only these generated cards; long-body progress records confirmed page IDs. Optional dead-post retraction may edit/delete its card after two removal signals | https://discord.com/privacy |
 | **Nitter mirrors** | Public RSS feeds for X/Twitter | per-instance |
 | **Redlib** | Reddit RSS fallback mirrors and (Reddit V3) best-effort **post-page** fetches for multi-photo galleries, liveness checks, and on-demand test posts. This includes the current 25-member fleet — `www.reddit.com` + `old.reddit.com` + token-gated `redlib.miningtcup.me` plus community instances `redlib.catsarch.com`, `redlib.privacyredirect.com`, `snoo.habedieeh.re`, `redlib.tiekoetter.com`, `redlib.nohost.network`, `redlib-1/2.privadency.com`, `reddit.idevicehacked.com`, `red.artemislena.eu`, `rl.awy.one`, `redlib.kylrth.com`, `redlib.freedit.eu`, `redlib.utilibre.org`, with tail restores `redlib.privadency.com`, `safereddit.com`, `redlib.nadeko.net` (kept per live #9283 partial success) plus 6 appended tail mirrors `redlib.mint.lgbt`, `reddit.jeremyh.xyz`, `redlib.jeikobu.net`, `redlib.vanillax.me`, `redlib.reallyaweso.me`, `redlib.ducks.party`; availability and operator policies vary. The optional dead-post retraction seatbelt (round 44, off by default) may read public `/new` listings — including the HTML `/r/<subreddit>/new?limit=100` fallback — to determine whether a previously delivered post remains visible; the former pristine listing confirmation (round 64) also used listings with a cache-busting timestamp and `no-cache` headers until its removal on 2026-10-21. When listings are read, the URL carries only the public subreddit name and, for the token-gated miningtcup mirror, that mirror's own access token. The same instances are probed in parallel where applicable; anti-bot challenges can make a request fail fast. | per-instance |
 | **FxTwitter / FxEmbed API** (incl. sister host **api.fixupx.com**) | **Primary** tweet metadata, media, translation; if the primary host can't answer, the same-engine fixupx host is tried (round 11) | https://fxtwitter.com |
@@ -83,9 +83,10 @@ The Service never reads or sends these third parties Discord server-member data 
 * Delivery-state files (`posted_tweets.json`, `posted_reddit.json`, `pending_reddit.json`, and
   `proxy_health.json`) live in your repository until you delete them. Post-ID caches retain the
   newest 250 keys per monitored source by default, with a 10,000-key global backstop.
-* `posted_messages.json` is conditional: it is created only when dead-post retraction is enabled,
-  retains undelivered/retraction candidates for `RETRACT_WINDOW_SECONDS` (default six hours),
-  and is pruned after each run. The default configuration does not create this file.
+* `posted_messages.json` supports optional retraction and durable long-body delivery. Completed
+  records use `RETRACT_WINDOW_SECONDS` (default six hours, from the final page for continuations); unfinished continuation records
+  remain until completed or reconciled. This file is used even when retraction is disabled.
+  Stored rendered payloads are public post content; webhook credentials are not retained.
 * Rendered messages and public content are retained by Discord under the retention/moderation
   settings of the server you operate.
 * GitHub retains workflow logs and step summaries according to its applicable
@@ -100,8 +101,8 @@ The Service never reads or sends these third parties Discord server-member data 
 ## 6. Your Responsibilities & Rights
 
 Because you operate your own instance, **you** are the data controller for it. You may inspect,
-modify, or delete every byte it holds (the four always-present workflow-managed JSON state files and
-the conditional `posted_messages.json` file) at any time. Server members who want messages removed can
+modify, or delete every byte it holds (the workflow-managed JSON state files, including
+`posted_messages.json`) at any time. Server members who want messages removed can
 ask you (or any admin with *Manage Messages*) to delete them from Discord.
 
 ---
