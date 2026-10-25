@@ -18,6 +18,9 @@ is a no-op: it is posted immediately, with no revalidation request and no
 delay, and neither the tweet-data provider that answered nor the gallery's
 ordering adds a repair. This is distinct from Reddit's persisted candidate recheck state;
 Twitter's heal queue is not stored in `pending_reddit.json` or `posted_tweets.json`.
+Each queued attempt GETs its own webhook message before PATCH; resolved media skips
+the edit, 401/403/404 stops, and transient GET failure retains bounded recovery.
+There is no persistent later-run recovery after the four-attempt ceiling.
 The workflow-only run summary reports actual runtime, aggregate feed entries,
 terminal feed failures, empty accounts, post counters, and cache status.
 
@@ -68,3 +71,14 @@ remain removed, as does the round-67 content-advisory gate.
 The removed content-advisory settings are not current configuration:
 `NSFW_ALLOWLIST`, `NSFW_FAIL_OPEN`, `NSFW_REQUIRE_SUBREDDIT`, and
 `NSFW_PAGE_FALLBACK` must not be added back to active code or workflows.
+
+### Durable Reddit continuation state
+
+`posted_messages.json` stores main/page IDs, remaining continuation payloads, next index,
+retry time and reconciliation holds even with retraction off. Saves are atomic; the workflow
+already force-adds this cache and semantic push recovery retains the newer timestamped record.
+An unreadable cache stops delivery. 429 rejections can resume; uncertain sends hold for
+operator reconciliation. Completed continuation records recover missing ordinary dedup keys.
+Live state is excluded from development-to-production sync; preserve each target’s own cache.
+Local saves still depend on the existing run-end Git persistence step for runner-loss recovery.
+No additional Variable, Secret, scheduler, provider-order or Reddit media-heal change is required.

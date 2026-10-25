@@ -10,8 +10,8 @@ transcription from supplied screenshots, not a raw archive/API capture.
 
 Continuations start with the remaining source text, without a generated
 `(continued)` label or extra leading newline; source-authored wording is preserved.
-The existing message cap, 3800-character component budget, accent and overflow
-handling remain. These checks are offline, not a live-post certification.
+Content-driven pagination replaces the old message cap; the 3800-character component
+budget, accent and existing Markdown split rules remain. These checks are offline, not a live-post certification.
 No cache reset, workflow edit or new configuration switch is required.
 
 ## Crosspost and summary regressions
@@ -143,3 +143,32 @@ secrets, and work fully offline.
 `.github/workflows/dependabot_auto_merge.yml`
 (the gate it waits on), `docs/DEPENDABOT.md` (why the gate exists), and
 `docs/PYTHON_RUNTIME.md` (runtime-bump-specific validation).*
+
+## Twitter recovery revalidation
+
+The focused Twitter media suite verifies GET revalidation before queued PATCH recovery:
+resolved during delay means zero edits; explicitly unresolved media keeps identical-payload
+recovery; 401/403/404 stops recovery; unavailable GET retains the bounded prior behavior.
+Each queued attempt adds at most one GET. An ordinary healthy post incurs no new request.
+
+## Full-body continuation delivery (2026-10-25)
+
+The smoke suite supersedes the old cap assertions with exact complete-content checks:
+part five, over 40k characters, more than ten pages and long tokens. Mocked Discord
+responses exercise the actual delivery helper, disk persistence with retraction disabled,
+429 deferral/resume without repeating accepted pages, all message IDs and holds after
+missing IDs, 500 responses and timeouts. Failed serialization leaves the prior cache intact;
+invalid JSON/object shapes fail closed. Full-post delivery preserves source ordering and
+main-card geometry. Live Discord playback and production delivery are not asserted.
+
+The completed-continuation restart regression runs the real main loop with a persisted
+completed record and a missing ordinary dedup file. A repeated feed entry performs no
+post-data/media lookup or Discord send, restores dedup and retains all recorded IDs.
+
+Round 88 integration also covers a main-card timeout with the hold saved before POST,
+explicit main rejections versus uncertain server errors, restart suppression of an
+ambiguous main, and retention after completing a continuation older than six hours.
+Nested malformed continuation progress is rejected before any resumed send.
+
+Pre-send connector failures separately verify retryable continuation deferral and release
+of an unsent main-card hold; timeouts and HTTP server errors still require reconciliation.
