@@ -636,7 +636,6 @@ services — please support them:
 | **cron-job.org** | Free external scheduler that triggers the workflows reliably every 10 minutes | [cron-job.org](https://cron-job.org) |
 | **GitHub Actions** | Runs everything on a schedule, for free | — |
 | **Discord Webhooks** | Delivers messages to channels statelessly | — |
-| **Arena AI** | AI agent platform that made this delivery pipeline possible — autonomous docs/engine consistency, fleet audits, and resilient delivery work | [arena.ai/company/about](https://arena.ai/company/about) · [x.com/arena](https://x.com/arena?lang=en) |
 
 Huge respect and gratitude to [@cold-logic5](https://github.com/cold-logic5)
 for the original architecture, to the Nitter project — if you can,
