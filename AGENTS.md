@@ -175,11 +175,15 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   handles it), the OAuth-skip INFO line, `redlib gallery enrichment failed`
   (fallback works). (The `MODQUEUE-LISTING ... fail open` line was removed
   with the mod-queue gate in round 63 — if you see it in old logs only.)
-- Long Reddit bodies deliver as the main card + up to 3 text-only
-  continuation messages ("-# (continued)" heading). Gallery, stats and
+- Long Reddit bodies deliver as the main card + content-driven text-only
+  continuation messages (no generated heading; no fixed page/body truncation). Gallery, stats and
   buttons live ONLY on the main card, and every split lands outside
   links/URLs/spoilers — by design (round 66, live 1wxfuj5). Do not
   "fix" continuations into the card or move media between parts.
+  `posted_messages.json` also persists continuation payloads, confirmed IDs and the
+  next index when retraction is off. Retry explicit 429 rejections after Retry-After;
+  hold ambiguous POST outcomes for reconciliation. Never clear held IDs or replay
+  the main card automatically. No webhook URLs are persisted.
 - The engine versions v1/v2 are documented fallbacks, enrolled in the
   smoke suite. Not stale code.
 - Blocked or walled nitter hosts at the bottom of `RSS_INSTANCES` (kareem,
@@ -269,3 +273,10 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 - Clean only verified disposable task-owned artifacts after inspecting status, ownership and retention needs. Never remove the repository root, `.git`, dirty user work, tracked fixtures, source captures, state or durable handoffs/evidence. No broad destructive cleanup as a capacity workaround.
 - If a snapshot/storage/tool limit blocks execution, report whether commands ran. Do not repeat identical blocked calls or claim writes/deletions succeeded. Request platform intervention or use a compact handoff when safe cleanup is impossible. Never promise automatic cross-session memory or unlimited storage.
 - Separate editing, committing/pushing, PR updates, merging, deployment, workflow dispatch, live API writes, state resets and production switch changes. Obtain the required authorization for each.
+
+### Twitter recovery revalidation (2026-10-25)
+
+Queued media recovery GETs the existing Discord message after the configured wait, before
+PATCH. Resolved media skips editing; 401/403/404 stops. Transient GET failure retains the
+existing bounded edit policy. Keep same-payload edits, video scope, proxy order and GIF
+conversion intact. Tests use synthetic messages; passing them cannot certify Discord playback.

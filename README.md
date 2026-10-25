@@ -173,8 +173,9 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 └── .gitignore
 ```
 
-> `posted_messages.json` (retraction state) is created only when the
-> retraction seatbelt is enabled, and is gitignored for local work.
+> `posted_messages.json` stores optional retraction records and durable long-body
+> delivery progress, including when retraction is disabled. It is gitignored locally
+> and force-added by the production workflow. Preserve it with the other live caches.
 
 ---
 
@@ -395,6 +396,24 @@ STATIC_BUTTONS = [
 ---
 
 ## 📬 Reddit delivery pipeline
+
+### Complete Reddit text
+
+V3 splits the entire retrieved post body across the main card and as many text-only
+continuations as needed, including part five and ten-plus messages. Media, stats and
+buttons stay on the main card. Confirmed page IDs and remaining payloads persist in
+`posted_messages.json`, also when retraction is disabled. Rate-limit rejections resume
+on a later run after Retry-After; other posts may appear between deferred parts.
+Uncertain outcomes (timeouts, server errors or missing
+message IDs) hold for manual reconciliation to avoid duplicate pages. Inspect Discord
+and the retained `continuation_next`/`continuation_hold` record before any state repair.
+Progress saves atomically; completed page records also restore missing main-card dedup after
+an interrupted final save. A saved main-card ambiguity hold also prevents replay if its
+response is lost. An unreadable delivery cache stops the run instead of dropping IDs.
+The existing workflow persists this file to Git at run end; local saves alone do not guarantee
+recovery if a runner is destroyed before that persistence step. This does not recover text
+omitted by upstream providers or replay historical truncated posts.
+
 
 Current behavior (round 63 onward). For the full history of how this evolved,
 see [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) and the
@@ -677,7 +696,9 @@ Twitter V3 requests Discord's created-message response (`wait=true`) and
 inspects the returned media metadata. Only unresolved media eligible for the
 configured scope is added to an in-memory message repair queue; the queue runs
 after the posting loop and re-edits the same payload up to the configured
-attempt cap. The default scope is video-only, and healthy media gets no edit:
+attempt cap. Before each queued edit, the monitor GETs its own webhook message: resolved media
+skips editing, 401/403/404 stops, and transient GET failure retains bounded recovery.
+The default scope is video-only, and healthy media gets no edit:
 a card Discord reports as resolved — or reports nothing conclusive about — is
 posted immediately, with no revalidation request and no delay, and which
 provider supplied the media never triggers a repair on its own.

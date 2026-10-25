@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased — Round 88: full Reddit text and Twitter recovery (2026-10-25)
+
+### Integration and final edge checks
+
+- Integrate the complete sibling handoff for full Reddit text and queued Twitter GET revalidation.
+- Persist multipart main-card ambiguity before POST, retain delayed-completion evidence for a full retention window, and reject malformed nested continuation progress before resuming.
+- Report cache-load failure as incomplete, count resumed progress as saved local state, and bound Twitter revalidation GETs to 15 seconds. Exhausted recovery logs describe observed metadata without asserting Discord refused the asset.
+- Retry proven pre-send connector failures without reconciliation; keep uncertain-response holds.
+- Add interruption/rejection/restart/retention regressions and refresh local compatibility/CPU benchmark evidence in the PR. Existing deployment remains gated on a reviewed merge.
+
+### Round 88: continuation and Twitter recovery handoff
+
+- Reconcile setup/privacy/tracking documentation with the tested full-body and pre-edit revalidation enhancements. Correct stale three-page and retraction-only cache instructions; ignore atomic-save scratch files. No engine, provider, media-heal, schedule, Secret or Variable changes in this documentation follow-up.
+- Preserve earlier history and record the authorized cap replacement, compatibility evidence, request/storage costs and recovery limits in [Round 88](history/ROUND_88.md).
+
+### Retain dedup evidence after the last continuation
+
+- Recover main-card dedup from completed continuation records as well as partial ones. A crash after the last page save but before the ordinary dedup save must not repost a completed card. Recovered keys count as newly saved keys for retention and persistence checks.
+- Add an offline restart regression exercising the actual main loop, saved message IDs, missing dedup file and a repeated feed entry; it failed before the repair.
+
+### Complete Reddit body continuations
+
+- Remove the 16,000-character ingestion cap and three-continuation cap. Deliver all retrieved text in content-driven pages, keeping main-card media, stats and buttons intact. This intentionally supersedes Round 66’s cap.
+- Persist continuation payloads, confirmed page IDs and next index independently of retraction. Resume explicit rate-limit rejections after Retry-After; stop at the first failure and hold uncertain outcomes for reconciliation instead of skipping or duplicating pages. Keep webhook credentials out of state.
+- Cover part five, 40k-plus text, ten-plus pages, unbroken tokens, all message IDs, disk round-trip retry, and ambiguous-response holds offline. No production backfill or cache reset.
+
+### Revalidate Twitter media before recovery edits
+
+- Re-read queued Discord messages after the existing recovery delay and before each PATCH. Skip edits when no eligible unresolved media remains; stop on 401/403/404. Transient revalidation failures retain the existing bounded recovery.
+- Preserve video-only defaults, identical PATCH payloads, four-attempt ceiling, proxy priority and GIF conversion. Healthy posts never enter this path; each queued attempt adds at most one GET.
+- Offline media tests cover resolved-during-wait, still-unresolved, unavailable revalidation, and deleted/inaccessible messages. No production messages or caches are modified by testing.
+
 ## Unreleased — attended workflow updates (2026-10-18)
 
 - Keep eligible package-only Dependabot auto-merge; require attended merges for
