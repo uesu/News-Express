@@ -14,6 +14,24 @@ Content-driven pagination replaces the old message cap; the 3800-character compo
 budget, accent and existing Markdown split rules remain. These checks are offline, not a live-post certification.
 No cache reset, workflow edit or new configuration switch is required.
 
+### Multi-page indicator and formatting preservation (2026-10-26)
+
+Multi-page posts carry one generated subtext footer and nothing else: the main card
+ends `… • 📜 Page 1/N`, each continuation ends `-# 📜 Page n/N`, and single-page
+cards stay byte-identical (no `Page 1/1`). The page count is settled by a bounded
+fixed-point loop, so the printed `N` always equals `1 + len(continuations)`.
+Guards cover the 7-page `1xfcqx0` shape, the 4000-character ceiling, and the
+round-66 gallery split that now expects the extra footer component.
+
+Formatting preservation is checked through the real cleaners: `<strong>`/`<b>`,
+inline-styled `<span>` bold, `<h1>`–`<h6>`, `<i>`/`<em>` and `<del>`/`<s>`/`<strike>`,
+`####`–`######` Markdown subheadings and native `>!spoiler!<` outside code spans,
+plus a tag-agnostic HTML-vs-Markdown router for JSON `selftext`. Text-only posts also
+keep proxy-observed `💬`/`👍` counts (zero extra requests) and drop a sibling
+wave's stats only when genuinely absent — counts are never fabricated. Fenced code
+blocks and inline emphasis are closed and reopened across page boundaries within
+budget. These are offline unit checks; they do not certify Discord playback.
+
 ## Crosspost and summary regressions
 
 The existing `tests/test_smoke.py` includes crosspost/media cases and executes the
@@ -67,7 +85,8 @@ Dependabot does not manage this `python-version` workflow input. The version is
 updated by the dedicated runtime bump workflow so a CPython patch cannot
 silently reach a live posting run. That workflow adds a wheels-only dependency
 install (`pip install --only-binary=:all:`), pre-rewrite and post-rewrite
-compile/test gates, an explicit current-runtime rewrite allowlist, and manual
+compile/test gates, an explicit current-runtime rewrite allowlist (including the
+dev-only `sync_prod.yml` pin where that file exists), and manual
 review for new minor series such as Python 3.15. Full compatibility,
 performance, automation, and rollback policy: [Python runtime policy](PYTHON_RUNTIME.md).
 
@@ -107,6 +126,14 @@ performance, automation, and rollback policy: [Python runtime policy](PYTHON_RUN
   (listed → delivers; absent → skipped with no pending/tracker entry, then
   delivered on the first tick that lists it; a listing outage is never read
   as absence). Nothing here contacts Reddit.
+* **Workflow-surface guards (round 89)** — every `uses:` must be a 40-hex SHA
+  pin carrying a bare `# vX.Y.Z` comment (prose goes on the line above: `zizmor`'s
+  `ref-version-mismatch` audit only parses a comment it can read), every job must
+  stay on `runs-on: ubuntu-latest` so runner OS updates roll forward, the runtime
+  bump's rewrite shell is executed against temporary checkouts (with, without, and
+  missing the dev-only `sync_prod.yml`), and the suite fails if its own stdout
+  emits a GitHub Actions workflow command such as `::error::` — simulated faults
+  belong in a captured buffer.
 * **Fail-loud** — any `FAIL` exits non-zero → red check → Dependabot PR
   (or your PR) cannot merge (or auto-merge).
 

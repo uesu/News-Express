@@ -1,5 +1,50 @@
 # Changelog
 
+## Unreleased — Round 90: multi-page indicator, proxy stats for text posts, formatting preservation (2026-10-26)
+
+### Reddit delivery
+
+- Long posts now say where you are: the main card ends `… • 📜 Page 1/N` and every
+  continuation ends `-# 📜 Page n/N`. Single-page cards are byte-identical to before
+  (no `Page 1/1`), and the printed page count is settled by a bounded fixed-point
+  loop so it always matches the number of continuation messages actually sent.
+- Text-only posts keep the `💬`/`👍` counts a proxy already observed (the `else`
+  branch now reuses the same text/stats helper), and `fetch_proxy_post` backfills
+  stats from a sibling wave responder instead of dropping them. Counts are never
+  forced or fabricated: no source, no counts.
+- Formatting survives delivery: HTML `<strong>`/`<b>`, inline CSS bold spans,
+  `<h1>`–`<h6>`, `<i>`/`<em>`, `<del>`/`<s>`/`<strike>`, Markdown `####`–`######`
+  subheadings (rendered as `**bold**`) and native `>!spoiler!<` (rendered as
+  `||spoiler||`) outside code spans. JSON `selftext` is cleaned with a
+  paragraph-preserving helper whose HTML detection is tag-agnostic — a narrow tag
+  list leaked raw `<pre>`, `<code>` and inline-styled `<span>` markup into cards.
+- Splits close and reopen fenced code blocks and inline `**`/`||`/`~~` emphasis
+  across page boundaries inside the character budget; `~~…~~` and inline code are
+  now protected spans.
+
+See [Round 90](history/ROUND_90.md) for provenance, the corrected HTML router,
+fuzz/parity evidence and limits.
+
+## Unreleased — Round 89: zizmor-verifiable pins, CI annotation hygiene (2026-10-26)
+
+### Development surfaces (no runtime/live change)
+
+- Make every workflow action pin auditable by online `zizmor` again: version
+  comments are bare `# vX.Y.Z` (prose on the line above), `actions/setup-python`
+  moves to `v7.1.0` (`6d4fd22b20465ccc0f7354476588e8df7c9ca0e0`), and
+  `actions/checkout` / `actions/github-script` keep their commits with exact
+  `v7.0.1` / `v9.0.0` tags. `runs-on: ubuntu-latest` stays everywhere so runner
+  OS updates roll forward automatically.
+- Fail the smoke suite (`r89d`) if the suite's own stdout ever emits a GitHub
+  Actions workflow command (`::error::`, `::warning::`, `::notice::`, `::group::`,
+  `::endgroup::`), so simulated faults cannot annotate a green run.
+- Cover the dev-only `.github/workflows/sync_prod.yml` Python pin in the runtime
+  bump when the file is present and skip it with a notice when it is absent (both
+  production repositories receive the bump workflow but never `sync_prod.yml`);
+  a missing required surface still fails closed.
+
+See [Round 89](history/ROUND_89.md) for the reproduction, guards and limits.
+
 ## Unreleased — Round 88: full Reddit text and Twitter recovery (2026-10-25)
 
 ### Integration and final edge checks
