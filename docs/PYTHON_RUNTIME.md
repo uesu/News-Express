@@ -1,6 +1,6 @@
-# Python runtime policy — CPython 3.14.8
+# Python runtime policy — CPython 3.14.9
 
-**Current production/CI pin:** `3.14.8`
+**Current production/CI pin:** `3.14.9`
 
 **Reviewed:** 2026-10-06 against official Python sources
 
@@ -9,7 +9,7 @@ version through SHA-pinned `actions/setup-python@v7`:
 
 ```yaml
 with:
-  python-version: '3.14.8'
+  python-version: '3.14.9'
   cache: 'pip'
 ```
 
@@ -20,15 +20,15 @@ because the current pin changes.
 
 ## Official status reviewed for this pin
 
-Python **3.14.8** is the current News-Express runtime. The official Python
+Python **3.14.9** is the current News-Express runtime. The official Python
 release page identifies it as the eighth maintenance release of Python 3.14 and
 lists its release date as **September 30, 2026**:
 
-* [Python 3.14.8 release page](https://www.python.org/downloads/release/python-3148/)
+* [Python 3.14.9 release page](https://www.python.org/downloads/release/python-3149/)
 
 As of this 2026-10-06 review, News-Express is **not** adopting Python 3.15:
 
-* the official Python downloads page still serves Python 3.14.8 as the latest
+* the official Python downloads page still serves Python 3.14.9 as the latest
   Python 3 source release;
 * the Python Developer's Guide lists Python 3.15 as `prerelease`; and
 * `https://www.python.org/downloads/release/python-3150/` does not publish a
@@ -44,8 +44,8 @@ News-Express uses the normal `MAJOR.MINOR.PATCH` terminology:
 
 | Example | Classification | Repository policy |
 |---|---|---|
-| `3.14.7 -> 3.14.8` | **PATCH** update inside the same `3.14` series | eligible for automated proposal and, when every gate passes, attended manual merge |
-| `3.14.8 -> 3.15.0` | new **MINOR** series | PR only; manual review required even if validation passes |
+| `3.14.7 -> 3.14.9` | **PATCH** update inside the same `3.14` series | eligible for automated proposal and, when every gate passes, attended manual merge |
+| `3.14.9 -> 3.15.0` | new **MINOR** series | PR only; manual review required even if validation passes |
 | `3.x -> 4.x` | **MAJOR** update | deliberate manual migration; never handled as an ordinary patch/minor bump |
 
 A new minor series must never be described as a patch update.
