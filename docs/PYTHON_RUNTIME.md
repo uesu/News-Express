@@ -141,8 +141,14 @@ interpreter:
 
 The rewrite scope is an explicit current-runtime allowlist: workflow pins,
 current runtime documentation, README runtime references, and the smoke-test
-pin guard. `docs/history/` is checked separately and fails the workflow if it
-changes. Unexpected files also fail closed.
+pin guard. `.github/workflows/sync_prod.yml` (round 89) is an *optional* member
+of that list: this development repository has the file, so its pin is rewritten
+in lockstep, while the production repositories — which receive
+`python_version_bump.yml` through `sync_prod.py` but never `sync_prod.yml` —
+skip it with a `::notice::` instead of failing. Every other allowlisted surface
+is required; a missing one still fails the job closed. `docs/history/` is
+checked separately and fails the workflow if it changes. Unexpected files also
+fail closed.
 
 ## Attended merge policy and authentication
 

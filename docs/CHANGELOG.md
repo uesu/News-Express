@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — Round 89: zizmor-verifiable pins, CI annotation hygiene (2026-10-26)
+
+### Development surfaces (no runtime/live change)
+
+- Make every workflow action pin auditable by online `zizmor` again: version
+  comments are bare `# vX.Y.Z` (prose on the line above), `actions/setup-python`
+  moves to `v7.1.0` (`6d4fd22b20465ccc0f7354476588e8df7c9ca0e0`), and
+  `actions/checkout` / `actions/github-script` keep their commits with exact
+  `v7.0.1` / `v9.0.0` tags. `runs-on: ubuntu-latest` stays everywhere so runner
+  OS updates roll forward automatically.
+- Fail the smoke suite (`r89d`) if the suite's own stdout ever emits a GitHub
+  Actions workflow command (`::error::`, `::warning::`, `::notice::`, `::group::`,
+  `::endgroup::`), so simulated faults cannot annotate a green run.
+- Cover the dev-only `.github/workflows/sync_prod.yml` Python pin in the runtime
+  bump when the file is present and skip it with a notice when it is absent (both
+  production repositories receive the bump workflow but never `sync_prod.yml`);
+  a missing required surface still fails closed.
+
+See [Round 89](history/ROUND_89.md) for the reproduction, guards and limits.
+
 ## Unreleased — Round 88: full Reddit text and Twitter recovery (2026-10-25)
 
 ### Integration and final edge checks

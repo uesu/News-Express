@@ -144,7 +144,10 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    between "Discord posted" and "cache committed" causes re-posts.
 6. **cron-job.org is the single scheduler.** GitHub's native `schedule:` is
    disabled on purpose (it raced the external cron → double posts).
-7. **Actions stay SHA-pinned** (round 57); jobs keep `timeout-minutes`.
+7. **Actions stay SHA-pinned** (round 57) with a **bare `# vX.Y.Z`** trailing
+   comment (round 89) — zizmor's `ref-version-mismatch` audit only parses that
+   form, so prose after the version silently disables it; put notes above.
+   Jobs keep `timeout-minutes` and `runs-on: ubuntu-latest`.
 8. Heal eligibility is classified by **URL**, never by response
    `content_type` (it is empty exactly when unresolved — round 56).
    `heal_eligible_items` reads module-global `MEDIA_HEAL_SCOPE` at call

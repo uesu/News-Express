@@ -55,10 +55,54 @@ except ImportError:
 failures = []
 
 
+class _WorkflowCommandGuard:
+    """Watch the suite's own stdout for GitHub Actions workflow commands.
+
+    GitHub parses ``::error::`` / ``::warning::`` / ``::notice::`` /
+    ``::group::`` / ``::endgroup::`` from the WHOLE job log, so a *passing*
+    test that lets simulated fault output reach stdout still annotates the
+    run (and can annotate it with a failure that never happened). Round 89:
+    simulated workflow faults must stay inside a captured buffer — either a
+    ``subprocess`` capture or an explicit ``redirect_stdout`` — and this
+    proxy records any command line that escapes so the suite can fail.
+    """
+
+    _COMMAND_RE = re.compile(r"^\s*::(?:error|warning|notice|group|endgroup)\b")
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.leaks = []
+        self._partial = ""
+
+    def write(self, text):
+        self._partial += text
+        if "\n" in self._partial:
+            *lines, self._partial = self._partial.split("\n")
+            self._record(lines)
+        return self.stream.write(text)
+
+    def _record(self, lines):
+        for line in lines:
+            if self._COMMAND_RE.match(line):
+                self.leaks.append(line.strip()[:200])
+
+    def flush(self):
+        self.stream.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+
 def check(label, cond, extra=""):
     print(("PASS " if cond else "FAIL ") + label + (f"  {extra}" if extra and not cond else ""))
     if not cond:
         failures.append(label)
+
+
+# Installed before the first check runs and removed again at the very end,
+# where the recorded leaks are asserted empty (round 89).
+_stdout_guard = _WorkflowCommandGuard(sys.stdout)
+sys.stdout = _stdout_guard
 
 
 def load_module(name, path):
@@ -3231,6 +3275,138 @@ for _r57_name in ("reddit_monitor.yml", "twitter_monitor.yml"):
     check(f"r57: {_r57_name} — P0 concurrency guard intact (queue, never cancel)",
           "concurrency:" in _r57_src
           and "cancel-in-progress: false" in _r57_src)
+
+
+# ---------------------------------------------------------------------------
+# ROUND 89 (2026-10-26): zizmor-verifiable pins + runner-image updates.
+# The sibling Game-Express CI surfaced three related weaknesses; this repo
+# had the same shape.
+# 89a — every `uses:` in EVERY workflow is SHA-pinned AND its version comment
+#       is a BARE `# vX.Y.Z` at end of line. zizmor's ref-version-mismatch
+#       audit only inspects a comment it can parse, so appending prose
+#       ("# v7 — SHA-pinned …") silently disables the check. Verified with
+#       zizmor 1.31.1: the annotated form reports nothing even when the
+#       version is wrong; the bare form reports the mismatch.
+# 89b — every workflow keeps `runs-on: ubuntu-latest` so GitHub's runner OS
+#       migration rolls forward automatically instead of pinning an image
+#       that later stops being provisioned.
+# ---------------------------------------------------------------------------
+_r89_uses_re = re.compile(r"^\s*(?:-\s+)?uses:\s*(\S+)(.*)$", re.MULTILINE)
+_r89_bare_version_re = re.compile(r"#\s*v\d+\.\d+\.\d+\s*$")
+_r89_uses_total = 0
+_r89_workflows = sorted(
+    name for name in os.listdir(os.path.join(ROOT, ".github", "workflows"))
+    if name.endswith((".yml", ".yaml"))
+)
+for _r89_name in _r89_workflows:
+    with open(os.path.join(ROOT, ".github", "workflows", _r89_name), encoding="utf-8") as _r89_f:
+        _r89_src = _r89_f.read()
+    _r89_uses = _r89_uses_re.findall(_r89_src)
+    _r89_uses_total += len(_r89_uses)
+    check(f"r89a: {_r89_name} — every uses: is SHA-pinned to a bare # vX.Y.Z comment",
+          bool(_r89_uses)
+          and all(re.fullmatch(r"[^@]+@[0-9a-f]{40}", ref) for ref, _rest in _r89_uses)
+          and all(_r89_bare_version_re.fullmatch(rest.strip()) for _ref, rest in _r89_uses),
+          [f"{ref}{rest}" for ref, rest in _r89_uses
+           if not (_r89_bare_version_re.fullmatch(rest.strip()) and re.fullmatch(r"[^@]+@[0-9a-f]{40}", ref))])
+    check(f"r89b: {_r89_name} — stays on runs-on: ubuntu-latest (automatic runner updates)",
+          "runs-on: ubuntu-latest" in _r89_src)
+check("r89a: every workflow was inspected (no vacuous pass)", _r89_uses_total >= 9,
+      f"uses: entries seen = {_r89_uses_total}")
+
+
+def _r89_bump_rewrite(files):
+    """Run the REAL 'Rewrite the allowlisted current-runtime files' shell.
+
+    Round 89: `.github/workflows/sync_prod.yml` is a dev-only surface, so the
+    bump must cover its pin when present and skip it — never fail closed —
+    when the workflow runs from a production checkout that does not carry it.
+    The current pin is read from ci.yml, so this guard never hardcodes a
+    runtime version that the bump would rewrite underneath it.
+
+    A standalone production checkout receives `tests/` and the workflows from
+    `sync_prod.py` but no README or `docs/`, so a required path that is missing
+    here is materialised as a one-line fixture holding the current pin. That
+    keeps every scenario exercised in both layouts instead of silently
+    skipping the check in production; where the real file exists it is used.
+    """
+    import subprocess
+    import textwrap
+    workflow_path = os.path.join(ROOT, ".github/workflows/python_version_bump.yml")
+    source = open(workflow_path, encoding="utf-8").read()
+    ci_source = open(os.path.join(ROOT, ".github/workflows/ci.yml"), encoding="utf-8").read()
+    current = re.search(r"python-version:\s*'(\d+\.\d+\.\d+)'", ci_source).group(1)
+    latest = current[:-1] + str(int(current[-1]) + 1)
+    body = source.split("      - name: Rewrite the allowlisted current-runtime files", 1)[1]
+    body = body.split("        run: |\n", 1)[1]
+    body = body.split("\n      # The rewrite touches the test suite itself", 1)[0]
+    body = textwrap.dedent(body)
+    fixtures = []
+    with tempfile.TemporaryDirectory() as directory:
+        for relative in files:
+            target = os.path.join(directory, relative)
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            real = os.path.join(ROOT, relative)
+            if os.path.isfile(real):
+                shutil.copy(real, target)
+            else:
+                fixtures.append(relative)
+                with open(target, "w", encoding="utf-8") as stream:
+                    stream.write(f"python-version: '{current}'\n")
+        environment = {
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "HOME": directory,
+            "CURRENT": current,
+            "LATEST": latest,
+            "GITHUB_OUTPUT": os.path.join(directory, "output.txt"),
+        }
+        for command in (["git", "init", "-q"], ["git", "config", "user.name", "smoke"],
+                        ["git", "config", "user.email", "smoke@example.com"], ["git", "add", "-A"],
+                        ["git", "commit", "-q", "-m", "baseline"]):
+            subprocess.run(command, cwd=directory, check=True, capture_output=True, text=True, env=environment)
+        completed = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", body], cwd=directory,
+                                   env=environment, capture_output=True, text=True)
+        rewritten = {}
+        for relative in files:
+            with open(os.path.join(directory, relative), encoding="utf-8") as stream:
+                rewritten[relative] = stream.read()
+        return completed, rewritten, current, latest, fixtures
+
+
+_R89_REQUIRED = (
+    ".github/workflows/ci.yml",
+    ".github/workflows/reddit_monitor.yml",
+    ".github/workflows/twitter_monitor.yml",
+    ".github/workflows/python_version_bump.yml",
+    "README.md",
+    "docs/PYTHON_RUNTIME.md",
+    "docs/CI_SMOKE.md",
+    "docs/DEPENDABOT.md",
+    "tests/test_smoke.py",
+)
+_r89_done, _r89_files, _r89_current, _r89_latest, _r89_fixtures = _r89_bump_rewrite(
+    _R89_REQUIRED + (".github/workflows/sync_prod.yml",)
+)
+check("r89c: runtime bump rewrites the dev-only sync_prod.yml pin when that surface is present",
+      _r89_done.returncode == 0
+      and f"python-version: '{_r89_latest}'" in _r89_files[".github/workflows/sync_prod.yml"]
+      and f"python-version: '{_r89_latest}'" in _r89_files[".github/workflows/ci.yml"],
+      _r89_done.stdout[-400:] + _r89_done.stderr[-400:])
+_r89_absent_done, _r89_absent_files, _, _, _ = _r89_bump_rewrite(_R89_REQUIRED)
+check("r89c: runtime bump succeeds without sync_prod.yml (production checkout) and reports the skip",
+      _r89_absent_done.returncode == 0
+      and "Optional runtime file absent in this repository; skipping: .github/workflows/sync_prod.yml"
+      in _r89_absent_done.stdout
+      and f"python-version: '{_r89_latest}'" in _r89_absent_files[".github/workflows/ci.yml"],
+      _r89_absent_done.stdout[-400:] + _r89_absent_done.stderr[-400:])
+_r89_missing_done, _r89_missing_files, _, _, _ = _r89_bump_rewrite(
+    tuple(f for f in _R89_REQUIRED if f != "README.md")
+)
+check("r89c: a missing REQUIRED runtime surface still fails the rewrite closed",
+      _r89_missing_done.returncode != 0
+      and "Expected runtime file missing: README.md" in _r89_missing_done.stdout
+      and f"python-version: '{_r89_current}'" in _r89_missing_files[".github/workflows/ci.yml"],
+      _r89_missing_done.stdout[-400:] + _r89_missing_done.stderr[-400:])
 
 
 class _R47Resp:
@@ -9199,6 +9375,14 @@ if os.path.isfile(_readme_path):
         _readme_text = _readme_file.read()
     check("credits: README has no Arena AI contributor row",
           not re.search(r"^\|\s*\*\*Arena AI\*\*\s*\|", _readme_text, re.MULTILINE))
+
+# ---- Round 89: no GitHub Actions annotation may leak out of this suite ----
+# Restore the real stdout first, then judge what the suite actually emitted.
+sys.stdout = _stdout_guard.stream
+_stdout_guard._record([_stdout_guard._partial])
+check("r89d: the suite never emits GitHub Actions workflow commands to stdout "
+      "(simulated faults stay captured, so CI gets no false ::error:: annotation)",
+      not _stdout_guard.leaks, _stdout_guard.leaks[:3])
 
 if failures:
     print(f"SMOKE TEST FAILURES ({len(failures)}): {failures}")

@@ -67,7 +67,8 @@ Dependabot does not manage this `python-version` workflow input. The version is
 updated by the dedicated runtime bump workflow so a CPython patch cannot
 silently reach a live posting run. That workflow adds a wheels-only dependency
 install (`pip install --only-binary=:all:`), pre-rewrite and post-rewrite
-compile/test gates, an explicit current-runtime rewrite allowlist, and manual
+compile/test gates, an explicit current-runtime rewrite allowlist (including the
+dev-only `sync_prod.yml` pin where that file exists), and manual
 review for new minor series such as Python 3.15. Full compatibility,
 performance, automation, and rollback policy: [Python runtime policy](PYTHON_RUNTIME.md).
 
@@ -107,6 +108,14 @@ performance, automation, and rollback policy: [Python runtime policy](PYTHON_RUN
   (listed → delivers; absent → skipped with no pending/tracker entry, then
   delivered on the first tick that lists it; a listing outage is never read
   as absence). Nothing here contacts Reddit.
+* **Workflow-surface guards (round 89)** — every `uses:` must be a 40-hex SHA
+  pin carrying a bare `# vX.Y.Z` comment (prose goes on the line above: `zizmor`'s
+  `ref-version-mismatch` audit only parses a comment it can read), every job must
+  stay on `runs-on: ubuntu-latest` so runner OS updates roll forward, the runtime
+  bump's rewrite shell is executed against temporary checkouts (with, without, and
+  missing the dev-only `sync_prod.yml`), and the suite fails if its own stdout
+  emits a GitHub Actions workflow command such as `::error::` — simulated faults
+  belong in a captured buffer.
 * **Fail-loud** — any `FAIL` exits non-zero → red check → Dependabot PR
   (or your PR) cannot merge (or auto-merge).
 
