@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased — Round 90: multi-page indicator, proxy stats for text posts, formatting preservation (2026-10-26)
+
+### Reddit delivery
+
+- Long posts now say where you are: the main card ends `… • 📜 Page 1/N` and every
+  continuation ends `-# 📜 Page n/N`. Single-page cards are byte-identical to before
+  (no `Page 1/1`), and the printed page count is settled by a bounded fixed-point
+  loop so it always matches the number of continuation messages actually sent.
+- Text-only posts keep the `💬`/`👍` counts a proxy already observed (the `else`
+  branch now reuses the same text/stats helper), and `fetch_proxy_post` backfills
+  stats from a sibling wave responder instead of dropping them. Counts are never
+  forced or fabricated: no source, no counts.
+- Formatting survives delivery: HTML `<strong>`/`<b>`, inline CSS bold spans,
+  `<h1>`–`<h6>`, `<i>`/`<em>`, `<del>`/`<s>`/`<strike>`, Markdown `####`–`######`
+  subheadings (rendered as `**bold**`) and native `>!spoiler!<` (rendered as
+  `||spoiler||`) outside code spans. JSON `selftext` is cleaned with a
+  paragraph-preserving helper whose HTML detection is tag-agnostic — a narrow tag
+  list leaked raw `<pre>`, `<code>` and inline-styled `<span>` markup into cards.
+- Splits close and reopen fenced code blocks and inline `**`/`||`/`~~` emphasis
+  across page boundaries inside the character budget; `~~…~~` and inline code are
+  now protected spans.
+
+See [Round 90](history/ROUND_90.md) for provenance, the corrected HTML router,
+fuzz/parity evidence and limits.
+
 ## Unreleased — Round 89: zizmor-verifiable pins, CI annotation hygiene (2026-10-26)
 
 ### Development surfaces (no runtime/live change)

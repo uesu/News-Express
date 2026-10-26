@@ -187,6 +187,11 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   next index when retraction is off. Retry explicit 429 rejections after Retry-After;
   hold ambiguous POST outcomes for reconciliation. Never clear held IDs or replay
   the main card automatically. No webhook URLs are persisted.
+  Round 90 added the ONE accepted generated component: a trailing subtext
+  `-# 📜 Page X/Y` footer on multi-page posts (main card `• 📜 Page 1/N`, each
+  continuation `-# 📜 Page n/N`). Single-page posts stay byte-identical — no
+  `Page 1/1`. It is a footer, not a heading; do not extend continuations with
+  any other generated text.
 - The engine versions v1/v2 are documented fallbacks, enrolled in the
   smoke suite. Not stale code.
 - Blocked or walled nitter hosts at the bottom of `RSS_INSTANCES` (kareem,

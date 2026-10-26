@@ -5512,10 +5512,17 @@ check("r66: 15-photo long-body card keeps the round-38c two-container split (10 
       and [c["type"] for c in _r66_g15["components"][0]["components"]] == [10, 10, 14, 12]
       and [c["type"] for c in _r66_g15["components"][1]["components"]] == [14, 12, 10, 14, 1],
       str([[c["type"] for c in cont["components"]] for cont in _r66_g15["components"]]))
+# r66 guard updated in round 90: continuation payloads now carry a second
+# text component, the `-# 📜 Page X/Y` subtext footer, so the "exactly one
+# component" shape this pinned is intentionally superseded. The body text is
+# still component 0 and the round-66 split still produces the same 4 pages.
 check("r66: gallery card body split feeds the SAME continuation pipeline",
       len(_r66_g15_conts) == 4
       and all(c["components"][0]["components"][0]["type"] == 10
-              and len(c["components"][0]["components"]) == 1 for c in _r66_g15_conts),
+              and c["components"][0]["components"][1] == {
+                  "type": 10, "content": f"-# 📜 Page {idx}/5"}
+              and len(c["components"][0]["components"]) == 2
+              for idx, c in enumerate(_r66_g15_conts, start=2)),
       f"conts={len(_r66_g15_conts)}")
 _r66_gdata_short = dict(_r66_data(_r66_short))
 _r66_gdata_short["media"] = _r66_photos(15)
@@ -9367,6 +9374,211 @@ if _sync_wf_path.is_file():
           and "python tests/test_reddit_signals.py" in _sync_wf_src
           and "python tests/test_twitter_media.py" in _sync_wf_src
           and "python .github/scripts/sync_prod.py" in _sync_wf_src)
+
+# ---- Round 90 (2026-10-26): multi-page `📜 Page X/Y` indicator, text-only proxy
+# stats retention, and cross-page formatting preservation. The sibling patch was
+# written against its own numbering; here the guards are `r90:` because `r88:`
+# already names this repository's full-body/Twitter-recovery round. ----
+def _test_round90_multipage_pagination_stats_and_formatting():
+    import importlib.util as _r90_ilu
+    _r90_spec = _r90_ilu.spec_from_file_location(
+        "reddit_proxy_r88", os.path.join(ROOT, "testing area", "reddit_proxy.py"))
+    _r90_px = _r90_ilu.module_from_spec(_r90_spec)
+    _r90_spec.loader.exec_module(_r90_px)
+
+    # 1. Single-page card (with and without stats): NO `📜 Page 1/1` suffix added
+    _s1_with = v3.build_v3_payload(
+        "Zenlesszonezeroleaks_",
+        {"title": "[3.4 BETA] Mindscape Art:Pramet via Seele", "author": "Tiny-Ad-8740",
+         "body": "Short single-page body.", "media": [], "crosspost": None,
+         "stats": {"comments": 8, "ups": 7}, "youtube_url": None, "op_comment": None},
+        "https://www.reddit.com/r/Zenlesszonezeroleaks_/comments/1xfd893/test/",
+        1792960916, return_remainder=True,
+    )
+    check("r90: single-page card with stats has no Page 1/1 indicator",
+          _s1_with[1] == ""
+          and _r66_texts(_s1_with[0])[-1] == "-# 💬 8 👍 7   •   🕐 <t:1792960916:f>")
+    _s1_no = v3.build_v3_payload(
+        "Zenlesszonezeroleaks_",
+        {"title": "Short Post", "author": "Tiny-Ad-8740",
+         "body": "Short single-page body.", "media": [], "crosspost": None,
+         "stats": None, "youtube_url": None, "op_comment": None},
+        "https://www.reddit.com/r/Zenlesszonezeroleaks_/comments/1xfd893/test/",
+        1792959719, return_remainder=True,
+    )
+    check("r90: single-page card without stats has no Page 1/1 indicator and no fake stats",
+          _s1_no[1] == ""
+          and _r66_texts(_s1_no[0])[-1] == "-# 🕐 <t:1792959719:f>")
+
+    # 2. Live 7-page `1xfcqx0` ("3.4 Threshold Simulation Update") shape:
+    #    - With stats: `-# 💬 8 👍 7   •   🕐 <t:1792960916:f> • 📜 Page 1/7`
+    #    - Without stats: `-# 🕐 <t:1792959719:f> • 📜 Page 1/7`
+    #    - Continuations: `-# 📜 Page 2/7` .. `-# 📜 Page 7/7`
+    #    - Bold headings across ALL 7 pages (from `<strong class="...">`, `<h4>`, `**...**`)
+    _p_html_sections = []
+    _section_names = [
+        ("[Four-Act Commissions]", '<strong class="md-bold">[Four-Act Commissions]</strong>'),
+        ("Chain Attack", '<strong data-md="1">Chain Attack</strong>'),
+        ("Follow-up Attack", '<h4>Follow-up Attack</h4>'),
+        ("EX Special Attack", '<span style="font-weight: 700">EX Special Attack</span>'),
+        ("Ultimate", '<strong> Ultimate </strong>'),
+        ("Rupture Specialist", '<h3><strong>Rupture Specialist</strong></h3>'),
+        ("Distinguished Alumnus", '<strong class="shreddit">Distinguished Alumnus</strong>'),
+    ]
+    for idx_s, (_plain_h, _html_h) in enumerate(_section_names, start=1):
+        _prose = (f"<p>Stage {idx_s} tactical effect increases Agent Sheer DMG and Crit DMG "
+                  f"while preserving <em>italic</em> and <del>strike</del> notes. "
+                  + ("Detailed buff description clause for stage mechanics. " * 55) + "</p>")
+        _p_html_sections.append(f"<p>{_html_h}</p>\n{_prose}")
+    _cleaned_7p = v3.clean_rss_body("\n".join(_p_html_sections))
+
+    _card_7p_stats, _rest_7p_stats = v3.build_v3_payload(
+        "Zenlesszonezeroleaks_",
+        {"title": "3.4 Threshold Simulation Update", "author": "Tiny-Ad-8740",
+         "body": _cleaned_7p, "media": [], "crosspost": None,
+         "stats": {"comments": 8, "ups": 7}, "youtube_url": None, "op_comment": None},
+        "https://www.reddit.com/r/Zenlesszonezeroleaks_/comments/1xfcqx0/34_threshold_simulation_update/",
+        1792960916, return_remainder=True,
+    )
+    _conts_7p_stats = v3.build_continuation_payloads(_rest_7p_stats)
+    _total_7p = 1 + len(_conts_7p_stats)
+    check("r90: 7-page 1xfcqx0 card with stats renders exact `• 📜 Page 1/N` footer",
+          _total_7p == 7
+          and _r66_texts(_card_7p_stats)[-1]
+          == "-# 💬 8 👍 7   •   🕐 <t:1792960916:f> • 📜 Page 1/7",
+          _r66_texts(_card_7p_stats)[-1])
+    check("r90: continuation payloads 2..7 each carry `-# 📜 Page X/7` subtext footer",
+          [c["components"][0]["components"][1] for c in _conts_7p_stats]
+          == [{"type": 10, "content": f"-# 📜 Page {i}/7"} for i in range(2, 8)])
+    check("r90: every multi-page payload stays strictly under Discord's 4000-char limit",
+          sum(len(t) for t in _r66_texts(_card_7p_stats)) <= 3800
+          and all(sum(len(x["content"]) for x in c["components"][0]["components"]) < 4000
+                  for c in _conts_7p_stats))
+
+    _all_7p_pages = [_r66_texts(_card_7p_stats)[1]] + _r66_chunks(_conts_7p_stats)
+    _joined_7p = "\n\n".join(_all_7p_pages)
+    check("r90: bold/italic/strikethrough formatting preserved across ALL 7 pages (including pages 3-7)",
+          all(f"**{plain_h}**" in _joined_7p for plain_h, _ in _section_names)
+          and "****" not in _joined_7p
+          and "*italic*" in _joined_7p
+          and "~~strike~~" in _joined_7p
+          and any("**Distinguished Alumnus**" in p for p in _all_7p_pages[4:]),
+          [p[:80] for p in _all_7p_pages])
+
+    _card_7p_nostats, _rest_7p_nostats = v3.build_v3_payload(
+        "Zenlesszonezeroleaks_",
+        {"title": "3.4 Threshold Simulation Update", "author": "Tiny-Ad-8740",
+         "body": _cleaned_7p, "media": [], "crosspost": None,
+         "stats": None, "youtube_url": None, "op_comment": None},
+        "https://www.reddit.com/r/Zenlesszonezeroleaks_/comments/1xfcqx0/34_threshold_simulation_update/",
+        1792959719, return_remainder=True,
+    )
+    check("r90: 7-page 1xfcqx0 card without stats renders `-# 🕐 <t:...:f> • 📜 Page 1/7` without fake counts",
+          _r66_texts(_card_7p_nostats)[-1] == "-# 🕐 <t:1792959719:f> • 📜 Page 1/7",
+          _r66_texts(_card_7p_nostats)[-1])
+
+    # 3. Text-only `resolve_post_media` rescues proxy `stats` with ZERO extra HTTP calls,
+    #    and leaves `stats is None` when proxies genuinely have no visible counts.
+    async def _run_text_stats_checks():
+        base_text = {
+            "title": "3.4 Threshold Simulation Update", "author": "Tiny-Ad-8740",
+            "body": _cleaned_7p, "content_html": "", "youtube_url": None,
+            "vred_id": None, "redgifs_url": None, "thumb": None,
+        }
+        fake_px_with_stats = SimpleNamespace(
+            fetch_proxy_post=AsyncMock(return_value={
+                "service": "vxreddit", "media": [], "body": "truncated og preview",
+                "stats": {"comments": 8, "ups": 7},
+            }),
+            fetch_embeddit_stats=AsyncMock(return_value={"comments": 99, "ups": 99}),
+        )
+        with patch.object(v3, "reddit_proxy", fake_px_with_stats), \
+             patch.object(v3, "PROXY_MEDIA", True), \
+             patch.object(v3, "fetch_arctic_post", AsyncMock(return_value=None)), \
+             patch.object(v3, "enrich_gallery_redlib", AsyncMock(return_value=[])):
+            res_with = await v3.resolve_post_media(
+                None, dict(base_text), None,
+                "/r/Zenlesszonezeroleaks_/comments/1xfcqx0/34_threshold_simulation_update/")
+        check("r90: text-only post retains proxy stats and full RSS body with zero extra requests",
+              res_with["stats"] == {"comments": 8, "ups": 7}
+              and res_with["body"] == _cleaned_7p
+              and fake_px_with_stats.fetch_embeddit_stats.await_count == 0,
+              str(res_with["stats"]))
+
+        fake_px_hidden = SimpleNamespace(
+            fetch_proxy_post=AsyncMock(return_value={
+                "service": "vxreddit", "media": [], "body": "preview", "stats": None,
+            }),
+            fetch_embeddit_stats=AsyncMock(return_value=None),
+        )
+        with patch.object(v3, "reddit_proxy", fake_px_hidden), \
+             patch.object(v3, "PROXY_MEDIA", True), \
+             patch.object(v3, "fetch_arctic_post", AsyncMock(return_value=None)), \
+             patch.object(v3, "enrich_gallery_redlib", AsyncMock(return_value=[])):
+            res_hidden = await v3.resolve_post_media(
+                None, dict(base_text), None,
+                "/r/Zenlesszonezeroleaks_/comments/1xfcqx0/34_threshold_simulation_update/")
+        check("r90: text-only post with hidden/absent counts keeps stats=None (never fabricates)",
+              res_hidden["stats"] is None)
+
+        # Also check `reddit_proxy.fetch_proxy_post` merges stats from lower-rank
+        # text-only responder when vxreddit text-only result had stats=None.
+        async def _vx_nostats(session, path, label=""):
+            return {"service": "vxreddit", "title": "T", "author": "A",
+                    "subreddit": "S", "body": "body from vx", "stats": None, "media": []}
+
+        async def _ez_stats(session, path, label=""):
+            return {"service": "redditez", "title": "T", "author": "A",
+                    "subreddit": "S", "body": "body from ez",
+                    "stats": {"comments": 8, "ups": 7}, "media": []}
+
+        async def _em_none(session, path, label=""):
+            return None
+
+        with patch.dict(_r90_px._PROXY_FETCHERS, {
+            "vxreddit": _vx_nostats, "redditez": _ez_stats, "embeddit": _em_none,
+        }):
+            merged_fb = await _r90_px.fetch_proxy_post(
+                None, "/r/Zenlesszonezeroleaks_/comments/1xfcqx0/title/", label="r90")
+        check("r90: fetch_proxy_post backfills text-only fallback stats from sibling wave responder",
+              merged_fb["service"] == "vxreddit"
+              and merged_fb["body"] == "body from vx"
+              and merged_fb["stats"] == {"comments": 8, "ups": 7},
+              str(merged_fb))
+
+    asyncio.run(_run_text_stats_checks())
+
+    # 4. Plain Markdown / JSON selftext parity + non-forcing graceful fallbacks:
+    _md_sample = "#### Follow-up Attack\n\nNormal unformatted paragraph.\n\nReveal >!hidden boss!< safely."
+    _md_cleaned = v3._clean_selftext(_md_sample)
+    check("r90: _clean_selftext preserves paragraphs, converts #### to **bold** and >!spoiler!< to ||spoiler||, and leaves plain lines plain",
+          _md_cleaned == "**Follow-up Attack**\n\nNormal unformatted paragraph.\n\nReveal ||hidden boss|| safely.",
+          repr(_md_cleaned))
+    # The HTML-vs-Markdown router must be tag-agnostic: an allowlist leaked raw
+    # `<pre>`/`<code>`/inline-styled `<span>` markup into the card body.
+    check("r90: _clean_selftext routes ANY HTML tag shape to the HTML cleaner (no raw <pre>/<code>/<span> leak)",
+          v3._clean_selftext("<pre><code>line1\nline2</code></pre>") == "line1\nline2"
+          and v3._clean_selftext('<span style="font-weight: 700">EX Special Attack</span>').strip()
+          == "**EX Special Attack**"
+          and v3._clean_selftext("[deleted]") == ""
+          and v3._clean_selftext("plain 1 < 2 and <https://x.y> autolink")
+          == "plain 1 < 2 and <https://x.y> autolink",
+          repr(v3._clean_selftext("<pre><code>line1\nline2</code></pre>")))
+    check("r90: proxy HTML cleaner matches RSS formatting parity without forcing plain text",
+          _r90_px.clean_proxy_body("<h4>Subhead</h4><p><strong class='x'>Bold </strong>plain <em>it</em></p>")
+          == "**Subhead**\n\n**Bold** plain *it*")
+    _fenced_long = "```python\n" + "\n".join(f"x_{i} = {i}" for i in range(450)) + "\n```"
+    _f_conts = v3.build_continuation_payloads(_fenced_long)
+    check("r90: fenced code block split across pages closes and reopens cleanly within budget",
+          len(_f_conts) >= 2
+          and all(c["components"][0]["components"][0]["content"].strip().startswith("```")
+                  and c["components"][0]["components"][0]["content"].strip().endswith("```")
+                  and len(c["components"][0]["components"][0]["content"]) <= v3.CONTINUATION_CHAR_LIMIT
+                  for c in _f_conts))
+
+
+_test_round90_multipage_pagination_stats_and_formatting()
+
 
 # ---- Documentation credits (README is excluded from production syncs) ----
 _readme_path = os.path.join(ROOT, "README.md")

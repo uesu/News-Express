@@ -14,6 +14,24 @@ Content-driven pagination replaces the old message cap; the 3800-character compo
 budget, accent and existing Markdown split rules remain. These checks are offline, not a live-post certification.
 No cache reset, workflow edit or new configuration switch is required.
 
+### Multi-page indicator and formatting preservation (2026-10-26)
+
+Multi-page posts carry one generated subtext footer and nothing else: the main card
+ends `… • 📜 Page 1/N`, each continuation ends `-# 📜 Page n/N`, and single-page
+cards stay byte-identical (no `Page 1/1`). The page count is settled by a bounded
+fixed-point loop, so the printed `N` always equals `1 + len(continuations)`.
+Guards cover the 7-page `1xfcqx0` shape, the 4000-character ceiling, and the
+round-66 gallery split that now expects the extra footer component.
+
+Formatting preservation is checked through the real cleaners: `<strong>`/`<b>`,
+inline-styled `<span>` bold, `<h1>`–`<h6>`, `<i>`/`<em>` and `<del>`/`<s>`/`<strike>`,
+`####`–`######` Markdown subheadings and native `>!spoiler!<` outside code spans,
+plus a tag-agnostic HTML-vs-Markdown router for JSON `selftext`. Text-only posts also
+keep proxy-observed `💬`/`👍` counts (zero extra requests) and drop a sibling
+wave's stats only when genuinely absent — counts are never fabricated. Fenced code
+blocks and inline emphasis are closed and reopened across page boundaries within
+budget. These are offline unit checks; they do not certify Discord playback.
+
 ## Crosspost and summary regressions
 
 The existing `tests/test_smoke.py` includes crosspost/media cases and executes the
