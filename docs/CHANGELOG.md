@@ -1,5 +1,48 @@
 # Changelog
 
+## Unreleased — Round 91: production-sync hardening + CPython 3.14.9 (2026-10-26)
+
+### Production sync (both live repos)
+
+- **Fixed a live production failure.** `uesu/7jkxmy9nvbc` and `uesu/wvkhabh2s22`
+  were failing every `Python version bump (auto)` run at *Rewrite the allowlisted
+  current-runtime files* with `::error::Expected runtime file missing: README.md`:
+  `sync_prod.py` copies `python_version_bump.yml` into both production repos but
+  never copies `README.md` or `docs/*`, which sat in the mandatory allowlist. The
+  allowlist is now split into **required** surfaces (present in every checkout)
+  and **optional** dev-only ones (rewritten where present, skipped with a
+  `::notice::` where absent), and the `docs/PYTHON_RUNTIME.md` slug `sed` is
+  guarded.
+- **No more pin downgrades.** `.github/scripts/sync_prod.py` merges workflow files
+  monotonically instead of overwriting them: a `python-version:` pin or SHA-pinned
+  `uses:` that production already advanced is preserved, so a dev-side sync can no
+  longer undo a production Dependabot/Python bump. The deployed
+  `tests/test_smoke.py` r39 pin is re-aligned to the deployed `ci.yml` afterwards.
+- Dev-only root markdown (`PRIVACY_POLICY.md`, `TERMS_OF_SERVICE.md`) joins the
+  exclusion list, and the unused `import json` is gone.
+
+### Runtime
+
+- CPython pin `3.14.8` → `3.14.9` across the allowlisted runtime surfaces (the
+  `actions/python-versions` Linux x64 build published 2026-10-21). Documentation
+  now states the runner-image publication date instead of a CPython release date
+  this repository cannot verify, and version examples are version-agnostic so the
+  automated rewrite cannot turn them into nonsense.
+
+### Guards
+
+- `r91a` — every **mandatory** allowlist path must exist in a real production
+  checkout; every **optional** one must genuinely be absent there.
+- `r91b` — newer production pins survive a dev-side sync, dev-side workflow
+  content still lands, the deployed r39 guard re-aligns, and the merged tree is
+  idempotent.
+- `r91c` — dev-only root markdown is excluded and never synced.
+- `r89c` — reworked: it now runs the real rewrite shell in **both** layouts and no
+  longer invents fixtures for missing files (that fixture is exactly why the
+  production failure went unseen).
+
+See [Round 91](history/ROUND_91.md) for the reproduction, evidence and limits.
+
 ## Unreleased — Round 90: multi-page indicator, proxy stats for text posts, formatting preservation (2026-10-26)
 
 ### Reddit delivery
