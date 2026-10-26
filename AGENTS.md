@@ -64,8 +64,11 @@ all three offline test suites (`test_smoke.py`, `test_reddit_signals.py`, `test_
 `uesu/wvkhabh2s22` in a single commit (using `secrets.PROD_SYNC_PAT || secrets.BUMP_PAT`), while
 never touching live deduplication/pending/health JSON caches (`posted_reddit.json`,
 `pending_reddit.json`, `proxy_health.json`, `posted_tweets.json`, `posted_messages.json`) and never
-copying development documentation (`docs/`, `README.md`, `AGENTS.md`, `.env.example`, or
-`sync_prod.yml` itself). Manual web-UI upload remains a fallback if needed (**engine file first**
+copying development documentation (`docs/`, `README.md`, `AGENTS.md`, `PRIVACY_POLICY.md`,
+`TERMS_OF_SERVICE.md`, `.env.example`, or `sync_prod.yml` itself). Workflow files are merged
+monotonically (round 91): a `python-version:` pin or SHA-pinned `uses:` that production already
+merged at a newer version is never downgraded by a dev-side sync, and the deployed
+`tests/test_smoke.py` r39 pin is re-aligned to the deployed `ci.yml`. Manual web-UI upload remains a fallback if needed (**engine file first**
 when uploading manually).
 
 Both prod repos intentionally contain BOTH monitors' files. They are NOT

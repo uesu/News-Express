@@ -5,7 +5,7 @@
 **X (Twitter) + Reddit → Discord monitor — 100% serverless.**
 
 [![CI](https://github.com/uesu/News-Express/actions/workflows/ci.yml/badge.svg)](https://github.com/uesu/News-Express/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.14.8-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/python-3.14.9-3776AB?logo=python&logoColor=white)
 ![Runtime](https://img.shields.io/badge/runtime-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)
 ![Scheduler](https://img.shields.io/badge/scheduler-cron--job.org-3D8EB9)
 ![Discord](https://img.shields.io/badge/Discord-webhooks-5865F2?logo=discord&logoColor=white)
@@ -525,12 +525,12 @@ path — the folder name contains a space).
 
 ## 🐍 Runtime, dependencies, and production scope
 
-* **Current runtime:** exact CPython **3.14.8** in CI and both monitor
-  workflows. The official Python 3.14.8 release page lists **September 30,
-  2026** as its release date.
-* **Version terms:** `MAJOR.MINOR.PATCH` — `3.14.7 -> 3.14.8` is a **patch**
-  update, `3.14.8 -> 3.15.0` is a new **minor** series, and `3.x -> 4.x` is a
-  **major** update.
+* **Current runtime:** exact CPython **3.14.9** in CI and both monitor
+  workflows, installed from the `actions/python-versions` Linux x64 build that
+  `actions/setup-python` resolves (published **October 21, 2026**).
+* **Version terms:** `MAJOR.MINOR.PATCH` — `x.y.z -> x.y.(z+1)` is a **patch**
+  update, `x.y.z -> x.(y+1).0` is a new **minor** series, and
+  `x -> x+1` is a **major** update.
 * **Runtime automation:** `.github/workflows/python_version_bump.yml` checks for
   final stable candidates in the `actions/python-versions` manifest, requires
   wheels-only dependency installation (`pip install --only-binary=:all:`), runs
@@ -556,7 +556,7 @@ See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
 |---|---|---|
 | **Discohook** | after each Reddit post, a share-link preview of the exact card is logged (keyless public API, no webhook URL ever leaves the repo; disable with `DISCOHOOK_PREVIEW=0`) | [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) |
 | **Dependabot** | weekly dependency/action checks; grouped PRs when requirements need updates; optional opt-in auto-merge (`AUTO_MERGE_DEPENDABOT=yes`) | [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) |
-| **Python runtime** | CPython pinned to exact stable **3.14.8**; all patch/minor update PRs require attended merging, major versions require manual migration | [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) |
+| **Python runtime** | CPython pinned to exact stable **3.14.9**; all patch/minor update PRs require attended merging, major versions require manual migration | [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) |
 | **CI** | every PR: `pip install` + `compileall` + smoke suite + Reddit signal suite + X media suite | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) |
 
 ---

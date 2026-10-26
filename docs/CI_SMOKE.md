@@ -57,7 +57,7 @@ Twitter media runners. No new test file, live webhook or cache reset is needed.
 
 | Piece | What it is | What it runs |
 |---|---|---|
-| `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every pull request** and every push to `main` (public repo = free) | Sets up exact **CPython 3.14.8**, then runs `pip install -r requirements.txt` → `python -m compileall` over every script → `python tests/test_smoke.py` → `python tests/test_reddit_signals.py` → `python tests/test_twitter_media.py` |
+| `.github/workflows/ci.yml` | A GitHub Actions workflow that triggers on **every pull request** and every push to `main` (public repo = free) | Sets up exact **CPython 3.14.9**, then runs `pip install -r requirements.txt` → `python -m compileall` over every script → `python tests/test_smoke.py` → `python tests/test_reddit_signals.py` → `python tests/test_twitter_media.py` |
 | `tests/test_smoke.py` | An **offline** test (no network, no secrets, no Discord): every monitor script must **import cleanly**, the Reddit V3 card pipeline and safety gates must still behave (body cleaning, media extraction/dedup, i.redd.it swap, redlib scoping, OP comment, Components V2 layout, proxy parsers, archive/liveness gates, and — round 51 — `/user`, `/u`, and `/r/u_` profile-crosspost headers plus the media-less vxReddit shell fallback). The X V3 path is also pinned for GIF conversion, fallback parsing/order, and — round 51 — a visible but still deduplicated cached `TEST_TWEET_ID` skip. | `python tests/test_smoke.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
 | `tests/test_reddit_signals.py` | A pure offline Reddit gate/decision suite for removal-notice classification, tombstones/retraction decisions, listing confirmation, main-loop signal behavior, and the round-67 policy guards (no content-advisory subsystem; video-quality selection + rollback). | `python tests/test_reddit_signals.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
 | `tests/test_twitter_media.py` | A pure offline **X (Twitter) V3 media** suite (round 73): canonical source order (photo-only, video-only, mixed, legacy provider payloads), the GIF converter chain and its content-type rules, mp4-vs-AVIF priority, the direct-mp4 fallback, and the healthy-media / explicit-unresolved-evidence heal contract — with per-URL probe counts proving the healthy path costs no extra round-trip and that the AVIF last resort never re-probes the converter chain. | `python tests/test_twitter_media.py` — prints `PASS`/`FAIL` per check, exits non-zero on any failure |
@@ -75,7 +75,7 @@ Twitter media runners. No new test file, live webhook or cache reset is needed.
 
 ## 2a. Python runtime coverage
 
-The CI workflow deliberately pins **CPython 3.14.8** in the same way as both
+The CI workflow deliberately pins **CPython 3.14.9** in the same way as both
 live monitor workflows. That makes a green PR the proof that the exact runtime
 can install the current dependencies, compile every script, and pass the
 offline behavioral suite. It does not contact Discord or external feeds; after
@@ -85,10 +85,12 @@ Dependabot does not manage this `python-version` workflow input. The version is
 updated by the dedicated runtime bump workflow so a CPython patch cannot
 silently reach a live posting run. That workflow adds a wheels-only dependency
 install (`pip install --only-binary=:all:`), pre-rewrite and post-rewrite
-compile/test gates, an explicit current-runtime rewrite allowlist (including the
-dev-only `sync_prod.yml` pin where that file exists), and manual
-review for new minor series such as Python 3.15. Full compatibility,
-performance, automation, and rollback policy: [Python runtime policy](PYTHON_RUNTIME.md).
+compile/test gates, an explicit current-runtime rewrite allowlist split into
+required surfaces (present in every checkout) and optional dev-only ones
+(`README.md`, `docs/*`, `sync_prod.yml` — skipped with a notice in the
+production repositories), and manual review for new minor series such as Python
+3.15. Full compatibility, performance, automation, and rollback policy:
+[Python runtime policy](PYTHON_RUNTIME.md).
 
 ## 3. Why the smoke test is written the way it is
 

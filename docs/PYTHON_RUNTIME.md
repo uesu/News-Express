@@ -1,15 +1,16 @@
-# Python runtime policy — CPython 3.14.8
+# Python runtime policy — CPython 3.14.9
 
-**Current production/CI pin:** `3.14.8`
+**Current production/CI pin:** `3.14.9`
 
-**Reviewed:** 2026-10-06 against official Python sources
+**Reviewed:** 2026-10-26 against the `actions/python-versions` manifest
+and its release metadata
 
 The CI, Reddit monitor, and X monitor workflows use the same exact CPython
 version through SHA-pinned `actions/setup-python@v7`:
 
 ```yaml
 with:
-  python-version: '3.14.8'
+  python-version: '3.14.9'
   cache: 'pip'
 ```
 
@@ -20,16 +21,19 @@ because the current pin changes.
 
 ## Official status reviewed for this pin
 
-Python **3.14.8** is the current News-Express runtime. The official Python
-release page identifies it as the eighth maintenance release of Python 3.14 and
-lists its release date as **September 30, 2026**:
+Python **3.14.9** is the current News-Express runtime: a maintenance release
+in the same `3.14` series as 3.14.8, so it is an ordinary patch update and keeps
+the series ABI. The pin is taken from the `actions/python-versions` manifest —
+the exact list `actions/setup-python` downloads from — where the Linux x64 build
+for this pin (`3.14.9-39619022138`) was published on **October 21, 2026**:
 
-* [Python 3.14.8 release page](https://www.python.org/downloads/release/python-3148/)
+* [Python 3.14.9 release page](https://www.python.org/downloads/release/python-3149/)
+* [`actions/python-versions` build 3.14.9-39619022138](https://github.com/actions/python-versions/releases/tag/3.14.9-39619022138)
 
-As of this 2026-10-06 review, News-Express is **not** adopting Python 3.15:
+As of this 2026-10-26 review, News-Express is **not** adopting Python 3.15:
 
-* the official Python downloads page still serves Python 3.14.8 as the latest
-  Python 3 source release;
+* the newest stable `3.14` patch in the runner manifest is still the newest
+  final Python 3 build available to `setup-python`;
 * the Python Developer's Guide lists Python 3.15 as `prerelease`; and
 * `https://www.python.org/downloads/release/python-3150/` does not publish a
   final Python 3.15.0 release page.
@@ -44,9 +48,13 @@ News-Express uses the normal `MAJOR.MINOR.PATCH` terminology:
 
 | Example | Classification | Repository policy |
 |---|---|---|
-| `3.14.7 -> 3.14.8` | **PATCH** update inside the same `3.14` series | eligible for automated proposal and, when every gate passes, attended manual merge |
-| `3.14.8 -> 3.15.0` | new **MINOR** series | PR only; manual review required even if validation passes |
-| `3.x -> 4.x` | **MAJOR** update | deliberate manual migration; never handled as an ordinary patch/minor bump |
+| `x.y.z -> x.y.(z+1)` | **PATCH** update inside the same `x.y` series | eligible for automated proposal and, when every gate passes, attended manual merge |
+| `x.y.z -> x.(y+1).0` | new **MINOR** series | PR only; manual review required even if validation passes |
+| `x -> x+1` | **MAJOR** update | deliberate manual migration; never handled as an ordinary patch/minor bump |
+
+The examples are deliberately version-agnostic: the bump workflow rewrites the
+literal pin in every allowlisted file, so a hard-coded example would silently
+turn into a wrong one (round 91).
 
 A new minor series must never be described as a patch update.
 
@@ -139,16 +147,23 @@ interpreter:
 | `python tests/test_twitter_media.py` | pure X (Twitter) V3 media guards (canonical order, GIF chain, heal contract) |
 | repeat compileall + all three suites after the rewrite | the rewrite updates current runtime surfaces and the round-39 pin guard in `tests/test_smoke.py`, so the rewritten tree is revalidated |
 
-The rewrite scope is an explicit current-runtime allowlist: workflow pins,
-current runtime documentation, README runtime references, and the smoke-test
-pin guard. `.github/workflows/sync_prod.yml` (round 89) is an *optional* member
-of that list: this development repository has the file, so its pin is rewritten
-in lockstep, while the production repositories — which receive
-`python_version_bump.yml` through `sync_prod.py` but never `sync_prod.yml` —
-skip it with a `::notice::` instead of failing. Every other allowlisted surface
-is required; a missing one still fails the job closed. `docs/history/` is
-checked separately and fails the workflow if it changes. Unexpected files also
-fail closed.
+The rewrite scope is an explicit current-runtime allowlist, split by **where
+the file exists** (round 91):
+
+| Class | Members | Behaviour |
+|---|---|---|
+| required | `.github/workflows/{ci,reddit_monitor,twitter_monitor,python_version_bump}.yml`, `tests/test_smoke.py` | every checkout has them; a missing one fails the job closed |
+| optional | `.github/workflows/sync_prod.yml`, `README.md`, `docs/PYTHON_RUNTIME.md`, `docs/CI_SMOKE.md`, `docs/DEPENDABOT.md` | rewritten where present (this development repository), skipped with a `::notice::` where absent (both production repositories, which receive `python_version_bump.yml` through `sync_prod.py` but never docs, README or `sync_prod.yml`) |
+
+Round 91 exists because the earlier single list put `README.md` and `docs/*` in
+the mandatory class: `sync_prod.py` never copies those to production, so every
+`Python version bump (auto)` run in `uesu/7jkxmy9nvbc` and `uesu/wvkhabh2s22`
+failed with `::error::Expected runtime file missing: README.md` before any pin
+was rewritten. The guarded `docs/PYTHON_RUNTIME.md` slug rewrite (`python-3xyz`)
+was the second half of the same failure. The smoke suite (`r89c`, `r91a`) now
+executes the real rewrite shell in both layouts, so the class of bug cannot
+return silently. `docs/history/` is checked separately and fails the workflow if
+it changes. Unexpected files also fail closed.
 
 ## Attended merge policy and authentication
 
