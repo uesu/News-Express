@@ -1,5 +1,70 @@
 # Changelog
 
+## Unreleased — Round 92: Redlib fleet 25 → 28, inline rich-text video, crosspost media, request savings (2026-10-27)
+
+### Reddit media
+
+- **Inline rich-text video** (`/link/<post>/video/<id>/player`) is now first-class: a post
+  whose only media is an inline player (`1xgnbtu` → `1xgncao`, `media=None`) resolves the
+  video instead of rendering text, and a post that pairs photos with a video keeps **both**
+  (photo `MediaGallery` + video `MediaGallery`). Several videos in one post resolve in
+  document order, and every candidate video ID is probed **at most once per post** — a dead
+  or 404 video is not retried by the supplement pass.
+- **`extract_vreddit_id`** additionally parses `/link/<post>/video/<id>/player` and defers to
+  the supplement pass when the post also carries inline photos, so mixed posts are not
+  half-resolved at base time.
+- **`_drop_gallery_media_lines`** now strips resolved video URL lines (bare and
+  self-labelled `/player` / `v.redd.it` / embed-mirror forms) while keeping real captions,
+  prose, and *unresolved* fallback links.
+
+### Crossposts
+
+- A crosspost whose parent is known only by ID (`t3_<id>` without a path) is hydrated
+  before resolution, so **crossposts from unmonitored subreddits** recover the original's
+  media — single image, single GIF, rich-text photo/GIF sets, and video — plus the
+  `🔁 Crosspost of [<Subreddit>](…)` attribution. `arctic_media_items` (ordered gallery →
+  rich-text `media_metadata` → single `i.redd.it` destination) backs that, and
+  `_arctic_media_hint` now unwraps the original.
+
+### Request savings
+
+- `enrich_gallery_redlib` probes the 10 verified post-page-capable mirrors first (Wave 1)
+  and only falls back to the remaining 18 in fleet order (Wave 2) when Wave 1 misses: up to
+  10 requests instead of 28 per post, **0 coverage loss** — the waves are a partition of the
+  fleet and a Wave-2-only mirror still resolves (both guarded).
+
+### Pre-merge hardening (`r92b`)
+
+- **No duplicate video tile.** A `vxreddit`/`embedez` permalink-shaped mp4
+  (`…/comments/<id>/<slug>/redditvideo.mp4`) carries no `v.redd.it/<id>`, so the inline-video
+  supplement pass used to re-probe it and add a second tile. An opaque video now consumes one
+  slot, both in `resolve_post_media` and in `_drop_gallery_media_lines` (bounded: one opaque
+  video removes at most one body line, so an unresolved fallback link survives).
+- **No `/vid/` false positives.** `INLINE_REDDIT_VIDEO_RE` and `REDDIL_PLAYER_VIDEO_RE` are
+  boundary-anchored, so third-party URLs (`video.twimg.com/…/pu/vid/1280x720/…`,
+  `example.com/foo/vid/…`) are no longer read as Reddit video IDs.
+- **Source-silent CMAF-only videos** resolve: `v.redd.it/<id>/CMAF_{720,480,360,240}.mp4` is
+  appended after the DASH ladder, so a video whose `fallback_url` is `None` and whose DASH
+  renditions 404 still lands instead of dropping to thumbnail-only.
+- **Loop-flagged `RedditVideo`** (`isGif: true` with no `s.gif`) is treated as video, while
+  `AnimatedImage` with `s.gif` stays a GIF.
+- **Harness fix with teeth:** round 92's case-1 proxy mock returned a tuple, which
+  `resolve_post_media` treats as "no proxy result" — the case passed without ever exercising the
+  proxy branch. It is a dict again, and the guard now asserts the fixture shape (control run:
+  the tuple fails the check).
+
+### Guards
+
+- `r92b` — the five edge cases above, plus the bounded-stripping rule.
+- `r92` — fleet order/`28`-member shape, `PROXY_SERVICES` unchanged, the retro-locked
+  `DISCOHOOK_PREVIEW` default, inline-video parsing, `arctic_video_info` mixed-video
+  deferral, media-line dropping, the full `1xgnbtu → 1xgncao` card contract, Wave-1 savings
+  and Wave-2 coverage, the three external-crosspost media classes, mixed photo+video
+  galleries, and the dead-video single-probe rule.
+
+See [Round 92](history/ROUND_92.md) for provenance, the divergence from the sibling patch,
+and limits.
+
 ## Unreleased — Round 91: production-sync hardening + CPython 3.14.9 (2026-10-26)
 
 ### Production sync (both live repos)
