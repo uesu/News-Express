@@ -66,6 +66,39 @@ nothing. This is the "10 requests instead of 28" saving, and it also resolves in
 when a post page has no photos. `resolve_video_url` is additionally memoised per post via
 `_attempted_vids`.
 
+## Follow-up delta (same round): pre-merge edge cases (`r92b`)
+
+A second companion patch arrived before merge, also re-verified here rather than trusted. Four
+hunks, each proven load-bearing by reverting it and watching exactly the matching guard fail:
+
+| Hunk | Why it exists | Guard that catches its absence |
+|---|---|---|
+| opaque video slots | `vxreddit`/`embedez` often return a permalink-shaped mp4 (`.../comments/<id>/<slug>/redditvideo.mp4`) with **no** `v.redd.it/<id>` in the URL. The round-92 supplement pass then re-probed the same video and appended a duplicate second tile. | `r92b vxreddit permalink video` + `r92b vxreddit opaque inline video` |
+| anchored `/vid/` regexes | Ruby-style third-party URLs (`video.twimg.com/…/pu/vid/1280x720/…`, `example.com/foo/vid/bar12345`) were read as Reddit video IDs. | `r92b external /vid/ URLs never trigger false-positive Reddit video IDs` |
+| CMAF native ladder | source-silent modern videos (`fallback_url=None`, DASH 404) had no durable candidate left; `https://v.redd.it/<id>/CMAF_{720,480,360,240}.mp4` is appended **after** the DASH ladder, so healthy and DASH-served videos are untouched. | `r92b source-silent CMAF-only inline video` |
+| loop-flagged `RedditVideo` | `e == "RedditVideo"` with `isGif: true` but no `s.gif` is a looping video, not a GIF; `AnimatedImage` with `s.gif` is still excluded. | `r92b metadata_video_ids keeps loop-flagged RedditVideo` |
+
+The delta also fixed the round-92 harness: case 1's `fetch_proxy_post_memo` mock returned a
+`(dict, str)` tuple, but `resolve_post_media` requires the normalized **dict** and silently
+treats anything else as "no proxy result". The case therefore passed for a year of CI without
+ever exercising the proxy branch. It is now a dict with the real keys (`service`, `body`,
+`media`, `stats` — stats use `ups`, per `reddit_proxy.parse_*`), and the check asserts the
+fixture shape so a tuple cannot come back.
+
+Two guards are mine, added on top of the delta:
+
+1. **The proxy-path guard is real, not cosmetic.** With the tuple restored, the suite fails
+   `r92 (1xgntbu -> 1xgncao)` — verified by a control run. (`await_count == 1` alone was
+   useless: the call happens either way; only the shape assertion distinguishes acceptance.)
+2. **Opaque stripping is bounded.** One opaque video may consume only one body video line, so a
+   post with two unresolved `/player` links keeps a clickable fallback. Control run with an
+   over-stripping variant fails exactly this guard.
+
+**Known limitation (documented, not hidden):** an opaque URL carries no video id, so which body
+line it consumes is positional. On a post with several *unresolved* videos the wrong line can be
+dropped — the guard only pins that they are never all dropped. Multi-video posts that resolve
+normally (native DASH/CMAF) are unaffected because their ids are known.
+
 ## What this branch kept from the sibling patch, and what it changed
 
 Kept verbatim: the engine hunks, the `1xgnbtu → 1xgncao` end-to-end fixture, the mixed
@@ -95,11 +128,11 @@ Changed on purpose:
 | Check | Result |
 |---|---|
 | `python -m compileall -q "testing area" tests .github/scripts` | clean |
-| `python tests/test_smoke.py` | `SMOKE TEST: ALL PASS` — 1157 PASS, 0 FAIL |
+| `python tests/test_smoke.py` | `SMOKE TEST: ALL PASS` — 1163 PASS, 0 FAIL |
 | `python tests/test_reddit_signals.py` | `ALL PASS (96 pass)` |
 | `python tests/test_twitter_media.py` | `ALL PASS` |
 | `pyflakes` on the engine, before vs after | identical (only the two pre-existing unused `global current_run_stats` notices) |
-| production-shaped checkout (`sync_prod.sync_tree`, no `README.md`/`docs/`) | `SMOKE TEST: ALL PASS` — 1152 PASS (the README/docs-only checks are skipped there by design) |
+| production-shaped checkout (`sync_prod.sync_tree`, no `README.md`/`docs/`) | `SMOKE TEST: ALL PASS` — 1158 PASS (the README/docs-only checks are skipped there by design) |
 
 Invariants held: single-page cards stay byte-identical (no `📜 Page 1/1`), multi-page cards
 stay under Discord's 4000-character limit, `💬`/`👍` are still never fabricated when stats are
@@ -116,6 +149,13 @@ into one row.
   `resolve_video_url`), the same style as rounds 47, 60, and 74 in this repository.
 - The ID-only crosspost hydration costs **one extra Arctic lookup per post**, and only when
   the parent has no path; it is deliberately not attempted when the path is already known.
+- The CMAF ladder addition costs up to four extra probes, and only for a video that already
+  failed both proxy quality candidates and the DASH ladder; the 40-second
+  `VIDEO_RESOLVE_BUDGET_SECONDS` deadline and the per-candidate budget check bound it.
+- Two `/vid/` false negatives are accepted by the anchored regexes: an **unquoted** attribute
+  (`href=/link/<post>/video/<id>`) and an absolute `https://reddit.com/vid/<id>`. Neither form
+  appears in redlib markup (which quotes `href`s) or in Reddit permalinks; the trade is that
+  third-party `/vid/` URLs can no longer be mistaken for Reddit videos.
 - `docs/` and `README.md` never reach `uesu/7jkxmy9nvbc` and `uesu/wvkhabh2s22`, so the
   documentation changes here are development-repository only. The engine and test changes
   reach production through `sync_prod.yml` after merge.

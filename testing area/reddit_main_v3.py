@@ -1214,7 +1214,7 @@ YOUTUBE_RE = re.compile(
 YOUTUBE_ID_RE = re.compile(r"(?:v=|youtu\.be/|shorts/|live/)([A-Za-z0-9_-]{11})")
 VREDDIT_RE = re.compile(r"https?://v\.redd\.it/([A-Za-z0-9]+)")
 INLINE_REDDIT_VIDEO_RE = re.compile(
-    r"(?:https?://(?:[\w-]+\.)?reddit\.com)?/(?:link/[a-z0-9]+/video|vid)/([A-Za-z0-9]{5,20})(?:/player)?(?=[/?#\x22\x27<>\s).,;]|$)",
+    r"(?:https?://(?:[\w-]+\.)?reddit\.com/link/[a-z0-9]+/video|(?:(?<=[\s\x22\x27<(])|^)/(?:link/[a-z0-9]+/video|vid))/([A-Za-z0-9]{5,20})(?:/player)?(?=[/?#\x22\x27<>\s).,;]|$)",
     re.IGNORECASE,
 )
 REDDIT_VIDEO_LINE_URL_RE = re.compile(
@@ -1978,12 +1978,14 @@ def metadata_video_ids(post) -> list[str]:
             meta = mm.get(mid) if isinstance(mid, str) else None
             if not isinstance(meta, dict) or meta.get("status") not in (None, "valid"):
                 continue
-            if (meta.get("e") == "RedditVideo" or meta.get("is_video")) and not (meta.get("isGif") or meta.get("is_gif")):
+            _s_g = meta.get("s") if isinstance(meta.get("s"), dict) else {}
+            if (meta.get("e") == "RedditVideo" or meta.get("is_video")) and not isinstance(_s_g.get("gif"), str):
                 _add(str(meta.get("id") or "") or extract_vreddit_id(str(meta.get("dashUrl") or meta.get("hlsUrl") or "")) or mid)
         for mid, meta in mm.items():
             if not isinstance(meta, dict) or meta.get("status") not in (None, "valid"):
                 continue
-            if (meta.get("e") == "RedditVideo" or meta.get("is_video")) and not (meta.get("isGif") or meta.get("is_gif")):
+            _s_m = meta.get("s") if isinstance(meta.get("s"), dict) else {}
+            if (meta.get("e") == "RedditVideo" or meta.get("is_video")) and not isinstance(_s_m.get("gif"), str):
                 _add(str(meta.get("id") or "") or extract_vreddit_id(str(meta.get("dashUrl") or meta.get("hlsUrl") or "")) or str(mid))
     return ordered
 
@@ -2000,7 +2002,8 @@ def _post_has_nonvideo_media(post) -> bool:
         for meta in mm.values():
             if not isinstance(meta, dict) or meta.get("status") not in (None, "valid"):
                 continue
-            if meta.get("e") in ("Image", "AnimatedImage") or meta.get("isGif") or meta.get("is_gif"):
+            _s_nv = meta.get("s") if isinstance(meta.get("s"), dict) else {}
+            if meta.get("e") in ("Image", "AnimatedImage") or isinstance(_s_nv.get("gif"), str):
                 return True
     return False
 
@@ -2468,6 +2471,7 @@ def _drop_gallery_media_lines(body: str, media: list) -> str:
         for m in media if m.get("url")
     }
     resolved_vids: set[str] = set()
+    opaque_video_slots = 0
     for m in media:
         if isinstance(m, dict) and m.get("kind") == "video" and m.get("url"):
             u_str = str(m["url"])
@@ -2477,6 +2481,15 @@ def _drop_gallery_media_lines(body: str, media: list) -> str:
                 vid = em.group(1) if em else None
             if vid:
                 resolved_vids.add(vid.lower())
+            elif "redgifs.com" not in u_str.lower():
+                opaque_video_slots += 1
+    if opaque_video_slots > 0:
+        for bvid in extract_all_reddit_video_ids(body):
+            if bvid.lower() not in resolved_vids:
+                resolved_vids.add(bvid.lower())
+                opaque_video_slots -= 1
+                if opaque_video_slots <= 0:
+                    break
     if not gallery_keys and not resolved_vids:
         return body
 
@@ -4409,6 +4422,8 @@ async def resolve_video_url(session: aiohttp.ClientSession, vid: str,
     if vid:
         native_ladder.extend((f"https://v.redd.it/{vid}/DASH_{quality}.mp4", quality)
                              for quality in DASH_QUALITIES)
+        native_ladder.extend((f"https://v.redd.it/{vid}/CMAF_{quality}.mp4", quality)
+                             for quality in (720, 480, 360, 240))
 
     async def _try_urls(candidates, timeout: float, kind: str) -> dict | None:
         for url, hint in candidates:
@@ -4807,7 +4822,10 @@ def extract_redlib_gallery(page_html: str | None) -> list[dict]:
 # themes either inline a v.redd.it URL or link the instance's player page
 # (/link/<post>/video/<id>); both carry the same base62 id the DASH chain
 # resolves. (Markup verified live on safereddit, 2026-09-30.)
-REDDIL_PLAYER_VIDEO_RE = re.compile(r"/(?:link/[a-z0-9]+/video|vid)/([a-z0-9]{5,20})")
+REDDIL_PLAYER_VIDEO_RE = re.compile(
+    r"(?:https?://(?!(?:[\w-]+\.)?(?:twimg|bilibili|youtube|youtu|tiktok|streamable|imgur)\.)[^/\s\x22\x27<>]+|(?:(?<=[\s\x22\x27<(])|^))/(?:link/[a-z0-9]+/video|vid)/([A-Za-z0-9]{5,20})",
+    re.IGNORECASE,
+)
 
 
 def extract_all_redlib_video_ids(page_html: str | None) -> list[str]:
@@ -5888,14 +5906,21 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
     # Round 92 (2026-10-27): supplement inline rich-text & mixed-gallery Reddit videos
     # (1xgntbu -> 1xgncao, mixed photo+video self-posts, multi-video self-posts, and
     # Arctic/JSON gallery video slides) without re-probing already-attempted video IDs.
+    _opaque_video_count = 0
     for _existing in media:
         if isinstance(_existing, dict) and _existing.get("kind") == "video" and _existing.get("url"):
-            _ev_id = extract_vreddit_id_from_media_url(str(_existing["url"]))
+            _ev_url = str(_existing["url"])
+            _ev_id = extract_vreddit_id_from_media_url(_ev_url)
             if not _ev_id:
-                _em = re.search(r"/video/([A-Za-z0-9]{5,20})(?:/|$)", str(_existing["url"]))
+                _em = re.search(r"/video/([A-Za-z0-9]{5,20})(?:/|$)", _ev_url)
                 _ev_id = _em.group(1) if _em else None
             if _ev_id:
                 _attempted_vids.add(_ev_id.lower())
+            elif "redgifs.com" not in _ev_url.lower():
+                _opaque_video_count += 1
+    if _opaque_video_count > 0 and vid and vid.lower() not in _attempted_vids:
+        _attempted_vids.add(vid.lower())
+        _opaque_video_count -= 1
     _extra_vid_candidates: list[str] = []
     _seen_extra: set[str] = set()
     for _cand_list in (
@@ -5910,6 +5935,9 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
             if _cv.lower() not in _seen_extra:
                 _seen_extra.add(_cv.lower())
                 _extra_vid_candidates.append(_cv)
+    if _opaque_video_count > 0:
+        for _ov in [c for c in _extra_vid_candidates if c.lower() not in _attempted_vids][:_opaque_video_count]:
+            _attempted_vids.add(_ov.lower())
     for _cv in _extra_vid_candidates:
         if _cv.lower() in _attempted_vids:
             continue

@@ -9815,10 +9815,17 @@ async def _r92_end_to_end_contracts():
 
     # 1. Exact 1xgntbu -> 1xgncao incident (Arctic hit + proxy text-only): resolves video once & builds MediaGallery
     _rv_mock = AsyncMock(return_value=_claret_mux)
+    # The proxy result is a DICT (reddit_proxy normalizes {service, body, media, stats}).
+    # A tuple mock makes `proxy["media"]` impossible, so `resolve_post_media` drops the
+    # whole proxy branch without failing — which is exactly how the earlier tuple mock
+    # passed this case without ever exercising the proxy path. The await count below
+    # keeps that honest.
+    _promemo_token = AsyncMock(return_value={"service": "vxreddit", "body": _claret_base["body"],
+                                            "media": [], "stats": {"ups": 89, "comments": 12}})
     with patch.object(v3, "reddit_proxy", proxy), \
          patch.object(v3, "PROXY_MEDIA", True), \
          patch.object(v3, "_dedupe_media_final_urls", AsyncMock(side_effect=lambda s, m: m)), \
-         patch.object(v3, "fetch_proxy_post_memo", AsyncMock(return_value=({"body": _claret_base["body"], "media": [], "stats": {"upvotes": 89, "comments": 12}}, "vxreddit"))), \
+         patch.object(v3, "fetch_proxy_post_memo", _promemo_token), \
          patch.object(v3, "fetch_arctic_post", AsyncMock(side_effect=lambda s, pid, *a, **kw: _claret_child_arctic if pid == "1xgntbu" else _claret_parent)), \
          patch.object(v3, "enrich_gallery_redlib", AsyncMock(return_value=[])), \
          patch.object(v3, "resolve_video_url", _rv_mock):
@@ -9839,8 +9846,11 @@ async def _r92_end_to_end_contracts():
     body_text_1xg = "\n".join(
         c.get("content", "") for c in payload_1xg["components"][0]["components"] if c.get("type") == 10
     )
-    check("r92 (1xgntbu -> 1xgncao): resolves muxed video once, adds type-12 MediaGallery, strips raw /player URL, keeps crosspost attribution",
+    check("r92 (1xgntbu -> 1xgncao): proxy path exercised, resolves muxed video once, adds type-12 MediaGallery, strips raw /player URL, keeps crosspost attribution",
           res_1xg["media"] == [{"kind": "video", "url": _claret_mux}]
+          and _promemo_token.await_count == 1
+          and isinstance(_promemo_token.return_value, dict)
+          and {"service", "body", "media", "stats"} <= set(_promemo_token.return_value)
           and _rv_mock.await_count == 1
           and 12 in comp_types_1xg
           and "/video/juuuo3it3zxh1/player" not in body_text_1xg
@@ -10036,6 +10046,125 @@ async def _r92_end_to_end_contracts():
           and _dead_res["media"] == []
           and "https://reddit.com/link/1xgncao/video/juuuo3it3zxh1/player" in _dead_body,
           str((_dead_rv.await_count, _dead_res["media"], _dead_body)))
+
+    # 6. Live vxreddit permalink video URL (.../comments/<id>/<slug>/redditvideo.mp4, no v.redd.it id in URL):
+    #    must emit strictly 1 video tile and 0 extra resolve_video_url calls (both link-video & inline-video posts).
+    _vx_permalink_mp4 = "https://www.vxreddit.com/r/WutheringWavesLeaks/comments/1xdk5qc/t/redditvideo.mp4"
+    _vx_rv = AsyncMock(return_value="https://proxy.embedez.com/render/video.mp4?videoUrl=https%3A%2F%2Fv.redd.it%2Fvid987xyz%2FCMAF_720.mp4")
+    with patch.object(v3, "reddit_proxy", proxy), \
+         patch.object(v3, "PROXY_MEDIA", True), \
+         patch.object(v3, "_dedupe_media_final_urls", AsyncMock(side_effect=lambda s, m: m)), \
+         patch.object(v3, "fetch_proxy_post_memo", AsyncMock(return_value={
+             "service": "vxreddit", "body": "", "media": [{"kind": "video", "url": _vx_permalink_mp4}],
+             "stats": {"ups": 512, "comments": 44},
+         })), \
+         patch.object(v3, "media_url_ok", AsyncMock(return_value=(True, 200000))), \
+         patch.object(v3, "proxy_video_quality_upgrade", AsyncMock(return_value=_vx_permalink_mp4)), \
+         patch.object(v3, "fetch_arctic_post", AsyncMock(return_value={
+             "id": "1xdk5qc", "is_video": True, "ups": 500, "num_comments": 40,
+             "media": {"reddit_video": {"fallback_url": "https://v.redd.it/vid987xyz/CMAF_720.mp4?source=fallback", "is_gif": False}},
+         })), \
+         patch.object(v3, "enrich_gallery_redlib", AsyncMock(return_value=[])), \
+         patch.object(v3, "resolve_video_url", _vx_rv):
+        _vx_res = await v3.resolve_post_media(
+            None,
+            dict(_claret_base, title="Gameplay Showcase", author="leaker", body="",
+                 content_html='<a href="https://v.redd.it/vid987xyz">[link]</a>',
+                 vred_id="vid987xyz", thumb="https://external-preview.redd.it/t.jpg", crosspost_orig_path=None),
+            None, "/r/WutheringWavesLeaks/comments/1xdk5qc/t/", label="WutheringWavesLeaks",
+        )
+    check("r92b vxreddit permalink video: strictly 1 video tile and 0 extra resolve_video_url calls",
+          _vx_res["media"] == [{"kind": "video", "url": _vx_permalink_mp4}]
+          and _vx_rv.await_count == 0,
+          str((_vx_rv.await_count, _vx_res["media"])))
+
+    _vx_inline_rv = AsyncMock(return_value="https://proxy.embedez.com/render/video.mp4?videoUrl=https%3A%2F%2Fv.redd.it%2Fvid987xyz%2FCMAF_720.mp4")
+    with patch.object(v3, "reddit_proxy", proxy), \
+         patch.object(v3, "PROXY_MEDIA", True), \
+         patch.object(v3, "_dedupe_media_final_urls", AsyncMock(side_effect=lambda s, m: m)), \
+         patch.object(v3, "fetch_proxy_post_memo", AsyncMock(return_value={
+             "service": "vxreddit",
+             "body": "Showcase notes\nhttps://reddit.com/link/1xdk5qc/video/vid987xyz/player",
+             "media": [{"kind": "video", "url": _vx_permalink_mp4}],
+             "stats": {"ups": 512, "comments": 44},
+         })), \
+         patch.object(v3, "media_url_ok", AsyncMock(return_value=(True, 200000))), \
+         patch.object(v3, "proxy_video_quality_upgrade", AsyncMock(return_value=_vx_permalink_mp4)), \
+         patch.object(v3, "fetch_arctic_post", AsyncMock(return_value=None)), \
+         patch.object(v3, "enrich_gallery_redlib", AsyncMock(return_value=[])), \
+         patch.object(v3, "resolve_video_url", _vx_inline_rv):
+        _vx_inline_res = await v3.resolve_post_media(
+            None,
+            dict(_claret_base, title="Inline Showcase", author="leaker",
+                 body="Showcase notes\nhttps://reddit.com/link/1xdk5qc/video/vid987xyz/player",
+                 content_html='<p>Showcase notes</p><p><a href="https://reddit.com/link/1xdk5qc/video/vid987xyz/player">https://reddit.com/link/1xdk5qc/video/vid987xyz/player</a></p>',
+                 vred_id=None, thumb=None, crosspost_orig_path=None),
+            None, "/r/WutheringWavesLeaks/comments/1xdk5qc/t/", label="WutheringWavesLeaks",
+        )
+    _vx_inline_clean = v3._drop_gallery_media_lines(_vx_inline_res["body"], _vx_inline_res["media"])
+    check("r92b vxreddit opaque inline video: 1 video tile, 0 extra probes, and bare /player line stripped",
+          _vx_inline_res["media"] == [{"kind": "video", "url": _vx_permalink_mp4}]
+          and _vx_inline_rv.await_count == 0
+          and "Showcase notes" in _vx_inline_clean
+          and "reddit.com/link/1xdk5qc/video/" not in _vx_inline_clean,
+          str((_vx_inline_rv.await_count, _vx_inline_res["media"], _vx_inline_clean)))
+
+    # 7. External non-Reddit /vid/ URLs (Twitter video.twimg.com /pu/vid/1280x720/, Bilibili /vid/BV..., generic /foo/vid/bar)
+    #    must NEVER false-match as Reddit video IDs.
+    _ext_blob = (
+        "Mirror: https://video.twimg.com/ext_tw_video/1982000/pu/vid/1280x720/abc.mp4 "
+        "and https://bilibili.com/vid/BV1xx411c7mD and https://example.com/foo/vid/bar12345"
+    )
+    check("r92b external /vid/ URLs never trigger false-positive Reddit video IDs",
+          v3.extract_all_reddit_video_ids(_ext_blob) == []
+          and v3.extract_vreddit_id(_ext_blob) is None
+          and v3.extract_all_redlib_video_ids(f'<div class="post_content"><p>{_ext_blob}</p></div>') == [],
+          str(v3.extract_all_reddit_video_ids(_ext_blob)))
+
+    # 8. Source-silent modern CMAF-only inline video (fallback_url=None, proxy muxers 404/502, DASH_*.mp4 404, CMAF_720.mp4 200 MP4):
+    #    still resolves native https://v.redd.it/<vid>/CMAF_720.mp4 instead of dropping to thumbnail-only.
+    v3.reset_video_quality_budget()
+    _silent_cmaf_url, _ = await _r67_video_resolve(
+        {"v.redd.it/silentcmaf1/CMAF_720.mp4": _r67_mp4_resp(1280, 720, audio=False)},
+        default=lambda: _R67Resp(404, {}, b""),
+        vid="silentcmaf1",
+        fallback=None,
+        mode="balanced",
+    )
+    v3.reset_video_quality_budget()
+    check("r92b source-silent CMAF-only inline video resolves native CMAF_720.mp4 when audio mux & DASH_* 404",
+          _silent_cmaf_url == "https://v.redd.it/silentcmaf1/CMAF_720.mp4",
+          str(_silent_cmaf_url))
+
+    # 9. Rich-text RedditVideo with isGif=True (loop-flagged video without s.gif) vs AnimatedImage (with s.gif)
+    _loop_vid_post = {
+        "selftext": "Loop clip",
+        "media_metadata": {
+            "loopvid99": {"status": "valid", "e": "RedditVideo", "id": "loopvid99", "isGif": True},
+            "animgif11": {"status": "valid", "e": "AnimatedImage", "id": "animgif11", "isGif": True,
+                          "s": {"gif": "https://i.redd.it/animgif11.gif", "mp4": "https://preview.redd.it/animgif11.mp4"}},
+        },
+    }
+    check("r92b metadata_video_ids keeps loop-flagged RedditVideo without s.gif and excludes AnimatedImage with s.gif",
+          v3.metadata_video_ids(_loop_vid_post) == ["loopvid99"],
+          str(v3.metadata_video_ids(_loop_vid_post)))
+
+    # 10. Opaque slots must never over-strip: ONE opaque video consumes ONE body video
+    #     line, so a post with two unresolved /player links keeps one clickable fallback.
+    #     (Which line is consumed is positional — the opaque URL carries no id — but every
+    #     unresolved link disappearing is the failure this pins.)
+    _two_body = ("https://reddit.com/link/1xdk5qc/video/aaaaaaaaa1/player\n\n"
+                 "https://reddit.com/link/1xdk5qc/video/bbbbbbbbb2/player")
+    _one_opaque_kept = v3._drop_gallery_media_lines(
+        _two_body, [{"kind": "video", "url": _vx_permalink_mp4}])
+    _two_distinct_kept = v3._drop_gallery_media_lines(
+        _two_body, [{"kind": "video", "url": "https://v.redd.it/ccccccccc3/CMAF_720.mp4"}])
+    check("r92b opaque video line-stripping is bounded (1 opaque slot removes 1 body line, never both)",
+          _one_opaque_kept.count("/player") == 1
+          and _one_opaque_kept.endswith("bbbbbbbbb2/player")
+          and _two_distinct_kept.count("/player") == 2
+          and "aaaaaaaaa1/player" in _two_distinct_kept,
+          (_one_opaque_kept, _two_distinct_kept))
 
 
 asyncio.run(_r92_end_to_end_contracts())

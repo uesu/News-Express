@@ -33,8 +33,29 @@
   10 requests instead of 28 per post, **0 coverage loss** — the waves are a partition of the
   fleet and a Wave-2-only mirror still resolves (both guarded).
 
+### Pre-merge hardening (`r92b`)
+
+- **No duplicate video tile.** A `vxreddit`/`embedez` permalink-shaped mp4
+  (`…/comments/<id>/<slug>/redditvideo.mp4`) carries no `v.redd.it/<id>`, so the inline-video
+  supplement pass used to re-probe it and add a second tile. An opaque video now consumes one
+  slot, both in `resolve_post_media` and in `_drop_gallery_media_lines` (bounded: one opaque
+  video removes at most one body line, so an unresolved fallback link survives).
+- **No `/vid/` false positives.** `INLINE_REDDIT_VIDEO_RE` and `REDDIL_PLAYER_VIDEO_RE` are
+  boundary-anchored, so third-party URLs (`video.twimg.com/…/pu/vid/1280x720/…`,
+  `example.com/foo/vid/…`) are no longer read as Reddit video IDs.
+- **Source-silent CMAF-only videos** resolve: `v.redd.it/<id>/CMAF_{720,480,360,240}.mp4` is
+  appended after the DASH ladder, so a video whose `fallback_url` is `None` and whose DASH
+  renditions 404 still lands instead of dropping to thumbnail-only.
+- **Loop-flagged `RedditVideo`** (`isGif: true` with no `s.gif`) is treated as video, while
+  `AnimatedImage` with `s.gif` stays a GIF.
+- **Harness fix with teeth:** round 92's case-1 proxy mock returned a tuple, which
+  `resolve_post_media` treats as "no proxy result" — the case passed without ever exercising the
+  proxy branch. It is a dict again, and the guard now asserts the fixture shape (control run:
+  the tuple fails the check).
+
 ### Guards
 
+- `r92b` — the five edge cases above, plus the bounded-stripping rule.
 - `r92` — fleet order/`28`-member shape, `PROXY_SERVICES` unchanged, the retro-locked
   `DISCOHOOK_PREVIEW` default, inline-video parsing, `arctic_video_info` mixed-video
   deferral, media-line dropping, the full `1xgnbtu → 1xgncao` card contract, Wave-1 savings
