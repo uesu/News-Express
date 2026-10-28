@@ -1,6 +1,63 @@
 # Changelog
 
-## Unreleased — Round 92: Redlib fleet 25 → 28, inline rich-text video, crosspost media, request savings (2026-10-27)
+## Unreleased — Round 93: removed link-spam liveness, Redlib removal comments (2026-10-28)
+
+### Liveness (the leak this round closes)
+
+Production run `#10864` posted `Genshin_Impact_Leaks_1xh7jl3` ("Daily Free PSN Codes"
+by `u/Chef-Goat` → external spam URL) **after Reddit had already removed it**
+(AutoModerator karma threshold, then the spam filter):
+
+* it never appeared in the live RSS feed and entered only through `_ArcticEntry`
+  (`feed_ok=False`);
+* `vxreddit` answered HTTP 200 with its generic `vxReddit` shell and no media, and
+  `redditez` returned "No data";
+* upstream **Embeddit ignores `removed_by_category` on removed non-self link posts**:
+  HTTP 200, pre-removal title, the external link as `body`, `media=[]`;
+* `verify_archive_post_live` trusted that media-less stub and returned
+  `(True, "live via embeddit")`.
+
+The fix is in the classifier, not in a new gate:
+
+* a **media-less `embeddit` answer never vouches for an archive-only candidate by
+  itself**. Redlib corroborates instead, and the corroboration now reads the removal
+  shapes a 2026 removed post actually leaves: Redlib's
+  `[removed] — [view removed post](…)` placeholder body, Reddit's
+  `[ Removed by Reddit on account of … ]` policy banner, and an **official removal
+  comment** (`AutoModerator` / `*-ModTeam`) on the post page.
+* a silently spam-filtered external link (no removal marker anywhere) is caught when
+  Redlib's `<a id="post_url">` points at an external non-Reddit URL that contradicts
+  the title **and** vxReddit answered with its placeholder — i.e. Reddit served the
+  page but the content moved, which is what a filter does.
+* `live_removal_reason` (the retraction path) uses the same three signals and stops at
+  the first parsed page instead of walking all 28 mirrors.
+* `base_from_redlib_page` keeps hyphens inside usernames, so `u/Chef-Goat` is no
+  longer truncated to `Chef`.
+
+### Not changed (deliberately)
+
+Live RSS posts (`feed_ok=True`) and archive posts whose `embeddit` answer carries media
+are verified immediately, with **zero** extra requests — unchanged. Routine
+AutoModerator stickies, future-tense warnings, quoted text and non-moderator replies
+never classify as removals. `REDDIT_RSS_INSTANCES` (28), `PROXY_SERVICES`,
+`DISCOHOOK_PREVIEW`, inline/CMAF video resolution and crosspost hydration are
+untouched, and `verify_archive_post_live` keeps its exact 4-parameter signature.
+
+### Guards
+
+* `r93` (smoke, 11 contracts) — the exact `1xh7jl3` replay (archive candidate +
+  media-less embeddit stub + AutoModerator removal comment → rejected, fast mirrors
+  probed first, stops at the first parsed page), live-RSS and media-bearing-archive
+  paths verified with zero Redlib probes, the silent external-spam case, the routine
+  sticky case, the vxReddit-outage case, `live_removal_reason` behaviour, the
+  hyphenated username, the placeholder recorder, and engine↔signals classifier parity.
+* `r93` (signals, 8 unit guards) — the three removal shapes, the benign shapes that
+  must stay clean, and the external-URL helpers.
+
+See [Round 93](history/ROUND_93.md) for the reproduction, the per-hunk control runs,
+and the limits.
+
+## Round 92: Redlib fleet 25 → 28, inline rich-text video, crosspost media, request savings (2026-10-27)
 
 ### Reddit media
 
