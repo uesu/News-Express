@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased — Round 95: independent pre-delivery liveness probe + Reddit summary pressure reporting (2026-10-30)
+
+### Correctness
+
+- **A delivered post must now survive an independent liveness check, not just a proxy
+  answer.** The round-20/32/93 gate is satisfied by any proxy response on the RSS path, and
+  a proxy serves a removed post's pre-removal title, body and media (live 2026-10-29:
+  `1xijfzb` auto-removed 6 s after submission, delivered 4.6 min later; `1xifykm` removed
+  by an AutoModerator karma rule; `1xifc1c` still awaiting moderator approval at delivery).
+  `candidate_liveness_verdict()` reads an **independent record** — the FULL-MODE post JSON
+  or the archive row already in hand (**0 requests**), else ONE Arctic lookup by id
+  (`/api/posts/ids`, 8 s cap) — and maps `removed_by_category`: `automod_filtered` →
+  `pending approval`, any other non-empty value → `removed by moderators/filters`, plus the
+  existing title/body markers. A clean existing record is positive proof of life.
+- **Lenient by default, strict by Variable.** `liveness_hold_decision()` holds only on
+  positive evidence unless `REDDIT_LIVENESS_STRICT=1`, so in the default mode this change
+  cannot withhold a live post (an unverifiable post posts exactly as before). Holds are
+  written to `pending_reddit.json` — never to the dedup cache — and retried; the existing
+  reason vocabulary is reused, so `_NO_RECHECK_REASONS` keeps its meaning.
+- **Bounded cost.** `LIVENESS_PROBE_BUDGET` (10 lookups/run), `LIVENESS_PROBE_TIMEOUT`
+  (8 s), nothing in DRY RUN or TEST POST mode, nothing on a run with no candidates, and an
+  isolated failure counter so a liveness lookup can never disable the media/archive paths.
+- **`verify_archive_post_live()` no longer claims `live via redlib`** when the answer came
+  from the combined RSS feed: it now says `live via redlib/rss fallback`. The 2026-10-29
+  logs printed `live via redlib` while `REDLIB-REACH` was `0/26`.
+
+### Observability
+
+- **Reddit run summary gains a `### Liveness` block**: probe enabled/disabled,
+  lenient/strict, verified live, held as removed/queued (by reason), unverified (posted),
+  evidence source (`post-json` / `arctic-entry` / `arctic-lookup`) and skipped — so a held
+  post is explainable from the summary without the Actions log.
+- **Dedup-cache pressure is reported**: `- Dedup cache: N key(s), M dropped at the cap this
+  run (hot: <sub>=<n>)`. Saturation and evictions were log-only warnings before.
+- **`REDLIB-REACH` is printed once**: the engine stores the line with its prefix, so the
+  summary used to render `Instances (REDLIB-REACH): REDLIB-REACH: 0/26 …`.
+- **All-mirrors-down warning**: when the run probed ≥1 mirror and none answered, the summary
+  says page-based checks were unavailable instead of leaving a bare `0/26`.
+
+### Notes
+
+- No Redlib page probe was added: the 2026-10-29 logs show **0/26 instances answering in
+  every run**, so it would be dormant exactly when needed. The round-93 classifiers remain
+  available for the day the fleet recovers.
+- Verified offline: smoke 1215 (was 1189), signals 103, Twitter media ALL PASS,
+  compileall clean, workflows parse (Reddit still 7 steps), zizmor identical to base,
+  10/10 mutations caught. See `docs/history/ROUND_95.md`.
+
 ## Unreleased — Round 94: Twitter run diagnostics, run-result presence, opt-in 350 MiB cap (2026-10-28)
 
 ### Observability

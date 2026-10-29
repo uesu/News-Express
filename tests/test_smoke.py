@@ -1885,15 +1885,17 @@ check("r30 throttle: skips with `continue` and never caches as posted",
 check("r30 throttle runs BEFORE any network work (the whole point)",
       _r30_main.index("pending-post recheck throttle")
       < _r30_main.index("post_json = await fetch_post_json"))
-check("r30/round-18/round-20/32/r63/r67 gates: all skip paths record a pending "
+check("r30/round-18/round-20/32/r63/r67/r95 gates: all skip paths record a pending "
       "entry (settle/mod-queue/dup-media/repost gates removed round 63; the "
       "content gate's call removed round 67 -- only removed-post-reason, "
-      "archive-liveness, media-wait/partial-gallery remain; ghost gates removed 2026-10-23)",
-      _r30_main.count("mark_pending(pending, unique_key") == 4
+      "archive-liveness, media-wait/partial-gallery and the round-95 liveness "
+      "probe remain; ghost gates removed 2026-10-23)",
+      _r30_main.count("mark_pending(pending, unique_key") == 5
       and "mark_pending(pending, unique_key, _removed, now" in _r30_main
       and "mark_pending(pending, unique_key,\n" in _r30_main
       and 'mark_pending(pending, unique_key, "media_wait", now)' in _r30_main
       and 'mark_pending(pending, unique_key, "partial_gallery", now)' in _r30_main
+      and "mark_pending(pending, unique_key, _hold_reason, now" in _r30_main
       and "ghost-check" not in _r30_main
       and "arctic-ghost-check" not in _r30_main,
       str(_r30_main.count("mark_pending(pending, unique_key")))
@@ -9288,9 +9290,13 @@ async def _check_r86_all_fixes():
         "redlib_reach": reach_str,
         "redlib_instances_configured": 23,
     })
+    # Round 95: the engine stores the line WITH its "REDLIB-REACH:" prefix, so
+    # the summary strips it instead of printing "Instances (REDLIB-REACH):
+    # REDLIB-REACH: ...". The payload must still be present verbatim.
     check("r86: Step Summary includes Instances (REDLIB-REACH) line",
-          "Instances (REDLIB-REACH): REDLIB-REACH: 1/2 instance(s) answered this run" in s_reach
-          and "redlib.reallyaweso.me 1/1" in s_reach,
+          "Instances (REDLIB-REACH): 1/2 instance(s) answered this run" in s_reach
+          and "redlib.reallyaweso.me 1/1" in s_reach
+          and "Instances (REDLIB-REACH): REDLIB-REACH:" not in s_reach,
           s_reach[:1200])
     v3._redlib_reach.clear()
 
@@ -10400,7 +10406,7 @@ async def _r93_removed_spam_liveness_contracts():
             _r93_live5 = await v3.verify_archive_post_live(None, _r93_path, "r93", feed_ok=False)
         check("r93: a legitimate self post with only the routine AutoModerator sticky "
               "still verifies (vxreddit placeholder alone is not a verdict)",
-              _r93_live5 == (True, "live via redlib"), str(_r93_live5))
+              _r93_live5 == (True, "live via redlib/rss fallback"), str(_r93_live5))
 
         # 8. A legitimate EXTERNAL LINK post during a vxReddit outage (no placeholder
         #    recorded) must not be mistaken for filtered spam: without the
@@ -10422,7 +10428,7 @@ async def _r93_removed_spam_liveness_contracts():
             _r93_live6 = await v3.verify_archive_post_live(None, _r93_path, "r93", feed_ok=False)
         check("r93: a legitimate external link post during a vxreddit outage still "
               "verifies (no placeholder evidence -> not treated as spam-filtered)",
-              _r93_live6 == (True, "live via redlib"), str(_r93_live6))
+              _r93_live6 == (True, "live via redlib/rss fallback"), str(_r93_live6))
 
         # 9. live_removal_reason uses the same three signals and stops at the first
         #    parsed page — the retraction path must not walk all 28 mirrors.
@@ -10570,6 +10576,225 @@ check("r94: the Reddit run-result status is always one of the four documented wo
           for _s, _d in (("read", {"runtime": "1s"}), ("missing", None),
                          ("invalid shape", ["not a record"]))),
       "status vocabulary")
+
+# ---- Round 95: independent pre-delivery liveness probe -------------------
+# The 2026-10-29 production logs settle the design: REDLIB-REACH was 0/26 in
+# every run (no mirror answers from Actions), while the Arctic archive answers
+# normally. So the probe reads the ARCHIVE record, not a page. These guards pin
+# the mapping, the lenient/strict rule, the request budget and the summary.
+_r95_record_cases = [
+    ({"id": "x", "removed_by_category": "automod_filtered"},
+     ("removed", "pending approval"), "queued post -> pending approval"),
+    ({"id": "x", "removed_by_category": "moderator"},
+     ("removed", "removed by moderators/filters"), "mod-removed post -> removed"),
+    ({"id": "x", "removed_by_category": "deleted"},
+     ("removed", "removed by moderators/filters"), "author-deleted post -> removed"),
+    ({"id": "x", "title": "[ Removed by moderator ]", "selftext": ""},
+     ("removed", "title marker"), "removal title marker -> removed"),
+    ({"id": "x", "title": "T", "selftext": "[removed]"},
+     ("removed", "whole-body marker"), "removal body marker -> removed"),
+    ({"id": "x", "title": "Live post", "selftext": "hello there"},
+     ("live", "archived record is clean"), "clean record -> live"),
+    (None, ("unknown", "no archived record"), "missing record -> unknown"),
+]
+for _rec, _expect, _label in _r95_record_cases:
+    check(f"r95: {_label}", v3.archived_removal_verdict(_rec) == _expect,
+          v3.archived_removal_verdict(_rec))
+check("r95: an empty removed_by_category is NOT read as a removal",
+      v3._queue_or_removal_reason("") is None and v3._queue_or_removal_reason(None) is None,
+      [v3._queue_or_removal_reason(""), v3._queue_or_removal_reason(None)])
+check("r95: only automod_filtered is the queue category",
+      v3._QUEUE_CATEGORIES == frozenset({"automod_filtered"}), sorted(v3._QUEUE_CATEGORIES))
+
+# Lenient (default) must be INCAPABLE of withholding a post on uncertainty: the
+# only holds are positive evidence, or an explicit opt-in.
+_r95_matrix = {
+    ("removed", False): True, ("removed", True): True,
+    ("unverified", False): False, ("unverified", True): True,
+    ("live", False): False, ("live", True): False,
+    ("skipped", False): False, ("skipped", True): False,
+}
+check("r95: lenient holds ONLY on positive evidence; strict also holds unverified; "
+      "a live post is never held",
+      all(v3.liveness_hold_decision(s, st) is exp for (s, st), exp in _r95_matrix.items()),
+      {f"{s}/{st}": v3.liveness_hold_decision(s, st) for s, st in _r95_matrix})
+
+
+async def _r95_probe_checks():
+    saved = {k: getattr(v3, k) for k in
+             ("REDDIT_LIVENESS_PROBE", "REDDIT_LIVENESS_STRICT", "LIVENESS_PROBE_BUDGET",
+              "DRY_RUN", "TEST_POST_ID", "_liveness_probe_budget_used")}
+    calls = []
+
+    async def fake_row(session, post_id, label=""):
+        calls.append(post_id)
+        return {"id": post_id, "removed_by_category": "automod_filtered"}
+
+    saved_row = v3._fetch_arctic_post_row
+    v3._fetch_arctic_post_row = fake_row
+    try:
+        v3.DRY_RUN = False
+        v3.TEST_POST_ID = ""
+        v3.REDDIT_LIVENESS_PROBE = True
+        v3.LIVENESS_PROBE_BUDGET = 10
+
+        # (a) off switch = pre-round-95 behaviour, no requests at all
+        v3.REDDIT_LIVENESS_PROBE = False
+        calls.clear()
+        st, _why, src = await v3.candidate_liveness_verdict(
+            None, key="k", path="/r/A/comments/aaa/slug/", post_json=None, entry=None)
+        check("r95: REDDIT_LIVENESS_PROBE=0 -> skipped with ZERO requests",
+              (st, src, calls) == ("skipped", "disabled", []), (st, src, calls))
+        v3.REDDIT_LIVENESS_PROBE = True
+
+        # (b) records already in hand cost nothing
+        calls.clear()
+        st, why, src = await v3.candidate_liveness_verdict(
+            None, key="k", path="/r/A/comments/aaa/slug/",
+            post_json={"id": "aaa", "removed_by_category": "moderator"}, entry=None)
+        check("r95: a FULL-MODE post JSON record answers the probe with no request",
+              (st, why, src, calls) == ("removed", "removed by moderators/filters", "post-json", []),
+              (st, why, src, calls))
+
+        class _Entry:
+            _arctic_post = {"id": "aaa", "removed_by_category": "automod_filtered"}
+
+        calls.clear()
+        st, why, src = await v3.candidate_liveness_verdict(
+            None, key="k", path="/r/A/comments/aaa/slug/", post_json=None, entry=_Entry())
+        check("r95: an archive-sourced candidate reuses its own record (no request)",
+              (st, why, src, calls) == ("removed", "pending approval", "arctic-entry", []),
+              (st, why, src, calls))
+
+        # (c) an RSS candidate costs exactly ONE archive lookup
+        calls.clear()
+        st, why, src = await v3.candidate_liveness_verdict(
+            None, key="k", path="/r/A/comments/aaa/slug/", post_json=None, entry=object())
+        check("r95: an RSS candidate costs exactly one archive lookup and holds on "
+              "the queue category",
+              (st, why, src, calls) == ("removed", "pending approval", "arctic-lookup", ["aaa"]),
+              (st, why, src, calls))
+
+        # (d) missing record is 'unverified' (lenient posts it, strict holds it)
+        async def no_row(session, post_id, label=""):
+            calls.append(post_id)
+            return None
+
+        v3._fetch_arctic_post_row = no_row
+        calls.clear()
+        st, why, src = await v3.candidate_liveness_verdict(
+            None, key="k", path="/r/A/comments/bbb/slug/", post_json=None, entry=object())
+        check("r95: no archive record yet -> unverified (never 'removed')",
+              (st, src) == ("unverified", "arctic-lookup"), (st, why, src))
+        check("r95: unverified posts in lenient mode and is held only in strict mode",
+              (v3.liveness_hold_decision(st, False), v3.liveness_hold_decision(st, True))
+              == (False, True), st)
+
+        # (e) the per-run budget bounds the extra latency of a flood run
+        v3._fetch_arctic_post_row = fake_row
+        v3.LIVENESS_PROBE_BUDGET = 1
+        v3._liveness_probe_budget_used = 0
+        calls.clear()
+        first = await v3.candidate_liveness_verdict(
+            None, key="k1", path="/r/A/comments/ccc/slug/", post_json=None, entry=object())
+        second = await v3.candidate_liveness_verdict(
+            None, key="k2", path="/r/A/comments/ddd/slug/", post_json=None, entry=object())
+        check("r95: LIVENESS_PROBE_BUDGET caps lookups per run (no unbounded latency)",
+              (first[0], second[0], second[2], calls) == ("removed", "unverified", "budget", ["ccc"]),
+              (first, second, calls))
+
+        # (f) a lookup failure must never disable the media/archive paths
+        v3.LIVENESS_PROBE_BUDGET = 10
+        v3._liveness_probe_budget_used = 0
+        v3._fetch_arctic_post_row = saved_row
+        before = v3._arctic_fail_count
+        v3._liveness_fail_count = 0
+
+        class _Boom:
+            def get(self, *a, **k):
+                raise RuntimeError("archive down")
+
+        failed = await v3._fetch_arctic_post_row(_Boom(), "eee", label="r95")
+        check("r95: a failed liveness lookup returns None and does NOT touch the "
+              "shared _arctic_fail_count (media/archive stay enabled)",
+              failed is None and v3._arctic_fail_count == before
+              and v3._liveness_fail_count == 1,
+              (failed, before, v3._arctic_fail_count, v3._liveness_fail_count))
+        v3._liveness_fail_count = 0
+    finally:
+        for k, val in saved.items():
+            setattr(v3, k, val)
+        v3._fetch_arctic_post_row = saved_row
+        v3._liveness_fail_count = 0
+
+
+asyncio.run(_r95_probe_checks())
+
+# Workflow wiring + summary rendering (executes the real summary shell).
+_r95_wf = open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"), encoding="utf-8").read()
+_r95_tw = open(os.path.join(ROOT, ".github/workflows/twitter_monitor.yml"), encoding="utf-8").read()
+check("r95: both probe Variables are mapped from repo Variables in the Reddit workflow",
+      "REDDIT_LIVENESS_PROBE: ${{ vars.REDDIT_LIVENESS_PROBE }}" in _r95_wf
+      and "REDDIT_LIVENESS_STRICT: ${{ vars.REDDIT_LIVENESS_STRICT }}" in _r95_wf,
+      "workflow env")
+check("r95: the probe Variables are not wired into the Twitter workflow",
+      "REDDIT_LIVENESS_PROBE" not in _r95_tw and "REDDIT_LIVENESS_STRICT" not in _r95_tw,
+      "twitter workflow")
+
+_r95_data = {
+    "completed": True, "dry_run": False, "persistence_status": "saved",
+    "combined_entries": 100, "subreddits_configured": 6, "unposted_candidates_considered": 7,
+    "delivered": 1, "known_pending_suppressed": 6,
+    "redlib_reach_probed": 26, "redlib_reach_answered": 0,
+    "liveness_probe_enabled": True, "liveness_probe_strict": False,
+    "liveness_probe_live": 3, "liveness_probe_removed": 1, "liveness_probe_unverified": 2,
+    "liveness_probe_skipped": 0,
+    "liveness_probe_by_reason": {"pending approval": 1},
+    "liveness_probe_by_source": {"arctic-lookup": 5, "post-json": 1},
+    "dedup_cache_size": 1019, "dedup_cache_dropped": 1,
+    "dedup_cache_hot": {"Genshin_Impact_Leaks": 250},
+}
+# monitor.log fallback path (the engine only records telemetry when it ran):
+# the REDLIB-REACH line arrives WITH its prefix, and must not be doubled.
+_r95_summary = _app_summary_shell_with_json(
+    "reddit", "2026-10-29 13:11:02,136 [INFO] REDLIB-REACH: 0/26 instance(s) answered "
+              "this run — redlib.catsarch.com 0/1\n",
+    fake_data={k: v for k, v in _r95_data.items()})
+check("r95: the summary reports the probe's outcome (live / held / unverified) and "
+      "the evidence source",
+      re.search(r"^### Liveness$", _r95_summary, re.MULTILINE) is not None
+      and "- Probe: enabled (lenient" in _r95_summary
+      and "- Verified live: 3" in _r95_summary
+      and "- Held as removed/queued: 1" in _r95_summary
+      and "- Unverified (posted): 2" in _r95_summary
+      and "arctic-lookup: 5" in _r95_summary,
+      [ln for ln in _r95_summary.splitlines() if "Liveness" in ln or "Probe" in ln][:4])
+check("r95: the summary shows dedup-cache pressure and cap evictions",
+      "- Dedup cache: 1019 key(s), 1 dropped at the cap this run" in _r95_summary,
+      [ln for ln in _r95_summary.splitlines() if "Dedup cache" in ln])
+check("r95: a 0/26 Redlib run is called out in the summary instead of being buried",
+      "no Redlib mirror answered this run" in _r95_summary,
+      [ln for ln in _r95_summary.splitlines() if "Redlib" in ln])
+_r95_reach_record = _app_summary_shell_with_json(
+    "reddit", "", fake_data={**_r95_data,
+                             "redlib_reach": "REDLIB-REACH: 0/26 instance(s) answered this run — x 0/1"})
+check("r95: the REDLIB-REACH line is printed ONCE, without the duplicated prefix",
+      "- Instances (REDLIB-REACH): 0/26 instance(s) answered this run — redlib.catsarch.com 0/1"
+      in _r95_summary
+      and "- Instances (REDLIB-REACH): 0/26 instance(s) answered this run — x 0/1" in _r95_reach_record
+      and "REDLIB-REACH): REDLIB-REACH:" not in _r95_summary
+      and "REDLIB-REACH): REDLIB-REACH:" not in _r95_reach_record,
+      [ln for ln in (_r95_summary + _r95_reach_record).splitlines() if "REDLIB-REACH" in ln][:2])
+check("r95: the probe block is marked disabled when the probe is off (no fake numbers)",
+      "- Probe: disabled (REDDIT_LIVENESS_PROBE=0)"
+      in _app_summary_shell_with_json("reddit", "", fake_data={**_r95_data,
+                                                              "liveness_probe_enabled": False}),
+      "off switch")
+_r95_answered = _app_summary_shell_with_json("reddit", "", fake_data={**_r95_data,
+                                                                     "redlib_reach_answered": 7})
+check("r95: the Redlib warning appears only when nothing answered",
+      "no Redlib mirror answered this run" not in _r95_answered,
+      [ln for ln in _r95_answered.splitlines() if "Redlib" in ln])
 
 # ---- Round 89: no GitHub Actions annotation may leak out of this suite ----
 # Restore the real stdout first, then judge what the suite actually emitted.

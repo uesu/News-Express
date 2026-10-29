@@ -342,6 +342,10 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `RETRACT_DEAD_POSTS` | `0` | `1` enables the dead-post retraction seatbelt |
 | `RETRACT_MODE` | `edit` | `edit` (tombstone in place) or `delete` |
 | `RETRACT_WINDOW_SECONDS` | `21600` | how far back a delivered post can still be retracted (6 h) |
+| `REDDIT_LIVENESS_PROBE` | `1` | independent pre-delivery liveness check against the Arctic archive record (`removed_by_category` + title/body markers); `0` restores pre-round-95 behaviour exactly |
+| `REDDIT_LIVENESS_STRICT` | `0` | `0` (lenient) holds a post only on positive removal/queue evidence — an unverifiable post posts as before; `1` also holds when no independent source could confirm the post |
+| `LIVENESS_PROBE_BUDGET` | `10` | max archive lookups per run (bounds the added latency of a flood run) |
+| `LIVENESS_PROBE_TIMEOUT` | `8` | per-lookup timeout in seconds |
 
 **Caches & caps**
 

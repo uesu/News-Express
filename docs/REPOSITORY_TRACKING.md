@@ -44,7 +44,11 @@ successful `saved`, never-ran `not-reached`) and repository persistence
 with repository push; preparation/copying/recovery-reset/staging/commit/push
 failures all `failed` and are covered in tests of the actual workflow shell
 `bash -n` + mock `unchanged`/`saved`/`recovered`/`failed`), feed and
-delivery counters, instance reachability (`REDLIB-REACH:`), proxy warmup health/services, video quality mode
+delivery counters, instance reachability (`REDLIB-REACH:`, printed once — the engine's
+stored line already carries its prefix — with an explicit all-mirrors-down warning),
+a `### Liveness` block from the round-95 pre-delivery probe (enabled/lenient/strict,
+verified live, held as removed/queued by reason, unverified, evidence source),
+dedup-cache size/evictions/per-sub saturation, proxy warmup health/services, video quality mode
 (`balanced` default, `highest`/`compatibility`), media resolved via provider,
 final media endpoint/hosting category, final card media kind and tile count,
 optional quality candidate result, whether validated base was retained,
