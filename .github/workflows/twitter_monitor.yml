@@ -109,6 +109,8 @@ jobs:
           #   MEDIA_HEAL_SCOPE=on (/all)  also heal photos/gif/webp (full
           #                               round-47 scope)
           #   MEDIA_HEAL_SCOPE=off        never re-edit any media
+          # Optional high video limit: unset/false keeps the 256 MiB default.
+          TWITTER_HIGH_VIDEO_LIMIT: ${{ vars.TWITTER_HIGH_VIDEO_LIMIT }}
           MEDIA_HEAL: ${{ vars.MEDIA_HEAL }}
           MEDIA_HEAL_DELAY_SECONDS: ${{ vars.MEDIA_HEAL_DELAY_SECONDS }}
           MEDIA_HEAL_ATTEMPTS: ${{ vars.MEDIA_HEAL_ATTEMPTS }}
@@ -211,6 +213,7 @@ jobs:
       - name: Write Twitter monitor run summary
         if: always()
         run: |
+          if [ -s twitter_monitor.log ]; then log_coverage=available; else log_coverage=unavailable; fi
           [ -f twitter_monitor.log ] || : > twitter_monitor.log
           count_matches() { local pattern="$1"; grep -Ec "$pattern" twitter_monitor.log 2>/dev/null || true; }
           total_feed_entries() { local total; total=$(grep 'feed OK via' twitter_monitor.log 2>/dev/null | grep -Eo '[0-9]+ entries' | grep -Eo '[0-9]+' | awk '{ total += $1 } END { print total + 0 }' || true); printf '%s\n' "${total:-0}"; }
@@ -248,7 +251,18 @@ jobs:
             echo "- skip log lines: $(count_matches 'skipping')"
             echo "- retry/fallback log lines: $(count_matches 'trying next|retry')"
             echo
+            echo "### Diagnostics (matching log lines, not unique posts)"
+            if [ "$log_coverage" = available ]; then
+              echo "- Discord delivery errors: $(count_matches 'Discord error [0-9]')"
+              echo "- FxTwitter fetch errors: $(count_matches 'Error fetching FxTwitter data')"
+              echo "- media-heal unresolved: $(count_matches 'media still unresolved after')"
+              echo "- media-heal edit errors: $(count_matches 'MEDIA-HEAL .*: edit (HTTP|error)')"
+              echo "- dedup guard errors: $(count_matches 'DEDUP GUARD:')"
+            else
+              echo "- diagnostic coverage: unavailable (empty or missing log)"
+            fi
+            echo
             echo "### State"
-            echo "- cache: ${TWITTER_CACHE_RESULT:-failed}"
+            echo "- cache: ${TWITTER_CACHE_RESULT:-not-reached}"
             echo "- summary source: local twitter_monitor.log only; no additional requests"
           } >> "$GITHUB_STEP_SUMMARY"

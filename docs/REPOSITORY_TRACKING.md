@@ -9,6 +9,7 @@ This document tracks current monitor observability and selected workflow variabl
 | Inputs | `ACCOUNTS`, `DISCORD_WEBHOOK_URL`, per-account `WEBHOOK_*`, optional `NITTER_RSS_TOKEN` |
 | Cache | `MAX_CACHE_SIZE_PER_ACCOUNT`, `MAX_CACHE_SIZE_TOTAL` |
 | Media healing | `MEDIA_HEAL`, `MEDIA_HEAL_SCOPE`, `MEDIA_HEAL_DELAY_SECONDS`, `MEDIA_HEAL_ATTEMPTS` |
+| Media cap | `TWITTER_HIGH_VIDEO_LIMIT` (opt-in 350 MiB; unset keeps the proven 256 MiB) |
 
 `MEDIA_HEAL_SCOPE=video` is the default. `off` disables the pass; `on` or
 `all` includes additional media types. Twitter V3 inspects Discord's returned
@@ -22,7 +23,12 @@ Each queued attempt GETs its own webhook message before PATCH; resolved media sk
 the edit, 401/403/404 stops, and transient GET failure retains bounded recovery.
 There is no persistent later-run recovery after the four-attempt ceiling.
 The workflow-only run summary reports actual runtime, aggregate feed entries,
-terminal feed failures, empty accounts, post counters, and cache status.
+terminal feed failures, empty accounts, post counters, cache status, and a
+*Diagnostics* block with fixed-category counts (Discord delivery errors,
+FxTwitter fetch errors, media-heal unresolved/edit errors, dedup-guard errors).
+Those counts are matching log LINES, not unique posts, and the block prints
+`unavailable` when the captured log is empty or missing instead of five zeros.
+An unset `TWITTER_CACHE_RESULT` reads `not-reached`, not `failed`.
 
 ## Reddit V3
 

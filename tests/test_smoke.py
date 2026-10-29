@@ -7675,7 +7675,7 @@ class _AppArchiveLookupTests(unittest.TestCase):
                 asyncio.run(scenario(mode))
 
 
-def _app_summary_shell(kind, log_text, status="success", epochs=True):
+def _app_summary_shell(kind, log_text, status="success", epochs=True, twitter_cache="success"):
     import subprocess
     import textwrap
     workflow = open(os.path.join(ROOT, ".github/workflows", kind + "_monitor.yml"), encoding="utf-8").read()
@@ -7692,7 +7692,7 @@ def _app_summary_shell(kind, log_text, status="success", epochs=True):
                 stream.write(log_text)
         destination = os.path.join(directory, "summary.md")
         env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "GITHUB_STEP_SUMMARY": destination,
-               "TWITTER_CACHE_RESULT": "success", "CACHE_RESULT": "success"}
+               "TWITTER_CACHE_RESULT": twitter_cache, "CACHE_RESULT": "success"}
         if epochs:
             prefix = "TWITTER" if kind == "twitter" else "MONITOR"
             env[prefix + "_START_EPOCH"] = "100"
@@ -7724,6 +7724,21 @@ _app_empty_summary = _app_summary_shell("twitter", None, epochs=False)
 check("missing Twitter output is unavailable, not a healthy no-op or fabricated runtime",
       "**Runtime:** unavailable" in _app_empty_summary and "observation coverage: unavailable" in _app_empty_summary
       and "new candidates: not separately measured" in _app_empty_summary)
+# Summary diagnostics use fixed categories and never echo the source log (which may contain secrets).
+_diag_log = ("[ERROR] Discord error 429 for account: secret-token-123456\n"
+             "[ERROR] Error fetching FxTwitter data (original) for 123: secret-token-123456\n"
+             "[ERROR] MEDIA-HEAL 123: edit HTTP 429 secret-token-123456\n"
+             "[WARNING] MEDIA-HEAL 123: media still unresolved after 4 edits\n"
+             "[ERROR] DEDUP GUARD: 1 key(s) missing\n")
+_diag_summary = _app_summary_shell("twitter", _diag_log)
+check("Twitter diagnostic summary is bounded and does not echo log contents",
+      all(x in _diag_summary for x in ("Discord delivery errors: 1", "FxTwitter fetch errors: 1",
+          "media-heal unresolved: 1", "media-heal edit errors: 1", "dedup guard errors: 1"))
+      and "secret-token-123456" not in _diag_summary)
+check("Twitter missing log does not imply healthy diagnostic coverage",
+      "diagnostic coverage: unavailable" in _app_empty_summary)
+check("Twitter missing cache outcome is not reported as failed",
+      "cache: not-reached" in _app_summary_shell("twitter", None, twitter_cache=""))
 # Updated for 2026-10-21 cleanup: summary now derives from reddit_run_result.json, not log scraping.
 # Helper to create a fake run-result JSON for the shell test helper.
 def _write_fake_reddit_result(directory, data):
@@ -7793,6 +7808,23 @@ _fake = {
     "combined_fetch_status": "ok"
 }
 _app_rd_summary = _app_summary_shell_with_json("reddit", "2026-10-17 05:50:32,826 [INFO] Combined feed OK: 100 entries covering 5 subreddit(s).\n", fake_data=_fake)
+check("Reddit summary reports run-result presence", "**Run-result record:** read" in _app_rd_summary)
+_missing_result = _app_summary_shell_with_json("reddit", None)
+check("Reddit summary reports missing run-result record", "**Run-result record:** missing" in _missing_result)
+_wrong_shape = _app_summary_shell_with_json("reddit", None, fake_data=["not a record"])
+check("Reddit summary reports wrong-shaped run-result record", "**Run-result record:** invalid shape" in _wrong_shape)
+# Malformed result files must not be confused with a clean empty run.
+import subprocess as _diag_subprocess, textwrap as _diag_textwrap
+_rd_wf = open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"), encoding="utf-8").read()
+_rd_script = _diag_textwrap.dedent(_rd_wf.split("      - name: Write monitor run summary", 1)[1].split("        run: |\n", 1)[1].split("\n        env:\n", 1)[0]).replace("${{ job.status }}", "failure")
+with tempfile.TemporaryDirectory() as _diag_dir:
+    open(os.path.join(_diag_dir, "reddit_run_result.json"), "w", encoding="utf-8").write("{broken SECRET")
+    _diag_dest = os.path.join(_diag_dir, "summary.md")
+    _diag_proc = _diag_subprocess.run(["bash", "-e", "-o", "pipefail", "-c", _rd_script], cwd=_diag_dir,
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "GITHUB_STEP_SUMMARY": _diag_dest}, capture_output=True, text=True)
+    _diag_text = open(_diag_dest, encoding="utf-8").read()
+    check("Reddit malformed run-result has safe actionable status", _diag_proc.returncode == 0
+          and "**Run-result record:** unreadable or malformed" in _diag_text and "SECRET" not in _diag_text)
 check("existing Reddit summary retains delivery and workflow persistence facts (json-derived)",
       "Combined-feed entries: 100" in _app_rd_summary and "Unposted candidates considered: 42" in _app_rd_summary
       and "Delivered posts: 1" in _app_rd_summary and "Repository persistence" in _app_rd_summary and "success" in _app_rd_summary
@@ -10449,6 +10481,95 @@ async def _r93_removed_spam_liveness_contracts():
 
 
 asyncio.run(_r93_removed_spam_liveness_contracts())
+
+# ===========================================================================
+# ROUND 94 (2026-10-28): Twitter run diagnostics, run-result presence, opt-in
+# 350 MiB video cap. The summary and the state line are operator-facing, so
+# these guards pin the parts a passing suite could otherwise fake: an empty log
+# (tee creates the file before the monitor writes a line) must not look like
+# "0 errors", every diagnostic pattern must still match a REAL engine log line
+# (a silently dead category would print a permanent 0), and the opt-in cap must
+# reach the live workflow without a second hardcoded 256 MiB cap behind it.
+# ===========================================================================
+
+# 1. An EMPTY log file is the common failure shape: the workflow pipes through
+#    `tee`, so the file exists the moment the monitor starts. Absence of lines
+#    is not evidence of a clean run.
+_r94_empty_log = _app_summary_shell("twitter", "", twitter_cache="")
+check("r94: an existing but EMPTY Twitter log reports diagnostic coverage as "
+      "unavailable instead of five zero counts",
+      "diagnostic coverage: unavailable" in _r94_empty_log
+      and "Discord delivery errors:" not in _r94_empty_log
+      and "FxTwitter fetch errors:" not in _r94_empty_log,
+      _r94_empty_log)
+
+# 2. Every diagnostic category must still match the engine's actual log line.
+#    A rename in twitter_v3.py would otherwise turn the count into a permanent 0
+#    that looks healthy in the summary.
+_r94_engine_src = open(os.path.join(ROOT, "testing area", "twitter_v3.py"),
+                       encoding="utf-8").read()
+_r94_wf_src = open(os.path.join(ROOT, ".github/workflows/twitter_monitor.yml"),
+                   encoding="utf-8").read()
+_r94_pairs = (
+    ("Discord error [0-9]", 'logging.error(f"Discord error {resp.status}'),
+    ("Error fetching FxTwitter data", 'logging.error(f"Error fetching FxTwitter data'),
+    ("media still unresolved after", "media still unresolved after"),
+    ("MEDIA-HEAL .*: edit (HTTP|error)", 'logging.error(f"MEDIA-HEAL {key}: edit HTTP'),
+    ("DEDUP GUARD:", 'logging.error(f"DEDUP GUARD:'),
+)
+check("r94: every Twitter diagnostic category still matches a real engine log line",
+      all(pattern in _r94_wf_src and literal in _r94_engine_src
+          for pattern, literal in _r94_pairs)
+      and 'logging.error(f"MEDIA-HEAL {key}: edit error' in _r94_engine_src,
+      [p for p, lit in _r94_pairs if p not in _r94_wf_src or lit not in _r94_engine_src])
+
+# 3. The opt-in cap is wired to the LIVE workflow only, and nothing behind it
+#    still enforces 256 MiB.
+_r94_rd_wf = open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"),
+                  encoding="utf-8").read()
+check("r94: the optional 350 MiB cap is mapped from a repository Variable in the "
+      "Twitter workflow only (Reddit keeps its own MAX_MEDIA_BYTES)",
+      "TWITTER_HIGH_VIDEO_LIMIT: ${{ vars.TWITTER_HIGH_VIDEO_LIMIT }}" in _r94_wf_src
+      and "TWITTER_HIGH_VIDEO_LIMIT" not in _r94_rd_wf)
+_r94_v2_src = open(os.path.join(ROOT, "testing area", "twitter_v2_button_outside.py"),
+                   encoding="utf-8").read()
+check("r94: unsetting the Variable leaves the proven 256 MiB cap in both engines, "
+      "with the gallery sub-cap still off",
+      x3._video_size_limit(None) == 256 * 1024 * 1024
+      and x3._video_size_limit("") == 256 * 1024 * 1024
+      and x3.VIDEO_SIZE_LIMIT == 256 * 1024 * 1024
+      and x3.GALLERY_VIDEO_LIMIT == 0
+      and 'VIDEO_SIZE_LIMIT = _video_size_limit(os.getenv("TWITTER_HIGH_VIDEO_LIMIT"))'
+      in _r94_v2_src)
+check("r94: the cap has exactly one source of truth (no second hardcoded 256 MiB "
+      "limit left behind in either engine)",
+      all("256 * 1024 * 1024" not in src
+          and src.count("VIDEO_SIZE_LIMIT = _video_size_limit(") == 1
+          for src in (_r94_engine_src, _r94_v2_src))
+      and _r94_engine_src.count("_video_size_limit(os.getenv(\"TWITTER_HIGH_VIDEO_LIMIT\"))") == 1,
+      (_r94_engine_src.count("256 * 1024 * 1024"), _r94_v2_src.count("256 * 1024 * 1024")))
+
+# 4. The Reddit run-result line reports presence only: the four documented
+#    states, and never the record's own contents (it can carry anything).
+_r94_secret = "sk-live-SECRET-9f8e7d"
+_r94_rd_valid = _app_summary_shell_with_json(
+    "reddit", None, fake_data={"runtime": "12s", "persistence_status": "success",
+                               "unexpected_key": _r94_secret})
+# The status line is a CLOSED vocabulary: exactly one of four words, nothing
+# appended. Anything that pastes record content after the word fails here.
+_r94_status_re = re.compile(
+    r"^\*\*Run-result record:\*\* (read|missing|invalid shape|unreadable or malformed)$",
+    re.MULTILINE)
+check("r94: a valid Reddit run-result is reported as `read` and its contents are "
+      "never echoed into the summary",
+      _r94_status_re.search(_r94_rd_valid) is not None
+      and _r94_secret not in _r94_rd_valid,
+      [line for line in _r94_rd_valid.splitlines() if "Run-result" in line])
+check("r94: the Reddit run-result status is always one of the four documented words",
+      all(_r94_status_re.search(_app_summary_shell_with_json("reddit", None, fake_data=_d)) is not None
+          for _s, _d in (("read", {"runtime": "1s"}), ("missing", None),
+                         ("invalid shape", ["not a record"]))),
+      "status vocabulary")
 
 # ---- Round 89: no GitHub Actions annotation may leak out of this suite ----
 # Restore the real stdout first, then judge what the suite actually emitted.

@@ -303,16 +303,20 @@ jobs:
           job_status = os.environ.get("JOB_STATUS", "unavailable")
           result_path = pathlib.Path("reddit_run_result.json")
           data = {}
+          result_status = "missing"
           if result_path.exists():
               try:
                   raw = result_path.read_text(encoding="utf-8")
                   loaded = json.loads(raw)
                   if isinstance(loaded, dict):
                       data = loaded
+                      result_status = "read"
                   else:
                       data = {"error": "wrong_shape", "raw_type": type(loaded).__name__}
+                      result_status = "invalid shape"
               except Exception as e:
                   data = {"error": f"malformed_json: {type(e).__name__}"}
+                  result_status = "unreadable or malformed"
           def v(k, default="unavailable"):
               val = data.get(k)
               return str(val) if val is not None else default
@@ -325,6 +329,7 @@ jobs:
           # Repository persistence (observed commit/push) vs local persistence (from run_result)
           print(f"**Result:** {job_status}")
           print(f"**Monitor runtime:** {runtime}")
+          print(f"**Run-result record:** {result_status}")
           # Repo persistence is from workflow env (observed git push), local is from run_result (file saves)
           print(f"**Repository persistence:** {cache_result}")
           local_persist = data.get("persistence_status", "unavailable")

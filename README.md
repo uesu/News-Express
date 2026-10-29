@@ -360,6 +360,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `MEDIA_HEAL_SCOPE` | `video` | `on`/`all` = also heal photos/gif/webp; `off` = never re-edit |
 | `MEDIA_HEAL_DELAY_SECONDS` | `45` | wait before each re-edit (30–60 is sane) |
 | `MEDIA_HEAL_ATTEMPTS` | `4` | max same-payload re-edits per message; hard-capped at 4 |
+| `TWITTER_HIGH_VIDEO_LIMIT` | unset (`256 MiB`) | opt-in `1`/`true`/`yes`/`on` = **350 MiB** gallery video cap. Unset, empty, `0`, `false`, `off`, `350` and any other value keep the proven 256 MiB cap; the 350 MiB ceiling is not yet proven on Discord's proxy, so raise it only after review |
 
 **FULL MODE probe**
 
@@ -590,8 +591,10 @@ See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
 * **First run posts only one item per account** — intentional anti-flood
   behavior; backfill starts on subsequent runs.
 * **A big video shows as a thumbnail / "smaller version" note (X)** — intended:
-  the file exceeded the ~256 MB Discord gallery limit (`VIDEO_SIZE_LIMIT`,
-  tunable). The card still plays a smaller rendition or links out to X.
+  the file exceeded the ~256 MB Discord gallery limit (`VIDEO_SIZE_LIMIT`).
+  Opting in with `TWITTER_HIGH_VIDEO_LIMIT=1` raises it to 350 MiB; that ceiling
+  is still unproven on Discord's proxy, so the default stays 256 MiB. The card
+  still plays a smaller rendition or links out to X either way.
 * **A video tile says "image not found" (X)** — rare, transient Discord proxy
   hiccup (the same URL plays fine when re-posted). Delete the message →
   remove the tweet from `posted_tweets.json` → re-run. If it ever becomes

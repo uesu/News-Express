@@ -1,6 +1,50 @@
 # Changelog
 
-## Unreleased — Round 93: removed link-spam liveness, Redlib removal comments (2026-10-28)
+## Unreleased — Round 94: Twitter run diagnostics, run-result presence, opt-in 350 MiB cap (2026-10-28)
+
+### Observability
+
+- **Twitter run summary gains a *Diagnostics* block** with fixed-category counts of
+  Discord delivery errors, FxTwitter fetch errors, unresolved media-heal lines,
+  media-heal edit errors and dedup-guard errors. The block states that these are
+  matching **log lines, not unique posts**, and prints
+  `diagnostic coverage: unavailable (empty or missing log)` when the captured log is
+  empty or missing — a run that produced no log is not five zeros and is not healthy.
+  Only counts are printed, never log content.
+- **Reddit run summary reports the run-result record itself**: `read`, `missing`,
+  `invalid shape`, or `unreadable or malformed` (`**Run-result record:** …`). The
+  status is a closed vocabulary, so a malformed or wrong-shaped
+  `reddit_run_result.json` is distinguishable from a clean empty run, and the record's
+  contents are never echoed.
+- **An absent `TWITTER_CACHE_RESULT` now reads `not-reached`** instead of `failed`: a
+  cache read that never ran (the monitor step failed before the persist step) is not a
+  cache failure. Matches the wording the Reddit summary already used.
+
+### Opt-in 350 MiB video cap (X)
+
+`TWITTER_HIGH_VIDEO_LIMIT` raises `VIDEO_SIZE_LIMIT` from the proven 256 MiB to 350 MiB
+in **both** X engines (V3 and the V2 alternative). It is deliberately strict opt-in:
+only `1`/`true`/`yes`/`on` (case- and space-insensitive) select 350 MiB — unset, empty,
+`0`, `false`, `off`, `350` and any other value keep 256 MiB, so a typo cannot raise a
+live posting limit. `twitter_monitor.yml` maps it from a repository **Variable**, so the
+effective cap does not move until a maintainer sets it. No other cap exists behind it
+(`GALLERY_VIDEO_LIMIT` is still off, and the constant now has a single source of truth).
+
+### Guards
+
+- `r94` (smoke, 6 contracts): the empty-but-existing log (`tee` creates the file before
+  the monitor writes a line) reports `unavailable` rather than zero counts; every
+  diagnostic category still matches a real engine log line; the Variable is mapped in
+  the Twitter workflow only; unset keeps 256 MiB with the gallery sub-cap off; the cap
+  has one source of truth; and the Reddit run-result status is a closed vocabulary whose
+  line never carries record content.
+- `test_twitter_media.py`: both engines at the 256/257/350/351 MiB selection boundaries
+  (real media selection through mocked sizes, not just parsing), plus the default and
+  opt-in parsing cases.
+
+See [Round 94](history/ROUND_94.md) for the control runs and limits.
+
+## Round 93: removed link-spam liveness, Redlib removal comments (2026-10-28)
 
 ### Liveness (the leak this round closes)
 
