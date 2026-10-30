@@ -181,6 +181,11 @@ MAX_CACHE_SIZE_TOTAL = _env_int("MAX_CACHE_SIZE_TOTAL", 10000)
 #   TWITTER_MAX_AGE_HOURS — 24 by default (a 5-minute cron posts real tweets
 #     within minutes; anything older than a day is a backlog, not news). Set 0
 #     to disable the guard and restore pre-95c behaviour exactly.
+# Two independent witnesses give the age: the feed's pubDate and the tweet id's
+# own snowflake. For an OWN tweet the older of the two wins, so a mirror that
+# re-stamps an old backlog entry with "now" cannot smuggle it through; for a
+# REPOST (link points at another author's status) the feed date wins, because a
+# repost of an older tweet is a legitimate new post.
 # A live/legit tweet is never blocked: the floor is far above the cron cadence,
 # and an entry whose age cannot be established (no published_parsed, no
 # parsable id) is posted as before — this guard only ever rejects entries whose
@@ -206,22 +211,62 @@ def tweet_id_created_ts(tweet_id: str | None) -> float | None:
     return ((value >> 22) + _TWITTER_SNOWFLAKE_EPOCH_MS) / 1000.0
 
 
-def tweet_entry_age_seconds(entry, now: float, tweet_id: str = "") -> float | None:
-    """Best-effort age of a feed entry in seconds (None = cannot establish)."""
+def feed_date_age_seconds(entry, now: float) -> float | None:
+    """Age from the feed's own pubDate (None = the feed gave no usable date)."""
     parsed = None
     try:
         parsed = entry.get("published_parsed") if entry is not None else None
     except Exception:
         parsed = None
-    if parsed:
-        try:
-            return max(0.0, float(now) - time.mktime(parsed))
-        except (OverflowError, ValueError, TypeError):
-            pass
+    if not parsed:
+        return None
+    try:
+        return max(0.0, float(now) - time.mktime(parsed))
+    except (OverflowError, ValueError, TypeError):
+        return None
+
+
+def tweet_entry_age_seconds(entry, now: float, tweet_id: str = "") -> float | None:
+    """Best-effort age of a feed entry in seconds (None = cannot establish)."""
+    age = feed_date_age_seconds(entry, now)
+    if age is not None:
+        return age
     created = tweet_id_created_ts(tweet_id)
     if created:
         return max(0.0, float(now) - created)
     return None
+
+
+def link_author(link: str) -> str | None:
+    """Screen name in a status link (`.../<author>/status/<id>`), if present."""
+    match = re.search(r"(?:x|twitter)\.com/([A-Za-z0-9_]+)/status/", str(link or ""))
+    return match.group(1) if match else None
+
+
+def judged_entry_age_seconds(entry, now: float, tweet_id: str = "",
+                             account: str = "") -> float | None:
+    """The age the stale floor should judge this entry by.
+
+    Two independent witnesses exist: the feed's pubDate and the tweet id's own
+    snowflake. They normally agree. When they disagree:
+
+    * OWN TWEET — the id is immutable and cannot be re-dated, so the OLDER of
+      the two wins. A degraded mirror that re-stamps an old backlog entry with
+      "now" therefore cannot smuggle it through (the #12043 shape).
+    * REPOST — the link points at the ORIGINAL author's status, whose id is as
+      old as the original tweet, while the entry legitimately appears now. The
+      repost's own pubDate is the truthful age, so it wins; judging by the id
+      would silently stop every repost of an older tweet.
+    """
+    feed_age = feed_date_age_seconds(entry, now)
+    created = tweet_id_created_ts(tweet_id)
+    id_age = max(0.0, float(now) - created) if created else None
+    author = link_author(getattr(entry, "link", ""))
+    is_repost = bool(author and account and author.lower() != account.lower())
+    if is_repost:
+        return feed_age if feed_age is not None else id_age
+    known = [a for a in (feed_age, id_age) if a is not None]
+    return max(known) if known else None
 
 
 def is_stale_entry(age_seconds: float | None) -> bool:
@@ -1826,7 +1871,8 @@ async def main():
                 # explicitly asked for that one tweet). Fail-open: unknown age
                 # posts as before.
                 if TWITTER_MAX_AGE_SECONDS and not test_tweet_id:
-                    entry_age = tweet_entry_age_seconds(entry, now, tweet_id)
+                    entry_age = judged_entry_age_seconds(entry, now, tweet_id,
+                                                        account)
                     if is_stale_entry(entry_age):
                         stale_skipped += 1
                         logging.info(

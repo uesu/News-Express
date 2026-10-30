@@ -10869,13 +10869,39 @@ check("r95c: the guard fails OPEN — an entry it cannot date is posted, not dro
       and not _r30_x.is_stale_entry(None)
       and not _r30_x.is_stale_entry(0.0),
       "unknown age must still post (a strict guard would silently drop live tweets)")
-_x95c_dated = _r30_x.tweet_entry_age_seconds({"published_parsed": time.gmtime(_x95c_now - 3600)},
-                                            _x95c_now, "2112102702817972715")
-check("r95c: a feed-supplied date is preferred over the id, so a re-dated entry is judged on its own date",
-      # the id alone says 256 h (stale); the feed says 1 h, and the feed wins.
-      _x95c_dated is not None and _x95c_dated < 2 * 3600
-      and not _r30_x.is_stale_entry(_x95c_dated),
-      _x95c_dated)
+class _X95cEntry:
+    def __init__(self, link, published=None):
+        self.link = link
+        self._published = published
+
+    def get(self, key, default=None):
+        return self._published if key == "published_parsed" else default
+
+
+_x95c_own = _X95cEntry("https://x.com/TYPEII_EN/status/2112102702817972715",
+                       time.gmtime(_x95c_now - 3600))
+_x95c_own_age = _r30_x.judged_entry_age_seconds(_x95c_own, _x95c_now,
+                                                "2112102702817972715", "TYPEII_EN")
+check("r95c: an own tweet is judged by the OLDER witness, so a re-stamped backlog entry cannot slip through",
+      # feed says 1 h, the immutable id says 256 h -> the id wins, entry refused.
+      _x95c_own_age is not None and _x95c_own_age > 200 * 3600
+      and _r30_x.is_stale_entry(_x95c_own_age),
+      _x95c_own_age)
+_x95c_rt = _X95cEntry("https://x.com/SomeoneElse/status/2112102702817972715",
+                      time.gmtime(_x95c_now - 300))
+_x95c_rt_age = _r30_x.judged_entry_age_seconds(_x95c_rt, _x95c_now,
+                                               "2112102702817972715", "TYPEII_EN")
+check("r95c: a repost is judged by its own feed date, so reposting an older tweet still posts",
+      _x95c_rt_age is not None and _x95c_rt_age < 600
+      and not _r30_x.is_stale_entry(_x95c_rt_age),
+      _x95c_rt_age)
+check("r95c: with no feed date an own tweet still falls back to the id, and a repost to either witness",
+      _r30_x.judged_entry_age_seconds(_X95cEntry("https://x.com/TYPEII_EN/status/1"),
+                                      _x95c_now, "2112102702817972715", "TYPEII_EN") > 200 * 3600
+      and _r30_x.judged_entry_age_seconds(_X95cEntry("https://x.com/SomeoneElse/status/1"),
+                                          _x95c_now, "2112102702817972715", "TYPEII_EN") > 200 * 3600
+      and _r30_x.judged_entry_age_seconds(_X95cEntry("https://x.com/TYPEII_EN/status/1"),
+                                          _x95c_now, "", "TYPEII_EN") is None)
 _x95c_src = open(os.path.join(ROOT, "testing area/twitter_v3.py"), encoding="utf-8").read()
 _x95c_loop = _x95c_src.split("for entry in entries:", 1)[1]
 _x95c_i_stale = _x95c_loop.find("is_stale_entry(entry_age)")

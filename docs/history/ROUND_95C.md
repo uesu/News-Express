@@ -47,9 +47,14 @@ moving a request off a blocked exit".
   the floor is skipped and logged as `STALE-SKIP`, *before* the tweet-data
   fetch, so a stale backlog costs **zero** requests instead of a full card
   build per entry.
-* Age comes from the feed's `published_parsed`, else from the tweet-id
-  **snowflake** (`(id >> 22) + 1288834974657` ms) — the id is always present,
-  so a feed that omits dates cannot hide an old post.
+* Age has **two independent witnesses**: the feed's `published_parsed` and the
+  tweet-id **snowflake** (`(id >> 22) + 1288834974657` ms).
+  * **Own tweet** → the **older** of the two wins. A degraded mirror that
+    re-stamps an old backlog entry with "now" cannot smuggle it through, and a
+    feed that omits dates cannot hide an old post.
+  * **Repost** (the link points at another author's status) → the **feed date**
+    wins, because reposting an older tweet is a legitimate new post and the
+    original's id is old by definition.
 * Failure modes are chosen so the guard can never lose a live post:
   * unknown age (no date, unparsable id) → **posts**, as before;
   * `TEST_TWEET_ID` → exempt (an operator asked for that specific tweet);
@@ -69,6 +74,8 @@ minutes of publication. A day-old entry is a backlog, never news.
 | entry with no date and no parsable id | age unknown → **posts** (fail-open) |
 | entry whose feed date says 1 h but whose id says 256 h | feed date wins → **posts** |
 | guard position in the loop | before `fetch_tweet_details_any` → 0 requests |
+| feed says "2 min ago", id says 40 h (re-stamped backlog) | **refused** (id wins) |
+| repost of a 60 h-old tweet, feed date now | **posted** (feed date wins) |
 | `TWITTER_MAX_AGE_HOURS=0` | guard inert |
 
 ---
@@ -115,11 +122,12 @@ Workflow logs are not readable by later agents, so the state now lands in
 
 ## Verification
 
-* `tests/test_smoke.py`: **1232 PASS** (14 round-95c guards added; the round-30
+** `tests/test_smoke.py`: **1234 PASS** (16 round-95c guards added; the round-30
   throttle guards were retargeted to the new 300 s default, including a
   +310 s "due" boundary).
 * Mutations: removing the guard, moving it after the fetch, flipping it to
-  fail-closed, and reverting the throttle each fail the suite.
+  fail-closed, trusting the feed date over the id, judging a repost by the id,
+  and reverting the throttle each fail the suite (8/8 caught).
 * `compileall` clean; `twitter_monitor.yml` and `reddit_monitor.yml` parse as
   YAML; summary renderer exercised with a real log line and with a missing one.
 * Delivery path unchanged: no new requests in `twitter_v3.py`, and the Reddit

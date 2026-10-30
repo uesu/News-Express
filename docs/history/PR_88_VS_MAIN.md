@@ -156,8 +156,11 @@ if known and age > TWITTER_MAX_AGE_HOURS:  # default 24
 
 * **24 h floor.** The cron fires every 5 minutes; a real tweet goes out within
   minutes. A day-old entry is a backlog, never news.
-* **Snowflake fallback.** Age is derivable from the id alone, so a feed that
-  omits dates cannot hide an old post.
+* **Two witnesses.** The feed date *and* the tweet-id snowflake both give an
+  age. For the account's **own** tweet the older one wins, so a mirror that
+  re-stamps an old entry with "now" is still refused. For a **repost** (link
+  points at another author's status) the feed date wins, so reposting an older
+  tweet still posts — that is a legitimate new post, not a backlog item.
 * **Cannot lose a live post.** Unknown age → posts. `TEST_TWEET_ID` → exempt.
   `TWITTER_MAX_AGE_HOURS=0` → byte-identical pre-95c behaviour.
 * **Zero requests.** The guard runs before `fetch_tweet_details_any`, so a
@@ -167,6 +170,19 @@ if known and age > TWITTER_MAX_AGE_HOURS:  # default 24
 `feed OK` and still serves 20 entries; the three old ones are logged
 `STALE-SKIP: entry is 46.4 h old (> 24 h floor)` and quietly dropped; a genuine
 tweet from 4 minutes ago is 240 s old and posts normally.
+
+End-to-end check with fake network (real `main()`, real dedup, real guard):
+
+| scenario | result |
+|---|---|
+| feed = 2 min + 12 h + 40 h | **2 posted**, 1 `STALE-SKIP` (the 40 h) |
+| same feed, next 5-min run | **0 posted**, `dedup_skipped=2`, `stale_skipped=1` — no re-post |
+| guard off (= today's `main`) | 3 posted — the only difference is the 40 h entry |
+| tweet at 11:00, run at 11:00:30 | **posted** |
+| same tweet, 11:05 run | **0 posted**, `dedup_skipped=1` |
+| feed says "2 min", id says 40 h | **refused** (id wins) |
+| repost of a 60 h-old tweet | **posted** (feed date wins) |
+| feed date 10 min in the future (clock skew) | **posted** (age clamps to 0) |
 
 ### Round 95c, part 2 — the re-check wait
 
@@ -270,9 +286,9 @@ Each is a repository Variable; no code revert, no redeploy.
 
 | Suite | Result |
 |---|---|
-| `tests/test_smoke.py` | **1232 PASS** (main: 1175; head before 95c: 1218) — **0 guards lost** |
+| `tests/test_smoke.py` | **1234 PASS** (main: 1175; head before 95c: 1218) — **0 guards lost** |
 | `tests/test_reddit_signals.py` | 103 PASS |
 | `tests/test_twitter_media.py` | ALL PASS |
 | `compileall`, YAML parse, zizmor | clean / OK / identical to base |
-| Mutation tests | 10/10 (r95) + 6/6 (r95c) |
+| Mutation tests | 10/10 (r95) + 8/8 (r95c) |
 | CI on PR #88 | `smoke` **SUCCESS**, `MERGEABLE/CLEAN` |

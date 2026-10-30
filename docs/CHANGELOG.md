@@ -12,8 +12,10 @@
   of an old backlog, not duplicates: the dedup cache only protects keys it already holds.
   New `TWITTER_MAX_AGE_HOURS` (default **24**, `0` = off) refuses any feed entry older than
   the floor, logged as `STALE-SKIP`, **before** the tweet-data fetch — so a stale feed costs
-  zero requests. Age comes from the feed date, else the tweet-id snowflake; unknown age
-  still posts (fail-open) and `TEST_TWEET_ID` is exempt. No delivery-path change, no added
+  zero requests. Age is judged by **two witnesses** — for an own tweet the older of
+  (feed date, tweet-id snowflake), so a mirror that re-stamps an old entry cannot smuggle
+  it through; for a repost the feed date, so reposting an older tweet still posts. Unknown
+  age still posts (fail-open) and `TEST_TWEET_ID` is exempt. No delivery-path change, no added
   request on a normal run. See `docs/history/ROUND_95C.md`.
 
 ### Timing

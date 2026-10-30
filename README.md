@@ -365,7 +365,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `MEDIA_HEAL_DELAY_SECONDS` | `45` | wait before each re-edit (30–60 is sane) |
 | `MEDIA_HEAL_ATTEMPTS` | `4` | max same-payload re-edits per message; hard-capped at 4 |
 | `TWITTER_HIGH_VIDEO_LIMIT` | unset (`256 MiB`) | opt-in `1`/`true`/`yes`/`on` = **350 MiB** gallery video cap. Unset, empty, `0`, `false`, `off`, `350` and any other value keep the proven 256 MiB cap; the 350 MiB ceiling is not yet proven on Discord's proxy, so raise it only after review |
-| `TWITTER_MAX_AGE_HOURS` | `24` | round 95c stale-backlog floor: a feed entry older than this is **not a new tweet** and is skipped (`STALE-SKIP`) before any tweet-data request, so a down/restoring nitter instance that answers with a days-old backlog cannot be posted. Age comes from the feed date, else from the tweet-id snowflake; an entry whose age cannot be established still posts (fail-open), and `TEST_TWEET_ID` is exempt. `0` disables the guard and restores pre-95c behaviour exactly |
+| `TWITTER_MAX_AGE_HOURS` | `24` | round 95c stale-backlog floor: a feed entry older than this is **not a new tweet** and is skipped (`STALE-SKIP`) before any tweet-data request, so a down/restoring nitter instance that answers with a days-old backlog cannot be posted. Age is judged by two witnesses — the feed date and the tweet-id snowflake: for the account's own tweet the **older** wins (a mirror that re-stamps an old entry cannot smuggle it through), for a **repost** the feed date wins (reposting an older tweet is a legitimate post). An entry whose age cannot be established still posts (fail-open), and `TEST_TWEET_ID` is exempt. `0` disables the guard and restores pre-95c behaviour exactly |
 
 **FULL MODE probe**
 
