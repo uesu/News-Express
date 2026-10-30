@@ -11390,9 +11390,10 @@ check("r97: a record without the new fields still renders (no Settings line)",
       "Fresh-age hold: 2" in _r97_old_summary
       and "**Settings:**" not in _r97_old_summary
       and "waiting:" not in _r97_old_summary)
+_r97_line = v3._init_run_stats().get("settings_line", "")
 check("r97: the settings line is built by the engine (workflow stays small)",
-      v3._init_run_stats().get("settings_line", "").startswith("**Settings:** fresh hold ")
-      and "pending_recheck_seconds" in v3._init_run_stats().get("settings_line", "")
+      _r97_line.startswith("**Settings:** fresh hold ")
+      and "recheck 300 s" in _r97_line and "window 48 h" in _r97_line
       and v3._settings_line({}) == "")
 # GitHub refuses a workflow whose step script exceeds 21,000 characters: prod
 # #11568 (2026-10-30 08:40Z) failed with "Exceeded max expression length 21000"
