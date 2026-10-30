@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased — Round 96c: the Reddit summary names the posts it held (2026-10-30)
+
+### Observability only (no delivery decision changes, no extra requests)
+
+- **A hold is now a key and an evidence string, not a count.** Run #11548
+  (`07:00Z`) printed `Liveness not verified: 1` and
+  `Known-rejected archive candidates: 5`; the one post it refused —
+  `AnantaLeaks_1xj8et0`, "One of the Apartments you can get in Ananta",
+  removed by the moderators — could be identified only from the Actions log
+  line `[AnantaLeaks_1xj8et0] post not verified live (...) — skipping`. The
+  summary now prints, for each held post (up to 10, then
+  `… N more held post(s) not shown`):
+  `- held: AnantaLeaks_1xj8et0 — 'removal_notice' (live-source, source=arctic): live source vxreddit still shows a removal notice (whole-body marker)`
+- **Suppressed known-pending keys are named too**, with a bounded tail:
+  `- keys: Genshin_Impact_Leaks_1xhnc6b, … … 3 more`.
+- Both lists live in the existing run-result record (`hold_keys`,
+  `known_pending_keys`), so the artifact carries the same names the summary
+  prints; each list is capped at 10 entries in the engine, so a flood run
+  cannot grow the record.
+- Records written by earlier rounds (no `hold_keys` / `known_pending_keys`)
+  render exactly as before.
+- The recorder takes the run-stats dict and a field name, so a missing or
+  renamed field degrades to "no names in the summary" instead of raising inside
+  the loop that posts: observability can never cost a delivery. Cost is
+  0.19 µs per call and at most ~2.4 KB on a worst-case run-result record.
+
 ## Unreleased — Round 96b: the Twitter summary names accounts, posts and refusals (2026-10-30)
 
 ### Observability (workflow summary only; no engine change, no extra requests)
