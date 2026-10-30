@@ -27,6 +27,38 @@ occur: this policy reduces unattended exposure, not the security gate itself.
 - Write an accurate PR title/body; report head, changes, checks and blockers briefly.
 - No extra audit MD, production posting, state reset or merge without approval.
 
+## HARD LIMIT: a workflow step script cannot exceed 21,000 characters
+
+GitHub's workflow loader refuses any `run:` script over **21,000 characters** — and it
+then rejects the **entire workflow file**, so no job is created at all and the monitor
+stops running while CI still looks green:
+
+```
+Invalid workflow file: .github/workflows/reddit_monitor.yml#L1
+(Line: 302, Col: 14): Exceeded max expression length 21000
+```
+
+This happened in production on 2026-10-30 08:40Z (run #11568 on `3b4b518`, plus the
+mirror repos `7jkxmy9nvbc` and `wvkhabh2s22`): one edit added ~2.5 KB of inline
+summary formatting, taking the `Write monitor run summary` step from 18.5 KB to
+21,058 chars. Five cron ticks could not run the monitor.
+
+**Non-negotiables for `.github/workflows/*.yml`:**
+
+1. Never grow a `run:` block by pasting formatting/printing code into it. Values the
+   engine already knows belong in the engine (e.g. `_settings_line()`); the workflow
+   prints them.
+2. Current sizes (keep the largest well under the cap): Reddit summary ~14.1 KB,
+   Reddit cache-persist 4.7 KB, Twitter summary ~7.3 KB. Aim for ≤ 16 KB.
+3. `yaml.safe_load()` and the offline smoke suite **cannot** see this limit — YAML is
+   valid and every test passes. Only GitHub's loader rejects it. Trust the guard, not
+   the YAML parse.
+4. The smoke suite enforces it: `r97: no workflow step script approaches GitHub's
+   21,000-character cap` measures every `run:` block with `_r97_run_scripts()` and
+   fails above **16,000** chars. If it fails, shrink the script — never raise the bound.
+5. After any workflow edit, verify a real run starts **and** completes on both prod
+   repos; a green PR does not prove the file loads.
+
 ## Media recovery and workflow summaries
 
 Keep crosspost recovery one-hop and provenance-validated; preserve child identity,

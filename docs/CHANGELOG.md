@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased — Round 97c: the summary step is a third smaller (2026-10-30)
+
+### Hardening after the 21,000-character outage
+
+- **The `Write monitor run summary` script is now 14,079 characters** (was 21,058 at
+  the failure, 19,622 after the first fix). The 21,000 cap that rejected the whole
+  workflow in prod #11568 is now 6.9 KB away, and the smoke suite fails above
+  16,000.
+- What was removed, and what was kept:
+  - dropped: duplicate feed-fallback triple (the `- Feed fallback:` line carries it),
+    the legacy `Selected media provider` / `Quality upgrades accepted` /
+    `Validated base retained` branches that only ran on pre-round-21 records, the
+    duplicated `Subreddits represented` + `Combined subreddits covered` pair, and the
+    long inline comment blocks;
+  - kept, unchanged in wording: every coverage line (feed per subreddit, missing subs,
+    archive per subreddit with posts/empty/failed/circuit open), delivered posts with
+    latency, known-pending keys, held keys with evidence, waiting keys with age and
+    floor, the effective-settings line, REDLIB-REACH with its warning, dedup pressure.
+- Shared helpers (`load`, `v`, `dstr`, `line`, `num`) replace repeated inline
+  formatting, so future additions are one line each.
+- `AGENTS.md` gains a **HARD LIMIT** section: the 21,000-character rule, how the guard
+  enforces it, why YAML parsing and CI cannot detect it, and the rule that engine-known
+  text is formatted in the engine, not pasted into the workflow.
+
 ## Unreleased — Round 97b: keep the summary step under GitHub's script cap (2026-10-30)
 
 ### Regression fix (prod Reddit monitor)
