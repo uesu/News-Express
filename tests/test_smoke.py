@@ -11153,6 +11153,61 @@ check("r96: a round-95 or older run record still renders (new keys are optional)
       "Combined-feed entries: 100" in _r96_old_summary
       and "Archive coverage:" not in _r96_old_summary)
 
+# ---- Round 96b (2026-10-30): the Twitter summary names accounts, posts and refuses ----
+# Run #12043 posted three 46/94/257-hour-old backlog tweets and the only trace of
+# WHICH entries were refused was the Actions log. The summary now carries the
+# per-account feed outcome, the delivered keys and the refused keys with ages.
+_t96b_log = "\n".join([
+    "2026-10-30 06:10:02,101 [INFO] [Ananta_EN] feed OK via https://nitter.cf — 17 entries.",
+    "2026-10-30 06:10:03,202 [INFO] [HonkaiNA] feed OK via https://nitter.meowing.monster — 20 entries.",
+    "2026-10-30 06:10:04,303 [WARNING] [PomPom_HonkaiSR] NO working nitter instance this run "
+    "— account skipped (see TEST_TWEET_ID to rebuild one tweet).",
+    "2026-10-30 06:10:05,404 [INFO] [Wuthering_Waves] skipping — no feed / 0 entries",
+    "2026-10-30 06:10:09,505 [INFO] [TYPEII_EN_2115271059188613499] STALE-SKIP: entry is 46.1 h old "
+    "— older than the 24 h floor, not posted.",
+    "2026-10-30 06:10:09,606 [INFO] [TYPEII_EN_2114559707734245394] STALE-SKIP: entry is 94.0 h old "
+    "— older than the 24 h floor, not posted.",
+    "2026-10-30 06:10:10,707 [INFO] V3 Posted: TYPEII_EN_2115271059188613499 (lang=en | source=fxtwitter)",
+    "2026-10-30 06:10:11,909 [INFO] V3 SUMMARY: posted=1 dedup_skipped=3 stale_skipped=2 "
+    "cache_missing=0 cache_keys=294 max_age_hours=24",
+]) + "\n"
+_t96b_summary = _app_summary_shell("twitter", _t96b_log)
+check("r96b: the Twitter summary names each account and the instance that fed it",
+      "Ananta_EN: ok via nitter.cf — 17 entries" in _t96b_summary
+      and "HonkaiNA: ok via nitter.meowing.monster — 20 entries" in _t96b_summary,
+      [ln for ln in _t96b_summary.splitlines() if "ok via" in ln][:2])
+check("r96b: a dark or empty account is named, not just counted",
+      "PomPom_HonkaiSR: FAILED — no working nitter instance this run" in _t96b_summary
+      and "Wuthering_Waves: empty feed (0 entries)" in _t96b_summary,
+      [ln for ln in _t96b_summary.splitlines() if "FAILED" in ln or "empty feed" in ln][:2])
+check("r96b: the delivered tweet keys are listed, not only a count",
+      "delivered keys:" in _t96b_summary
+      and "- TYPEII_EN_2115271059188613499" in _t96b_summary,
+      [ln for ln in _t96b_summary.splitlines() if "delivered keys" in ln][:1])
+check("r96b: the refused backlog keys are listed with their age",
+      "refused keys (oldest-first as logged):" in _t96b_summary
+      and "TYPEII_EN_2115271059188613499 — 46.1 h old" in _t96b_summary
+      and "TYPEII_EN_2114559707734245394 — 94.0 h old" in _t96b_summary,
+      [ln for ln in _t96b_summary.splitlines() if "h old" in ln][:2])
+check("r96b: a consistent log produces no truncation note",
+      "trust the engine value" not in _t96b_summary)
+_t96b_bad = _t96b_log.replace("stale_skipped=2", "stale_skipped=7")
+_t96b_bad_summary = _app_summary_shell("twitter", _t96b_bad)
+check("r96b: a truncated log is called out instead of silently under-reporting",
+      "engine reported 7 stale-skip(s), this log has 2 line(s)" in _t96b_bad_summary
+      and "trust the engine value" in _t96b_bad_summary,
+      [ln for ln in _t96b_bad_summary.splitlines() if "trust the engine" in ln][:1])
+_t96b_many = "\n".join(
+    f"2026-10-30 06:10:1{i % 10},00{i % 10} [INFO] V3 Posted: TYPEII_EN_2115{i:012d} (lang=en | source=fxtwitter)"
+    for i in range(12)) + "\n"
+_t96b_many_summary = _app_summary_shell("twitter", _t96b_many)
+_t96b_bullets = [ln for ln in _t96b_many_summary.splitlines()
+                 if ln.startswith("  - TYPEII_EN_2115")]
+check("r96b: the delivered-key list is bounded (no unbounded summary growth)",
+      len(_t96b_bullets) == 10 and "… 2 more not shown" in _t96b_many_summary,
+      (len(_t96b_bullets),
+       [ln for ln in _t96b_many_summary.splitlines() if "more not shown" in ln][:2]))
+
 # ---- Round 89: no GitHub Actions annotation may leak out of this suite ----
 # Restore the real stdout first, then judge what the suite actually emitted.
 sys.stdout = _stdout_guard.stream

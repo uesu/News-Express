@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — Round 96b: the Twitter summary names accounts, posts and refusals (2026-10-30)
+
+### Observability (workflow summary only; no engine change, no extra requests)
+
+- **Which account failed is now a name, not a count.** The summary lists every
+  account with its outcome — `Ananta_EN: ok via nitter.cf — 17 entries`,
+  `PomPom_HonkaiSR: FAILED — no working nitter instance this run`,
+  `Wuthering_Waves: empty feed (0 entries)` — bounded to 12 lines, host only
+  (no path or query), sorted.
+- **Delivered keys are listed** (up to 10, with `… N more not shown`) instead of a
+  bare "posts delivered: 3", plus a `… more` note when truncated.
+- **Refused backlog entries are named with their age**
+  (`TYPEII_EN_2115271059188613499 — 46.1 h old`, up to 5), so the 46/94/257-hour
+  backlog of run #12043 is verifiable from the summary alone.
+- **Log truncation is called out**: when the number of `V3 Posted` / `STALE-SKIP`
+  lines disagrees with the engine's authoritative `V3 SUMMARY` line, the summary
+  says so and tells the reader to trust the engine value.
+
 ## Unreleased — Round 96: the Reddit run summary proves coverage without the log (2026-10-30)
 
 ### Observability (no delivery-path change, no extra requests)
