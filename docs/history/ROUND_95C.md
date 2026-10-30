@@ -49,9 +49,14 @@ moving a request off a blocked exit".
   build per entry.
 * Age has **two independent witnesses**: the feed's `published_parsed` and the
   tweet-id **snowflake** (`(id >> 22) + 1288834974657` ms).
-  * **Own tweet** → the **older** of the two wins. A degraded mirror that
-    re-stamps an old backlog entry with "now" cannot smuggle it through, and a
-    feed that omits dates cannot hide an old post.
+  * **Own tweet** → the **id** wins when it is parsable: it is immutable and
+    encodes the creation instant exactly, so a mirror that re-stamps an old
+    backlog entry with "now" — or mangles the date outright (epoch 0) — cannot
+    smuggle it through. The feed date is the fallback when the id is unusable.
+  * **UTC, not local time.** feedparser yields UTC struct_times and the age is
+    read with `calendar.timegm`. `time.mktime` would read them as local time:
+    on a UTC+8 machine every entry would look 8 h older, so a 16 h-old tweet
+    would hit a 24 h floor.
   * **Repost** (the link points at another author's status) → the **feed date**
     wins, because reposting an older tweet is a legitimate new post and the
     original's id is old by definition.
@@ -72,7 +77,8 @@ minutes of publication. A day-old entry is a backlog, never news.
 | the three #12043 entries, judged at the run's own clock | 46.4 h / 93.4 h / 256.2 h → **all refused** |
 | a tweet from 4 minutes ago | age ≈ 240 s → **posts** |
 | entry with no date and no parsable id | age unknown → **posts** (fail-open) |
-| entry whose feed date says 1 h but whose id says 256 h | feed date wins → **posts** |
+| entry whose feed date says 1 h but whose id says 256 h | id wins → **refused** (re-stamped backlog) |
+| fresh tweet whose feed date says 1970 | id wins → **posts** (broken feed date cannot hold a live tweet) |
 | guard position in the loop | before `fetch_tweet_details_any` → 0 requests |
 | feed says "2 min ago", id says 40 h (re-stamped backlog) | **refused** (id wins) |
 | repost of a 60 h-old tweet, feed date now | **posted** (feed date wins) |
@@ -122,7 +128,7 @@ Workflow logs are not readable by later agents, so the state now lands in
 
 ## Verification
 
-** `tests/test_smoke.py`: **1236 PASS** (18 round-95c guards added; the round-30
+** `tests/test_smoke.py`: **1238 PASS** (20 round-95c guards added; the round-30
   throttle guards were retargeted to the new 300 s default, including a
   +310 s "due" boundary).
 * Mutations: removing the guard, moving it after the fetch, flipping it to

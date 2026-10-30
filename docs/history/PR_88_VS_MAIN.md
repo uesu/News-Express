@@ -157,10 +157,12 @@ if known and age > TWITTER_MAX_AGE_HOURS:  # default 24
 * **24 h floor.** The cron fires every 5 minutes; a real tweet goes out within
   minutes. A day-old entry is a backlog, never news.
 * **Two witnesses.** The feed date *and* the tweet-id snowflake both give an
-  age. For the account's **own** tweet the older one wins, so a mirror that
-  re-stamps an old entry with "now" is still refused. For a **repost** (link
-  points at another author's status) the feed date wins, so reposting an older
-  tweet still posts — that is a legitimate new post, not a backlog item.
+  age. For the account's **own** tweet the **id** wins — it is immutable, so a
+  mirror that re-stamps an old entry with "now" (or mangles the date) is still
+  refused. For a **repost** (link points at another author's status) the feed
+  date wins, so reposting an older tweet still posts — that is a legitimate new
+  post, not a backlog item. Ages are read as **UTC** (`calendar.timegm`), so a
+  non-UTC machine cannot shift the floor by its offset.
 * **Cannot lose a live post.** Unknown age → posts. `TEST_TWEET_ID` → exempt.
   `TWITTER_MAX_AGE_HOURS=0` → byte-identical pre-95c behaviour.
 * **Zero requests.** The guard runs before `fetch_tweet_details_any`, so a
@@ -293,9 +295,9 @@ Each is a repository Variable; no code revert, no redeploy.
 
 | Suite | Result |
 |---|---|
-| `tests/test_smoke.py` | **1236 PASS** (main: 1175; head before 95c: 1218) — **0 guards lost** |
+| `tests/test_smoke.py` | **1238 PASS** (main: 1175; head before 95c: 1218) — **0 guards lost** |
 | `tests/test_reddit_signals.py` | 103 PASS |
 | `tests/test_twitter_media.py` | ALL PASS |
 | `compileall`, YAML parse, zizmor | clean / OK / identical to base |
-| Mutation tests | 10/10 (r95) + 8/8 (r95c) |
+| Mutation tests | 10/10 (r95) + 10/10 (r95c incl. the two wiring guards) |
 | CI on PR #88 | `smoke` **SUCCESS**, `MERGEABLE/CLEAN` |

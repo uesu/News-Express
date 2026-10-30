@@ -10882,11 +10882,22 @@ _x95c_own = _X95cEntry("https://x.com/TYPEII_EN/status/2112102702817972715",
                        time.gmtime(_x95c_now - 3600))
 _x95c_own_age = _r30_x.judged_entry_age_seconds(_x95c_own, _x95c_now,
                                                 "2112102702817972715", "TYPEII_EN")
-check("r95c: an own tweet is judged by the OLDER witness, so a re-stamped backlog entry cannot slip through",
+check("r95c: an own tweet is judged by its id, so a re-stamped backlog entry cannot slip through",
       # feed says 1 h, the immutable id says 256 h -> the id wins, entry refused.
       _x95c_own_age is not None and _x95c_own_age > 200 * 3600
       and _r30_x.is_stale_entry(_x95c_own_age),
       _x95c_own_age)
+_x95c_bogus = _X95cEntry("https://x.com/TYPEII_EN/status/1", time.gmtime(0))  # a 1970 feed date
+check("r95c: a broken feed date (epoch 0) cannot hold a fresh own tweet",
+      not _r30_x.is_stale_entry(
+          _r30_x.judged_entry_age_seconds(_x95c_bogus, _x95c_now, _x95c_fresh, "TYPEII_EN")),
+      _r30_x.judged_entry_age_seconds(_x95c_bogus, _x95c_now, _x95c_fresh, "TYPEII_EN"))
+check("r95c: ages are read as UTC, so a non-UTC machine cannot shift the floor "
+      "(time.mktime would add the local offset)",
+      abs(_r30_x.feed_date_age_seconds(_X95cEntry("x", time.gmtime(_x95c_now - 3600)),
+                                       _x95c_now) - 3600) < 2
+      and "calendar.timegm(parsed)" in open(
+          os.path.join(ROOT, "testing area/twitter_v3.py"), encoding="utf-8").read())
 _x95c_rt = _X95cEntry("https://x.com/SomeoneElse/status/2112102702817972715",
                       time.gmtime(_x95c_now - 300))
 _x95c_rt_age = _r30_x.judged_entry_age_seconds(_x95c_rt, _x95c_now,
@@ -10895,7 +10906,7 @@ check("r95c: a repost is judged by its own feed date, so reposting an older twee
       _x95c_rt_age is not None and _x95c_rt_age < 600
       and not _r30_x.is_stale_entry(_x95c_rt_age),
       _x95c_rt_age)
-check("r95c: with no feed date an own tweet still falls back to the id, and a repost to either witness",
+check("r95c: with no id an own tweet falls back to the feed date; with neither the entry posts",
       _r30_x.judged_entry_age_seconds(_X95cEntry("https://x.com/TYPEII_EN/status/1"),
                                       _x95c_now, "2112102702817972715", "TYPEII_EN") > 200 * 3600
       and _r30_x.judged_entry_age_seconds(_X95cEntry("https://x.com/SomeoneElse/status/1"),

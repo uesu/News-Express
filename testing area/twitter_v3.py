@@ -99,6 +99,7 @@ import os
 import re
 import json
 import time
+import calendar
 import html as html_lib
 import asyncio
 import logging
@@ -182,10 +183,12 @@ MAX_CACHE_SIZE_TOTAL = _env_int("MAX_CACHE_SIZE_TOTAL", 10000)
 #     within minutes; anything older than a day is a backlog, not news). Set 0
 #     to disable the guard and restore pre-95c behaviour exactly.
 # Two independent witnesses give the age: the feed's pubDate and the tweet id's
-# own snowflake. For an OWN tweet the older of the two wins, so a mirror that
-# re-stamps an old backlog entry with "now" cannot smuggle it through; for a
-# REPOST (link points at another author's status) the feed date wins, because a
-# repost of an older tweet is a legitimate new post.
+# own snowflake. For an OWN tweet the id is authoritative — it is immutable and
+# encodes the creation instant, so a mirror that re-stamps an old backlog entry
+# with "now" (or mangles the date outright) cannot smuggle it through; the feed
+# date is only a fallback when the id is unparsable. For a REPOST (link points
+# at another author's status) the feed date wins, because that id is the
+# ORIGINAL tweet's and is old by definition.
 # A live/legit tweet is never blocked: the floor is far above the cron cadence,
 # and an entry whose age cannot be established (no published_parsed, no
 # parsable id) is posted as before — this guard only ever rejects entries whose
@@ -221,7 +224,10 @@ def feed_date_age_seconds(entry, now: float) -> float | None:
     if not parsed:
         return None
     try:
-        return max(0.0, float(now) - time.mktime(parsed))
+        # feedparser yields UTC struct_time; timegm reads it as UTC. time.mktime
+        # would interpret it as LOCAL time — on a UTC+8 machine every entry
+        # would look 8 h older, so a 16 h-old tweet would hit a 24 h floor.
+        return max(0.0, float(now) - calendar.timegm(parsed))
     except (OverflowError, ValueError, TypeError):
         return None
 
@@ -264,9 +270,12 @@ def judged_entry_age_seconds(entry, now: float, tweet_id: str = "",
     author = link_author(getattr(entry, "link", ""))
     is_repost = bool(author and account and author.lower() != account.lower())
     if is_repost:
+        # the id belongs to the ORIGINAL tweet, so it is old by design
         return feed_age if feed_age is not None else id_age
-    known = [a for a in (feed_age, id_age) if a is not None]
-    return max(known) if known else None
+    # Own tweet: the id is immutable and encodes the creation instant exactly,
+    # while a feed date can be re-stamped by a degraded mirror (a backlog entry
+    # labelled "now") or broken outright (epoch 0). The id wins when present.
+    return id_age if id_age is not None else feed_age
 
 
 def is_stale_entry(age_seconds: float | None) -> bool:
