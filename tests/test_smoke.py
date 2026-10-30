@@ -11667,6 +11667,22 @@ async def _r98_main_cases():
     out["still_dead"] = await _case([], _held(), live, {"1xdkwf": dead})
     out["notice"] = await _case([], _held(reason="removal_notice"), live,
                                 {"1xdkwf": post})
+    # Edge cases: no usable timestamp anywhere (must never be posted), a record
+    # with a future timestamp (must be clamped, not held forever by the floor),
+    # and a held key whose subreddit is no longer tracked (no webhook error).
+    _no_ts = {k: {kk: vv for kk, vv in v.items() if kk != "published_ts"}
+              for k, v in _held().items()}
+    out["no_timestamp"] = await _case([], _no_ts, live,
+                                      {"1xdkwf": {k: v for k, v in post.items()
+                                                  if k != "created_utc"}})
+    out["future_ts"] = await _case([], _held(), live,
+                                   {"1xdkwf": dict(post, created_utc=time.time() + 900)})
+    out["sub_mismatch"] = await _case([], _held(), live,
+                                      {"1xdkwf": dict(post, subreddit="OtherSub")})
+    out["unknown_sub"] = await _case([], {"OtherSub_9zzz": {
+        "first_seen": time.time() - 4000, "last_checked": time.time() - 3600,
+        "reason": "liveness_removed", "source": "arctic",
+        "published_ts": int(time.time() - 3600)}}, live, {"9zzz": post})
     return out
 
 
@@ -11677,7 +11693,7 @@ try:
 except Exception as _exc:                                   # pragma: no cover
     _r98_cases, _r98_run_err = {}, repr(_exc)
 check("r98: main() completes in every reclaim/override case",
-      _r98_run_err is None and len(_r98_cases) == 5, _r98_run_err or _r98_cases)
+      _r98_run_err is None and len(_r98_cases) == 9, _r98_run_err or _r98_cases)
 if _r98_cases:
     _c = _r98_cases
     check("r98: a held post NOTHING lists is re-read from the archive and "
@@ -11707,6 +11723,27 @@ if _r98_cases:
           _c["notice"]["stats"].get("reclaim_checked") in (0, None)
           and not _c["notice"]["calls"]
           and _c["notice"]["stats"].get("delivered") == 0)
+    check("r98: a record with NO usable timestamp is never re-admitted "
+          "(no guessing, no bogus published_ts written)",
+          _c["no_timestamp"]["stats"].get("delivered") == 0
+          and _c["no_timestamp"]["stats"].get("reclaim_clean") in (0, None)
+          and _c["no_timestamp"]["pending"]["TestSub_1xdkwf"]
+          .get("published_ts") is None,
+          _c["no_timestamp"]["stats"].get("reclaim_keys"))
+    check("r98: a future timestamp is clamped, so the fresh-age floor cannot "
+          "hold the post forever",
+          _c["future_ts"]["stats"].get("delivered") == 1
+          and _c["future_ts"]["stats"].get("reclaim_clean") == 1)
+    check("r98: a record whose own subreddit disagrees with the key is never "
+          "re-admitted (no wrong-channel post)",
+          _c["sub_mismatch"]["stats"].get("delivered") == 0
+          and _c["sub_mismatch"]["stats"].get("reclaim_clean") in (0, None)
+          and _c["sub_mismatch"]["stats"].get("reclaim_held") in (0, None))
+    check("r98: a held key from an untracked subreddit is skipped (no webhook "
+          "error, no archive request)",
+          _c["unknown_sub"]["stats"].get("delivered") == 0
+          and not _c["unknown_sub"]["calls"]
+          and _c["unknown_sub"]["stats"].get("reclaim_skipped_unknown_sub") == 1)
 
 # ---- Round 89: no GitHub Actions annotation may leak out of this suite ----
 # Restore the real stdout first, then judge what the suite actually emitted.

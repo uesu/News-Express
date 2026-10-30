@@ -122,16 +122,32 @@ hold, so it expires on its own schedule.
   14,509 chars, guard 16,000, GitHub cap 21,000).
 - Engine-formatted settings line adds `reclaim 5/run, snapshot override after 3 feeds`.
 
+## Edge cases (each one has a test)
+
+| Case | Behaviour |
+|---|---|
+| Archive record has no usable `created_utc` **and** the pending entry has no `published_ts` | `no_timestamp` — hold stands, nothing written, never posted on a guess |
+| Archive record carries a timestamp in the future | clamped to `now` (otherwise the fresh-age floor would hold it forever) |
+| Record's own `subreddit` disagrees with the pending key | `sub_mismatch` — never re-admitted (no wrong-channel post) |
+| Held key belongs to a subreddit no longer tracked | filtered before the archive call (no request, no "No webhook configured" ERROR line) |
+| Archive unreachable / circuit open / no record | `no_record` — hold stands, re-probed next tick, fail-open |
+| Batch request returns a subset | only the returned ids are acted on; the rest stay held |
+| Malformed entry in `stale_snapshot_keys` / `reclaim_keys` | summary skips it and truncates long text; the step still exits 0 |
+| `TEST POST` mode (feed bypassed) | reclaim disabled; `native_keys` initialised outside the feed branch |
+| `DRY_RUN` | no Discord post; liveness verdict is `skipped` |
+| First run (empty dedup cache) | reclaim disabled (anti-flood, same rule as the archive sweep) |
+
 ## Verification
 
-- `python3 tests/test_smoke.py` → **ALL PASS**. Five of the new checks run the **real
+- `python3 tests/test_smoke.py` → **ALL PASS**. Nine of the new checks run the **real
   `v3.main()`** with the network mocked and read the run-result record back:
   reclaim → delivered + leaves pending; feed-listed + streak 3 + archive says removed →
   delivered with `stale_snapshot_overrides: 1`; the same with streak 1 → still held; a
   reclaim that still reads as removed → kept, reason preserved, `last_checked` refreshed;
-  a `removal_notice` hold → never reclaimed, zero archive requests. This is what caught
-  the two placement bugs below — a grep could not have.
-- Eight further checks execute the pure helpers (streak reset, native-only listing, no
+  a `removal_notice` hold → never reclaimed, zero archive requests; plus the four edge
+  cases in the table above. This is what caught the placement bugs below — a grep could
+  not have.
+- Ten further checks execute the pure helpers (streak reset, native-only listing, no
   `post-json` override, reason/window/seen/limit filters, single-request batching,
   workflow presence of both summary lines).
 - Two real bugs were found and fixed before this PR: (1) `num()` was called without its

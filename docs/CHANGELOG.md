@@ -32,6 +32,13 @@
   (typically 1–2 keys). Both decisions are visible in the summary —
   `Stale-snapshot overrides: N` with the keys, and `Held posts re-probed: N` with
   `re-admitted / still removed` plus one line per probe.
+- **Edge cases closed before merge** (each has a check): a record with no usable
+  timestamp is never re-admitted and never writes a bogus `published_ts`; a future
+  timestamp is clamped so the fresh-age floor cannot hold a post forever; a record whose
+  own subreddit disagrees with the pending key is never re-admitted (no wrong-channel
+  post); a held key for a subreddit that is no longer tracked is skipped before it costs
+  an archive request or a "no webhook" ERROR line; the summary skips malformed entries
+  and truncates long text.
 - `AGENTS.md` size table updated (largest step script 14.5 KB). Smoke suite gains eight
   checks that **execute** both new pure functions (streak reset, native-only listing, no
   post-JSON override, reclaim selection/limit) **and five that run the real `main()`**

@@ -727,6 +727,7 @@ def _init_run_stats():
         "reclaim_clean": 0,
         "reclaim_held": 0,
         "reclaim_keys": [],
+        "reclaim_skipped_unknown_sub": 0,
         "newly_rejected_removed": 0,
         "newly_rejected_by_reason": {},
         "liveness_not_verified": 0,
@@ -7577,6 +7578,17 @@ async def main():
                 _seen_keys = {p[2] for p in new_posts}
                 _reclaim_keys = _reclaim_due(pending, _seen_keys, now,
                                              RECLAIM_MAX_PER_RUN)
+                # A key left behind by a subreddit that is no longer tracked would
+                # reach a missing webhook (an ERROR log line every tick). Drop it
+                # here, before it costs an archive request.
+                _unknown_subs = {k for k in _reclaim_keys
+                                 if k.rpartition("_")[0] not in SUBREDDITS}
+                if _unknown_subs:
+                    _reclaim_keys = [k for k in _reclaim_keys
+                                     if k not in _unknown_subs]
+                    run_stats["reclaim_skipped_unknown_sub"] = len(_unknown_subs)
+                    logging.info(f"reclaim: {len(_unknown_subs)} held key(s) belong to "
+                                 f"subreddits no longer tracked — left alone.")
                 if _reclaim_keys:
                     _reclaim_posts = await fetch_arctic_posts_by_ids(
                         session, [k.rpartition("_")[2] for k in _reclaim_keys],
@@ -7588,18 +7600,32 @@ async def main():
                         _rrec = _raw_rec if isinstance(_raw_rec, dict) else {}
                         _rpost = _reclaim_posts.get(_rpid)
                         _outcome = "no_record"
-                        if isinstance(_rpost, dict):
+                        _rpost_sub = str((_rpost or {}).get("subreddit") or "") \
+                            if isinstance(_rpost, dict) else ""
+                        if isinstance(_rpost, dict) and _rpost_sub and _rpost_sub != _rsub:
+                            # The record's own subreddit disagrees with the key:
+                            # never risk posting into the wrong channel.
+                            _outcome = "sub_mismatch"
+                        elif isinstance(_rpost, dict):
                             _rtitle = str(_rpost.get("title") or "")
                             _rbody = str(_rpost.get("selftext") or "")
                             try:
                                 _rpub = (float(_rpost.get("created_utc") or 0)
-                                         or float(_rrec.get("published_ts") or 0) or now)
+                                         or float(_rrec.get("published_ts") or 0))
                             except (TypeError, ValueError):
+                                _rpub = 0.0
+                            if _rpub > 0 and _rpub > now:
+                                # Clock skew in the record: never post a "future"
+                                # post (the fresh-age floor would hold it forever).
                                 _rpub = now
                             _rremoved = removed_post_reason(_rtitle, _rbody)
                             _rpath = normalize_reddit_path(
                                 str(_rpost.get("permalink") or ""))
-                            if _rremoved:
+                            if _rpub <= 0:
+                                # No usable timestamp: do not guess. The hold
+                                # stands and the 48 h window still governs it.
+                                _outcome = "no_timestamp"
+                            elif _rremoved:
                                 # Still not live: refresh the clock but KEEP the
                                 # original reason, so a `removal_notice` hold is
                                 # never silently downgraded into a retry loop.
