@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased — Round 97: the summary states the settings it ran with (2026-10-30)
+
+### Observability only (no delivery decision changes, no extra requests)
+
+- **The effective settings are printed, not inferred.** Run #11563 (`08:15Z`)
+  ran with `FRESH_HOLD_SECONDS: 60` from the operator Variable and reported
+  `2 fresh-hold`, but the effective floor (the code default is 30 s) was only
+  visible in the runner's own env dump. The engine now records the values it
+  resolved and the summary prints one plain line:
+
+  `**Settings:** fresh hold 60 s · recheck 300 s · window 48 h · flood cap 25 · dedup 250/sub (10000 total) · liveness probe on (lenient, budget 10)`
+
+  A disabled floor/probe reads `fresh hold off (0 s)` / `liveness probe off`
+  rather than a bare zero.
+- **Posts waiting on that floor are named**, with the age and the floor that
+  held them (up to 10, then `… N more waiting post(s) not shown`):
+
+  `- waiting: WutheringWavesLeaks_1xj9k2p — 41.3 s old (floor 60 s)`
+
+  Before this, `Fresh-age hold: 2` was a count with no names — the same gap
+  round 96c closed for liveness holds.
+- `_effective_settings()` reads module globals at call time, so a renamed
+  constant yields one `unavailable` value instead of an exception; records
+  written by earlier rounds render exactly as before.
+
 ## Unreleased — Round 96c: the Reddit summary names the posts it held (2026-10-30)
 
 ### Observability only (no delivery decision changes, no extra requests)
