@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — Round 98b: the liveness evidence-source line stops contradicting itself (2026-10-30)
+
+### Summary fix (output only — no engine behaviour changes)
+
+- Run **#11658** printed:
+  ```
+  - Unverified (posted): 0
+    - evidence source: arctic-lookup: 8
+  ```
+  `liveness_probe_by_source` counts **every** verdict (live / removed / unverified) by
+  the evidence it used, but the summary nested it under the *unverified* counter — so the
+  block read "0 unverified" directly above "8 sources". The three posts in that block had
+  in fact been **held on positive evidence** and then released by the round-98 override.
+- It is now its own top-level line: `- Evidence source (all verdicts): arctic-lookup: 8`.
+- Nothing else changes: no delivery path, no cache, no gate. `Write monitor run summary`
+  is 14,720 characters (guard 16,000, GitHub cap 21,000), and the smoke suite asserts the
+  misleading nesting cannot come back.
+
 ## Unreleased — Round 98: stale archive snapshots no longer strand live posts (2026-10-30)
 
 ### Two holds that outlived their evidence
