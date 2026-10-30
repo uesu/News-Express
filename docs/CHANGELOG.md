@@ -1,6 +1,145 @@
 # Changelog
 
-## Unreleased — Round 93: removed link-spam liveness, Redlib removal comments (2026-10-28)
+## Unreleased — Round 95c: stale-backlog guard, one-tick re-check wait, agent-readable Twitter summary (2026-10-30)
+
+### Correctness
+
+- **A degraded nitter fleet can no longer turn an old backlog into "new" posts.**
+  Run #12043 (`2026-10-30T00:55Z`) had four mirrors return 502 and one 429 while every
+  account still reported `feed OK`, and `TYPEII_EN` posted three tweets that were 46 h,
+  94 h and 257 h old. Those three keys were **never** in `posted_tweets.json` before that
+  run (checked across all 100 commits that touch the file), so they were first-time posts
+  of an old backlog, not duplicates: the dedup cache only protects keys it already holds.
+  New `TWITTER_MAX_AGE_HOURS` (default **24**, `0` = off) refuses any feed entry older than
+  the floor, logged as `STALE-SKIP`, **before** the tweet-data fetch — so a stale feed costs
+  zero requests. Age is judged by **two witnesses** — for an own tweet the **tweet id**
+  (immutable, so a mirror that re-stamps an old entry or mangles the date cannot smuggle
+  it through); for a repost the feed date, so reposting an older tweet still posts. Ages are
+  read as **UTC** (`calendar.timegm`), so a local UTC+8 machine cannot shift the floor.
+  Unknown age still posts (fail-open) and `TEST_TWEET_ID` is exempt. No delivery-path change, no added
+  request on a normal run. See `docs/history/ROUND_95C.md`.
+
+### Timing
+
+- **`PENDING_RECHECK_SECONDS` default `1800` → `300`** (one 5-minute cron tick). A post held
+  for a transient reason was waiting up to 30 min for its re-probe while the workflow ran
+  every 5 min, so an approved post could sit missing for 25 extra minutes. At 300 s the hold
+  is re-checked on the next run. Removed/deleted posts are still never re-checked
+  (`_NO_RECHECK_REASONS`), and the extra work is bounded by the round-95 probe budget;
+  `PENDING_RECHECK_SECONDS=1800` restores the old wait.
+
+### Observability
+
+- The Twitter engine now prints one machine-readable state line
+  (`V3 SUMMARY: posted=… dedup_skipped=… stale_skipped=… cache_missing=… cache_keys=…
+  max_age_hours=…`) and the workflow summary renders it under **Dedup / backlog state**,
+  with a stale-backlog count, an explicit `engine: unavailable` when the line is missing,
+  and a re-post warning when the dedup cache could not be persisted. Workflow logs are not
+  readable by later agents; the step summary now carries the state.
+
+### Tests
+
+- 12 new guards (stale floor and fail-open paths, guard ordering before the fetch,
+  `TEST_TWEET_ID` exemption, summary rendering with and without the state line, cache-failure
+  warning); the round-30/32 throttle guards were retargeted to the 300 s default.
+
+## Unreleased — Round 95: independent pre-delivery liveness probe + Reddit summary pressure reporting (2026-10-30)
+
+### Correctness
+
+- **A delivered post must now survive an independent liveness check, not just a proxy
+  answer.** The round-20/32/93 gate is satisfied by any proxy response on the RSS path, and
+  a proxy serves a removed post's pre-removal title, body and media (live 2026-10-29:
+  `1xijfzb` auto-removed 6 s after submission, delivered 4.6 min later; `1xifykm` removed
+  by an AutoModerator karma rule; `1xifc1c` still awaiting moderator approval at delivery).
+  `candidate_liveness_verdict()` reads an **independent record** — the FULL-MODE post JSON
+  or the archive row already in hand (**0 requests**), else ONE Arctic lookup by id
+  (`/api/posts/ids`, 8 s cap) — and maps `removed_by_category`: `automod_filtered` →
+  `pending approval`, any other non-empty value → `removed by moderators/filters`, plus the
+  existing title/body markers. A clean existing record is positive proof of life.
+- **Lenient by default, strict by Variable.** `liveness_hold_decision()` holds only on
+  positive evidence unless `REDDIT_LIVENESS_STRICT=1`, so in the default mode this change
+  cannot withhold a live post (an unverifiable post posts exactly as before). Holds are
+  written to `pending_reddit.json` — never to the dedup cache — and retried. The hold reason
+  is `liveness_removed` / `liveness_unverified`, both **outside** `_NO_RECHECK_REASONS`:
+  the archive record is a snapshot, so a removal it reports may since have been reversed, and
+  reusing the never-re-check vocabulary would have turned a stale snapshot into a permanent
+  hold (the round-34 shape). Held posts are re-probed every 30 min and post as soon as the
+  record is clean.
+- **Bounded cost.** `LIVENESS_PROBE_BUDGET` (10 lookups/run), `LIVENESS_PROBE_TIMEOUT`
+  (8 s), nothing in DRY RUN or TEST POST mode, nothing on a run with no candidates, and an
+  isolated failure counter so a liveness lookup can never disable the media/archive paths.
+- **`verify_archive_post_live()` no longer claims `live via redlib`** when the answer came
+  from the combined RSS feed: it now says `live via redlib/rss fallback`. The 2026-10-29
+  logs printed `live via redlib` while `REDLIB-REACH` was `0/26`.
+
+### Observability
+
+- **Reddit run summary gains a `### Liveness` block**: probe enabled/disabled,
+  lenient/strict, verified live, held as removed/queued (by reason), unverified (posted),
+  evidence source (`post-json` / `arctic-entry` / `arctic-lookup`) and skipped — so a held
+  post is explainable from the summary without the Actions log.
+- **Dedup-cache pressure is reported**: `- Dedup cache: N key(s), M dropped at the cap this
+  run (hot: <sub>=<n>)`. Saturation and evictions were log-only warnings before.
+- **`REDLIB-REACH` is printed once**: the engine stores the line with its prefix, so the
+  summary used to render `Instances (REDLIB-REACH): REDLIB-REACH: 0/26 …`.
+- **All-mirrors-down warning**: when the run probed ≥1 mirror and none answered, the summary
+  says page-based checks were unavailable instead of leaving a bare `0/26`.
+
+### Notes
+
+- No Redlib page probe was added: the 2026-10-29 logs show **0/26 instances answering in
+  every run**, so it would be dormant exactly when needed. The round-93 classifiers remain
+  available for the day the fleet recovers.
+- Verified offline: smoke 1215 (was 1189), signals 103, Twitter media ALL PASS,
+  compileall clean, workflows parse (Reddit still 7 steps), zizmor identical to base,
+  10/10 mutations caught. See `docs/history/ROUND_95.md`.
+
+## Unreleased — Round 94: Twitter run diagnostics, run-result presence, opt-in 350 MiB cap (2026-10-28)
+
+### Observability
+
+- **Twitter run summary gains a *Diagnostics* block** with fixed-category counts of
+  Discord delivery errors, FxTwitter fetch errors, unresolved media-heal lines,
+  media-heal edit errors and dedup-guard errors. The block states that these are
+  matching **log lines, not unique posts**, and prints
+  `diagnostic coverage: unavailable (empty or missing log)` when the captured log is
+  empty or missing — a run that produced no log is not five zeros and is not healthy.
+  Only counts are printed, never log content.
+- **Reddit run summary reports the run-result record itself**: `read`, `missing`,
+  `invalid shape`, or `unreadable or malformed` (`**Run-result record:** …`). The
+  status is a closed vocabulary, so a malformed or wrong-shaped
+  `reddit_run_result.json` is distinguishable from a clean empty run, and the record's
+  contents are never echoed.
+- **An absent `TWITTER_CACHE_RESULT` now reads `not-reached`** instead of `failed`: a
+  cache read that never ran (the monitor step failed before the persist step) is not a
+  cache failure. Matches the wording the Reddit summary already used.
+
+### Opt-in 350 MiB video cap (X)
+
+`TWITTER_HIGH_VIDEO_LIMIT` raises `VIDEO_SIZE_LIMIT` from the proven 256 MiB to 350 MiB
+in **both** X engines (V3 and the V2 alternative). It is deliberately strict opt-in:
+only `1`/`true`/`yes`/`on` (case- and space-insensitive) select 350 MiB — unset, empty,
+`0`, `false`, `off`, `350` and any other value keep 256 MiB, so a typo cannot raise a
+live posting limit. `twitter_monitor.yml` maps it from a repository **Variable**, so the
+effective cap does not move until a maintainer sets it. No other cap exists behind it
+(`GALLERY_VIDEO_LIMIT` is still off, and the constant now has a single source of truth).
+
+### Guards
+
+- `r94` (smoke, 6 contracts): the empty-but-existing log (`tee` creates the file before
+  the monitor writes a line) reports `unavailable` rather than zero counts; every
+  diagnostic category still matches a real engine log line; the Variable is mapped in
+  the Twitter workflow only; unset keeps 256 MiB with the gallery sub-cap off; the cap
+  has one source of truth; and the Reddit run-result status is a closed vocabulary whose
+  line never carries record content.
+- `test_twitter_media.py`: both engines at the 256/257/350/351 MiB selection boundaries
+  (real media selection through mocked sizes, not just parsing), plus the default and
+  opt-in parsing cases.
+
+See [Round 94](history/ROUND_94.md) for the control runs and limits.
+
+## Round 93: removed link-spam liveness, Redlib removal comments (2026-10-28)
 
 ### Liveness (the leak this round closes)
 

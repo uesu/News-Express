@@ -337,11 +337,15 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | Variable | Default | Meaning |
 |---|---|---|
 | `FRESH_HOLD_SECONDS` | `30` | flat minimum post age before a candidate is considered; `0` = off (stateless) |
-| `PENDING_RECHECK_SECONDS` | `1800` | shared throttle for retryable operational holds; confirmed removed/deleted archive entries use a no-recheck path unless they reappear via RSS (provenance-aware, still runs removal checks) |
+| `PENDING_RECHECK_SECONDS` | `300` | shared throttle for retryable operational holds — 5 min, i.e. exactly one cron tick, so a hold is re-probed on the next run (round 95c; `1800` restores the old 30-min wait); confirmed removed/deleted archive entries use a no-recheck path unless they reappear via RSS (provenance-aware, still runs removal checks) |
 | `REDDIT_VIDEO_QUALITY` | `balanced` | video-quality selection: `balanced` (EmbedEZ 1080p may replace vxreddit → 720p → durable DASH floor), `compatibility` (pre-round-67 order, instant rollback), `highest` (wider quality window) |
 | `RETRACT_DEAD_POSTS` | `0` | `1` enables the dead-post retraction seatbelt |
 | `RETRACT_MODE` | `edit` | `edit` (tombstone in place) or `delete` |
 | `RETRACT_WINDOW_SECONDS` | `21600` | how far back a delivered post can still be retracted (6 h) |
+| `REDDIT_LIVENESS_PROBE` | `1` | independent pre-delivery liveness check against the Arctic archive record (`removed_by_category` + title/body markers); `0` restores pre-round-95 behaviour exactly |
+| `REDDIT_LIVENESS_STRICT` | `0` | `0` (lenient) holds a post only on positive removal/queue evidence — an unverifiable post posts as before; `1` also holds when no independent source could confirm the post |
+| `LIVENESS_PROBE_BUDGET` | `10` | max archive lookups per run (bounds the added latency of a flood run) |
+| `LIVENESS_PROBE_TIMEOUT` | `8` | per-lookup timeout in seconds |
 
 **Caches & caps**
 
@@ -360,6 +364,8 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `MEDIA_HEAL_SCOPE` | `video` | `on`/`all` = also heal photos/gif/webp; `off` = never re-edit |
 | `MEDIA_HEAL_DELAY_SECONDS` | `45` | wait before each re-edit (30–60 is sane) |
 | `MEDIA_HEAL_ATTEMPTS` | `4` | max same-payload re-edits per message; hard-capped at 4 |
+| `TWITTER_HIGH_VIDEO_LIMIT` | unset (`256 MiB`) | opt-in `1`/`true`/`yes`/`on` = **350 MiB** gallery video cap. Unset, empty, `0`, `false`, `off`, `350` and any other value keep the proven 256 MiB cap; the 350 MiB ceiling is not yet proven on Discord's proxy, so raise it only after review |
+| `TWITTER_MAX_AGE_HOURS` | `24` | round 95c stale-backlog floor: a feed entry older than this is **not a new tweet** and is skipped (`STALE-SKIP`) before any tweet-data request, so a down/restoring nitter instance that answers with a days-old backlog cannot be posted. Age is judged by two witnesses, in **UTC**: for the account's own tweet the **tweet id** wins (immutable — a mirror that re-stamps an old entry, or mangles the date, cannot smuggle it through); for a **repost** the feed date wins (reposting an older tweet is a legitimate post). An entry whose age cannot be established still posts (fail-open), and `TEST_TWEET_ID` is exempt. `0` disables the guard and restores pre-95c behaviour exactly |
 
 **FULL MODE probe**
 
@@ -424,7 +430,7 @@ see [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) and the
 1. **Dedup cache** — already posted? skip. (`<subreddit>_<post_id>` key, retained per the cache caps above.)
 2. **Pending recheck throttle** — retryable operational holds already recorded
    for a candidate are re-evaluated according to `PENDING_RECHECK_SECONDS`
-   (default 1800 s). Confirmed removed/deleted archive entries use a no-recheck
+   (default 300 s — one cron tick, so the re-check lands on the next run). Confirmed removed/deleted archive entries use a no-recheck
    path unless they reappear via RSS (eligible for reconsideration when
    returned by RSS, still subject to removal checks; archive/media presence
    alone is not proof of current visibility).
@@ -590,8 +596,10 @@ See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
 * **First run posts only one item per account** — intentional anti-flood
   behavior; backfill starts on subsequent runs.
 * **A big video shows as a thumbnail / "smaller version" note (X)** — intended:
-  the file exceeded the ~256 MB Discord gallery limit (`VIDEO_SIZE_LIMIT`,
-  tunable). The card still plays a smaller rendition or links out to X.
+  the file exceeded the ~256 MB Discord gallery limit (`VIDEO_SIZE_LIMIT`).
+  Opting in with `TWITTER_HIGH_VIDEO_LIMIT=1` raises it to 350 MiB; that ceiling
+  is still unproven on Discord's proxy, so the default stays 256 MiB. The card
+  still plays a smaller rendition or links out to X either way.
 * **A video tile says "image not found" (X)** — rare, transient Discord proxy
   hiccup (the same URL plays fine when re-posted). Delete the message →
   remove the tweet from `posted_tweets.json` → re-run. If it ever becomes
