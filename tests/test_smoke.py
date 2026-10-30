@@ -10730,6 +10730,38 @@ async def _r95_probe_checks():
 
 asyncio.run(_r95_probe_checks())
 
+# A probe hold must never land on the never-re-check list: the archive record is
+# a snapshot, so a removal it reports can since have been reversed. If a
+# probe-derived reason were one of _NO_RECHECK_REASONS, a stale snapshot would
+# become a permanent hold (the round-34 "held and never posted" failure shape).
+_r95_main_src = inspect.getsource(v3.main)
+check("r95: probe holds use reasons OUTSIDE _NO_RECHECK_REASONS (a stale archive "
+      "snapshot can never become a permanent hold)",
+      '"liveness_removed"' in _r95_main_src
+      and '"liveness_unverified"' in _r95_main_src
+      and "liveness_removed" not in v3._NO_RECHECK_REASONS
+      and "liveness_unverified" not in v3._NO_RECHECK_REASONS,
+      sorted(v3._NO_RECHECK_REASONS))
+_r95_hold_now = 1_000_000.0
+_r95_hold = {}
+v3.mark_pending(_r95_hold, "Sub_h", "liveness_removed", _r95_hold_now)
+check("r95: a held post is re-probed after PENDING_RECHECK_SECONDS (no network "
+      "before that) and is not skipped forever",
+      v3._pending_throttle_skip(_r95_hold, "Sub_h", _r95_hold_now + 60, object()) is True
+      and v3._pending_throttle_skip(_r95_hold, "Sub_h",
+                                    _r95_hold_now + v3.PENDING_RECHECK_SECONDS + 1,
+                                    object()) is False,
+      _r95_hold)
+_r95_probe_block = _r95_main_src.split("round 95: independent liveness probe", 1)[1].split(
+    "resolve_post_media", 1)[0]
+check("r95: a held post is only ever a PENDING entry — the probe block never touches "
+      "the dedup cache (the round-34 'held and never posted' shape)",
+      "posted.add" not in _r95_probe_block
+      and "save_posted_messages" not in _r95_probe_block
+      and "pending.pop(unique_key" not in _r95_probe_block
+      and "mark_pending(pending, unique_key, _hold_reason, now" in _r95_probe_block,
+      _r95_probe_block[:300])
+
 # Workflow wiring + summary rendering (executes the real summary shell).
 _r95_wf = open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"), encoding="utf-8").read()
 _r95_tw = open(os.path.join(ROOT, ".github/workflows/twitter_monitor.yml"), encoding="utf-8").read()

@@ -62,6 +62,15 @@ A held post is written to `pending_reddit.json` (never to the dedup cache) and r
 after `PENDING_RECHECK_SECONDS` (or immediately when it reappears in RSS), so
 "held" means "later", not "lost".
 
+The hold reason is deliberately **not** the archive's own wording: it is
+`liveness_removed` / `liveness_unverified`, both **outside** `_NO_RECHECK_REASONS`.
+Those never-re-check reasons exist for evidence read from a live page; the archive record is a
+snapshot, so a removal it reports may since have been reversed (a moderator approving a queued
+post is a routine event in these subreddits). Reusing the never-re-check vocabulary here would
+have turned a stale snapshot into a **permanent** hold — the round-34 "held and never posted"
+failure shape. With its own reason, a held post is re-probed every 30 min and posts as soon as
+the record is clean, and it is never written into the dedup cache.
+
 ### 3. Bounded cost
 
 - `LIVENESS_PROBE_BUDGET` (default **10**) archive lookups per run, so a flood run cannot

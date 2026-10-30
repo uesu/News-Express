@@ -17,8 +17,12 @@
 - **Lenient by default, strict by Variable.** `liveness_hold_decision()` holds only on
   positive evidence unless `REDDIT_LIVENESS_STRICT=1`, so in the default mode this change
   cannot withhold a live post (an unverifiable post posts exactly as before). Holds are
-  written to `pending_reddit.json` — never to the dedup cache — and retried; the existing
-  reason vocabulary is reused, so `_NO_RECHECK_REASONS` keeps its meaning.
+  written to `pending_reddit.json` — never to the dedup cache — and retried. The hold reason
+  is `liveness_removed` / `liveness_unverified`, both **outside** `_NO_RECHECK_REASONS`:
+  the archive record is a snapshot, so a removal it reports may since have been reversed, and
+  reusing the never-re-check vocabulary would have turned a stale snapshot into a permanent
+  hold (the round-34 shape). Held posts are re-probed every 30 min and post as soon as the
+  record is clean.
 - **Bounded cost.** `LIVENESS_PROBE_BUDGET` (10 lookups/run), `LIVENESS_PROBE_TIMEOUT`
   (8 s), nothing in DRY RUN or TEST POST mode, nothing on a run with no candidates, and an
   isolated failure counter so a liveness lookup can never disable the media/archive paths.

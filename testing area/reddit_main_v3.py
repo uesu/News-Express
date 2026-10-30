@@ -7459,7 +7459,16 @@ async def main():
                         post_json=post_json, entry=entry)
                     _note_liveness(_ls, _lwhy, _lsrc, run_stats)
                     if liveness_hold_decision(_ls, REDDIT_LIVENESS_STRICT):
-                        _hold_reason = _lwhy if _ls == "removed" else "liveness_unverified"
+                        # Deliberately NOT `_lwhy`: the archive record is a
+                        # SNAPSHOT, so a removal it reports may since have been
+                        # reversed. The existing never-re-check reasons are for
+                        # evidence read from a live page; using one here would
+                        # turn a stale snapshot into a permanent hold. These two
+                        # reasons are outside `_NO_RECHECK_REASONS`, so the post
+                        # is re-probed after PENDING_RECHECK_SECONDS and posts as
+                        # soon as the record is clean (or the post is approved).
+                        _hold_reason = ("liveness_removed" if _ls == "removed"
+                                        else "liveness_unverified")
                         mark_pending(pending, unique_key, _hold_reason, now,
                                      source=_entry_source36,
                                      title=str(base.get("title") or "")[:200],
