@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased — Round 95d: the round-95c guard crash in production CI (2026-10-30)
+
+### Fix
+
+- **A documentation check crashed both production CIs after the round-95 merge.**
+  `uesu/7jkxmy9nvbc` run #332 and `uesu/wvkhabh2s22` run #417 both failed at the same line:
+  `tests/test_smoke.py` opened `README.md` unguarded. `README.md` is **dev-only** —
+  `sync_prod.py` deliberately keeps it out of both production repositories — so the check
+  raised `FileNotFoundError` in a tree where every engine, workflow and test assertion had
+  already passed. Nothing in delivery was affected (the monitors run on their 5-minute cron,
+  not on CI), but the safety gate was red.
+- **Fixed by skipping the check when the documentation is absent**, exactly like the
+  round-90 credits check does: a production checkout now asserts the round's knob is still
+  wired and skips the README knob table instead of crashing.
+- **New self-audit (`r95d`) so this class of bug cannot return:** the suite parses its own
+  syntax tree and fails, by name and line, if any read of `README.md`, `AGENTS.md`,
+  `.env.example` or `docs/**` sits outside an existence guard or a `try/except`. It resolves
+  simple path aliases too (`p = .../README.md; open(p)`), which is the shape of the bug.
+  The audit itself is self-tested four ways (literal, guarded, variable, `try/except`).
+
+### Proof
+
+| Tree | Before | After |
+| --- | --- | --- |
+| dev (`README.md` present) | 1238 PASS | **1240 PASS**, 0 FAIL |
+| production-shaped (no `README.md`, no `docs/`, no `sync_prod.yml`) | `FileNotFoundError` | **1235 PASS**, 0 FAIL |
+| production-shaped + mutated to the pre-fix unguarded read | — | **FAIL r95d** naming the exact line, then the old crash |
+
 ## Unreleased — Round 95c: stale-backlog guard, one-tick re-check wait, agent-readable Twitter summary (2026-10-30)
 
 ### Correctness
