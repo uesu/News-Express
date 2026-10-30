@@ -1,5 +1,57 @@
 # Changelog
 
+## Unreleased — Round 96b: the Twitter summary names accounts, posts and refusals (2026-10-30)
+
+### Observability (workflow summary only; no engine change, no extra requests)
+
+- **Which account failed is now a name, not a count.** The summary lists every
+  account with its outcome — `Ananta_EN: ok via nitter.cf — 17 entries`,
+  `PomPom_HonkaiSR: FAILED — no working nitter instance this run`,
+  `Wuthering_Waves: empty feed (0 entries)` — bounded to 12 lines, host only
+  (no path or query), sorted.
+- **Delivered keys are listed** (up to 10, with `… N more not shown`) instead of a
+  bare "posts delivered: 3", plus a `… more` note when truncated.
+- **Refused backlog entries are named with their age**
+  (`TYPEII_EN_2115271059188613499 — 46.1 h old`, up to 5), so the 46/94/257-hour
+  backlog of run #12043 is verifiable from the summary alone.
+- **Log truncation is called out**: when the number of `V3 Posted` / `STALE-SKIP`
+  lines disagrees with the engine's authoritative `V3 SUMMARY` line, the summary
+  says so and tells the reader to trust the engine value.
+
+## Unreleased — Round 96: the Reddit run summary proves coverage without the log (2026-10-30)
+
+### Observability (no delivery-path change, no extra requests)
+
+- **A quiet subreddit is now a stated fact, not an inference.** Run #11533
+  (`05:45Z`) fetched 100 combined-feed entries covering **5 of 6** subreddits;
+  `HonkaiNexusAnimaLeaks` had no entry (it takes ~2 contributions a week) and the
+  archive legitimately returned nothing for it. That was provable **only** by the
+  *absence* of an `Arctic Shift search unavailable` line in the Actions log — which
+  nobody can check later without the log. The summary now prints:
+  - `Feed entries by subreddit: …` and
+    `Subreddits missing from the combined feed: HonkaiNexusAnimaLeaks`,
+  - `Archive coverage: 5 subreddit(s) without RSS news tried — 4 with posts,
+    1 empty (nothing inside the posting window), 0 failed, 0 skipped (circuit open)`
+    plus a `by subreddit: … =empty` breakdown,
+  - a **WARNING** line whenever an archive lookup *failed* or hit the circuit
+    breaker, so "unconfirmed" can never read as "nothing to post".
+- **Delivered posts are listed, not just counted**:
+  `Genshin_Impact_Leaks_1xj77do — video/native-dash, 1 item(s), LATENCY 2.8 min`
+  (with `held as '<reason>'` when a hold preceded it and the Discord message id).
+- **FULL MODE availability is in the summary**: `FULL MODE post-JSON probe: http_403: 1`
+  and *"native mode this run"* — the `post JSON HTTP 403 — native mode` line used to
+  exist only in the log.
+- New run-record fields: `feed_subreddits_with_entries`, `feed_subreddits_missing`,
+  `arctic_by_sub` (`posts`/`empty`/`failed`/`circuit_open`), `arctic_subreddits_*`
+  counters, `delivered_posts`, `json_probe_by_status`. All are additive: a round-95
+  record still renders unchanged.
+
+### Engine logging
+
+- `[arctic <sub>] no posts in the last 48 h — nothing to recover from the archive`
+  is emitted on an empty archive answer, so an *attempted but empty* lookup no longer
+  looks like a subreddit that was never tried.
+
 ## Unreleased — Round 95d: the round-95c guard crash in production CI (2026-10-30)
 
 ### Fix
