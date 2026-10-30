@@ -11399,19 +11399,47 @@ check("r97: the settings line is built by the engine (workflow stays small)",
 # #11568 (2026-10-30 08:40Z) failed with "Exceeded max expression length 21000"
 # at 21,058 chars, taking the WHOLE monitor down because the summary step had
 # grown. Keep a 1,000-character margin and prove it for every workflow here.
-import yaml as _r97_yaml
+def _r97_run_scripts(text):
+    """[(label, script_length)] for every `run: |` block, WITHOUT PyYAML.
+
+    requirements.txt carries no YAML library (the engines do not need one), so
+    this walks the raw file the way GitHub's loader counts: the block scalar's
+    content, common indentation removed, newline-joined.
+    """
+    out, lines = [], text.splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() != "run: |":
+            continue
+        indent = len(line) - len(line.lstrip())
+        body, label = [], ""
+        for prev in range(i - 1, max(-1, i - 40), -1):
+            if lines[prev].strip().startswith("- name:"):
+                label = lines[prev].strip()[len("- name:"):].strip()[:40]
+                break
+        for ln in lines[i + 1:]:
+            if not ln.strip():
+                body.append("")
+                continue
+            if len(ln) - len(ln.lstrip()) <= indent:
+                break
+            body.append(ln)
+        while body and not body[-1]:
+            body.pop()
+        # YAML strips the indentation of the FIRST non-empty line (blank lines
+        # carry no indentation and must not widen the strip).
+        pad = next((len(b) - len(b.lstrip()) for b in body if b.strip()), 0)
+        out.append((label, len("\n".join(b[pad:] for b in body)) + 1))
+    return out
+
+
 _r97_worst = []
 for _wf_name in ("reddit_monitor.yml", "twitter_monitor.yml"):
-    _wf_data = _r97_yaml.safe_load(open(os.path.join(ROOT, ".github/workflows", _wf_name),
-                                        encoding="utf-8"))
-    for _job in _wf_data["jobs"].values():
-        for _step in _job.get("steps", []):
-            _script = _step.get("run")
-            if isinstance(_script, str):
-                _r97_worst.append((len(_script), _wf_name, str(_step.get("name"))[:40]))
-_r97_worst.sort(reverse=True)
+    _wf_text = open(os.path.join(ROOT, ".github/workflows", _wf_name), encoding="utf-8").read()
+    for _label, _len in _r97_run_scripts(_wf_text):
+        _r97_worst.append((_len, _wf_name, _label))
+_r97_worst.sort(key=lambda x: (-x[0], x[1]))
 check("r97: no workflow step script approaches GitHub's 21,000-character cap",
-      _r97_worst and _r97_worst[0][0] <= 20000, _r97_worst[:2])
+      len(_r97_worst) >= 10 and _r97_worst[0][0] <= 20000, _r97_worst[:3])
 _r97_src = open(os.path.join(ROOT, "testing area/reddit_main_v3.py"), encoding="utf-8").read()
 check("r97: the fresh-age gate records the key it deferred",
       '_note_key(run_stats, "fresh_hold_keys",' in _r97_src
