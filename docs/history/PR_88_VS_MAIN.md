@@ -269,7 +269,14 @@ named replacement.
 
 ---
 
-## 8. Rollback, per piece — no revert needed
+## 8. Variables — nothing needs turning on
+
+Every switch in this PR is **on by default with a safe value**; after you merge,
+the runs behave as described above with **no repository Variable set at all**.
+The table below is only for changing or undoing a behaviour (`Settings →
+Secrets and variables → Actions → Variables`, then the next run picks it up).
+
+## 8b. Rollback, per piece — no revert needed
 
 | Want the old behaviour? | Set |
 |---|---|
@@ -286,7 +293,7 @@ Each is a repository Variable; no code revert, no redeploy.
 
 | Suite | Result |
 |---|---|
-| `tests/test_smoke.py` | **1234 PASS** (main: 1175; head before 95c: 1218) — **0 guards lost** |
+| `tests/test_smoke.py` | **1236 PASS** (main: 1175; head before 95c: 1218) — **0 guards lost** |
 | `tests/test_reddit_signals.py` | 103 PASS |
 | `tests/test_twitter_media.py` | ALL PASS |
 | `compileall`, YAML parse, zizmor | clean / OK / identical to base |

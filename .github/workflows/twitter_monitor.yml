@@ -111,6 +111,13 @@ jobs:
           #   MEDIA_HEAL_SCOPE=off        never re-edit any media
           # Optional high video limit: unset/false keeps the 256 MiB default.
           TWITTER_HIGH_VIDEO_LIMIT: ${{ vars.TWITTER_HIGH_VIDEO_LIMIT }}
+          # Round 95c: stale-backlog floor. An entry older than this many
+          # hours is refused (STALE-SKIP) before any tweet-data request, so a
+          # degraded nitter mirror that answers `feed OK` with a days-old
+          # backlog cannot post old tweets as news. Unset/empty keeps 24 h.
+          #   TWITTER_MAX_AGE_HOURS=0     switch the guard off entirely
+          #   TWITTER_MAX_AGE_HOURS=48    keep a two-day catch-up window
+          TWITTER_MAX_AGE_HOURS: ${{ vars.TWITTER_MAX_AGE_HOURS }}
           MEDIA_HEAL: ${{ vars.MEDIA_HEAL }}
           MEDIA_HEAL_DELAY_SECONDS: ${{ vars.MEDIA_HEAL_DELAY_SECONDS }}
           MEDIA_HEAL_ATTEMPTS: ${{ vars.MEDIA_HEAL_ATTEMPTS }}

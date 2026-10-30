@@ -10913,6 +10913,28 @@ check("r95c: TEST_TWEET_ID stays exempt (an operator explicitly asked for that t
       "if TWITTER_MAX_AGE_SECONDS and not test_tweet_id:" in _x95c_src)
 check("r95c: the stale skip is logged as its own greppable reason",
       "STALE-SKIP:" in _x95c_src and "not posted." in _x95c_src)
+_x95c_wf = open(os.path.join(ROOT, ".github/workflows/twitter_monitor.yml"), encoding="utf-8").read()
+check("r95c: the stale floor's off-switch is actually wired (a Variable the workflow never "
+      "passes through would be silently ignored in CI)",
+      "TWITTER_MAX_AGE_HOURS: ${{ vars.TWITTER_MAX_AGE_HOURS }}" in _x95c_wf
+      and 'TWITTER_MAX_AGE_HOURS' in _x95c_src)
+# Every tuning knob documented in the README must reach its workflow, or setting
+# it in repository settings does nothing. The six exceptions are not repository
+# Variables: ACCOUNTS/SUBREDDITS are edited in the workflow, DRY_RUN and the two
+# TEST_* switches are one-off dispatch inputs, EMBEDEZE_API_KEY belongs to the
+# standby V2 engine.
+_r95c_not_variables = {"ACCOUNTS", "SUBREDDITS", "DRY_RUN", "TEST_POST_ID",
+                       "TEST_TWEET_ID", "EMBEDEZ_API_KEY"}
+_x95c_readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
+_x95c_documented = sorted(set(re.findall(r"^\| `([A-Z][A-Z0-9_]+)` \|", _x95c_readme, re.M)))
+_x95c_mapped = set(re.findall(r"vars\.([A-Z][A-Z0-9_]+)",
+                             _x95c_wf + open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"),
+                                             encoding="utf-8").read()))
+_x95c_unwired = [n for n in _x95c_documented
+                 if n not in _x95c_mapped and n not in _r95c_not_variables]
+check("r95c: every README-documented tuning knob is passed through by its workflow",
+      _x95c_documented and not _x95c_unwired,
+      _x95c_unwired)
 check("r95c: the engine emits one machine-readable state line for the workflow summary",
       # must be INFO: the summary step greps the log, and DEBUG lines are not emitted.
       'logging.info(f"V3 SUMMARY: posted=' in _x95c_src

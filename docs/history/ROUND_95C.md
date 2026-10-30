@@ -122,7 +122,7 @@ Workflow logs are not readable by later agents, so the state now lands in
 
 ## Verification
 
-** `tests/test_smoke.py`: **1234 PASS** (16 round-95c guards added; the round-30
+** `tests/test_smoke.py`: **1236 PASS** (18 round-95c guards added; the round-30
   throttle guards were retargeted to the new 300 s default, including a
   +310 s "due" boundary).
 * Mutations: removing the guard, moving it after the fetch, flipping it to
