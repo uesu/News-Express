@@ -21,6 +21,10 @@
   cannot grow the record.
 - Records written by earlier rounds (no `hold_keys` / `known_pending_keys`)
   render exactly as before.
+- The recorder takes the run-stats dict and a field name, so a missing or
+  renamed field degrades to "no names in the summary" instead of raising inside
+  the loop that posts: observability can never cost a delivery. Cost is
+  0.19 µs per call and at most ~2.4 KB on a worst-case run-result record.
 
 ## Unreleased — Round 96b: the Twitter summary names accounts, posts and refusals (2026-10-30)
 

@@ -11217,15 +11217,25 @@ check("r96c: the run record has bounded name lists for held and suppressed posts
       isinstance(_r96c_init.get("hold_keys"), list)
       and isinstance(_r96c_init.get("known_pending_keys"), list))
 _r96c_bucket = []
+_r96c_stats = {"hold_keys": _r96c_bucket}
 for _i in range(15):
-    v3._note_key(_r96c_bucket, {"key": f"Sub_1xj{_i}"})
+    v3._note_key(_r96c_stats, "hold_keys", {"key": f"Sub_1xj{_i}"})
 check("r96c: _note_key is bounded (a flood run cannot grow the run-result file)",
       len(_r96c_bucket) == 10 and _r96c_bucket[0]["key"] == "Sub_1xj0")
+# Observability may never break delivery: a missing field is created, junk stats
+# are ignored, and nothing raises into the loop that posts.
+_r96c_missing = {}
+v3._note_key(_r96c_missing, "hold_keys", {"key": "Sub_1xj"})
+v3._note_key(None, "hold_keys", {"key": "Sub_1xj"})
+v3._note_key({}, "hold_keys", None)
+v3._note_key({"hold_keys": "not a list"}, "hold_keys", {"key": "Sub_1xj"})
+check("r96c: _note_key can never raise into the delivery loop (missing/junk stats)",
+      _r96c_missing == {"hold_keys": [{"key": "Sub_1xj"}]})
 _r96c_src96 = open(os.path.join(ROOT, "testing area/reddit_main_v3.py"), encoding="utf-8").read()
 check("r96c: both hold gates record the key they refused",
-      '_note_key(run_stats["hold_keys"],\n                                  {"key": unique_key, "reason": _live_reason,' in _r96c_src96
-      and '_note_key(run_stats["hold_keys"],\n                                  {"key": unique_key, "reason": _hold_reason,' in _r96c_src96
-      and '_note_key(run_stats["known_pending_keys"],' in _r96c_src96)
+      '_note_key(run_stats, "hold_keys",' in _r96c_src96
+      and '_note_key(run_stats, "known_pending_keys",' in _r96c_src96
+      and _r96c_src96.count('_note_key(run_stats, "hold_keys",') == 2)
 
 # Rendered through the real workflow step with a #11548-shaped record.
 _r96c_fake = {

@@ -444,7 +444,7 @@ _RUN_RESULT_FILE = "reddit_run_result.json"
 # Global for media tracking (set per-run inside main)
 current_run_stats = None
 
-def _note_key(bucket, record, limit: int = 10) -> None:
+def _note_key(stats, name: str, record, limit: int = 10) -> None:
     """Round 96c: remember WHICH key was held/suppressed, bounded.
 
     Live #11548 (2026-10-30 07:00Z): the summary said "Liveness not verified: 1"
@@ -452,9 +452,17 @@ def _note_key(bucket, record, limit: int = 10) -> None:
     was `[AnantaLeaks_1xj8et0] post not verified live (...) — skipping` in the
     Actions log. The counts already exist; this adds the names, capped so a flood
     run cannot grow the run-result file.
+
+    Takes the stats dict + field name (not the list) on purpose: this is
+    observability, so a missing/renamed field must degrade to "no names in the
+    summary", never raise into the delivery loop. Every failure is swallowed and
+    the run posts exactly as it would without it.
     """
     try:
-        if isinstance(bucket, list) and len(bucket) < limit:
+        bucket = stats.get(name)
+        if not isinstance(bucket, list):
+            bucket = stats[name] = []
+        if len(bucket) < limit:
             bucket.append(record)
     except Exception:
         pass
@@ -7361,7 +7369,7 @@ async def main():
                     if _pend.get("reason") in _NO_RECHECK_REASONS:
                         run_stats["known_pending_suppressed"] += 1
                         _inc_reason(run_stats["known_pending_by_reason"], _pend_reason)
-                        _note_key(run_stats["known_pending_keys"],
+                        _note_key(run_stats, "known_pending_keys",
                                   {"key": unique_key, "reason": _pend_reason})
                         logging.debug(f"[{unique_key}] pending ({_pend_reason}) — "
                                      f"not re-checking (removed posts re-enter via RSS "
@@ -7554,7 +7562,7 @@ async def main():
                                      published_ts=published_ts)
                         run_stats["liveness_not_verified"] += 1
                         _inc_reason(run_stats["liveness_by_reason"], _why)
-                        _note_key(run_stats["hold_keys"],
+                        _note_key(run_stats, "hold_keys",
                                   {"key": unique_key, "reason": _live_reason,
                                    "detail": _why, "source": _entry_source36,
                                    "gate": "live-source"})
@@ -7595,7 +7603,7 @@ async def main():
                         run_stats["liveness_not_verified"] += 1
                         _inc_reason(run_stats["liveness_by_reason"],
                                     f"round95 {'removed' if _ls == 'removed' else 'unverified'}: {_lwhy}")
-                        _note_key(run_stats["hold_keys"],
+                        _note_key(run_stats, "hold_keys",
                                   {"key": unique_key, "reason": _hold_reason,
                                    "detail": _lwhy, "source": _lsrc,
                                    "gate": "liveness-probe"})
