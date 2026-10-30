@@ -11056,6 +11056,103 @@ check("r95c: an unpersisted dedup cache is called out as a re-post risk",
       and "not persisted this run" not in _app_summary_shell("twitter", _app_tw_log,
                                                              twitter_cache="success"))
 
+# ---- Round 96 (2026-10-30): the run summary must prove coverage by itself ----
+# Live #11533: one configured subreddit (HonkaiNexusAnimeLeaks) was absent from the
+# 100-entry combined feed and the archive returned nothing. The only proof that the
+# archive had actually been asked was the ABSENCE of an "Arctic Shift search
+# unavailable" line in the Actions log — invisible to anyone without the log. These
+# counters put the coverage in the summary, so the log is no longer required.
+_r96_init = v3._init_run_stats()
+check("r96: the run record carries feed + archive coverage detail",
+      isinstance(_r96_init.get("feed_subreddits_with_entries"), dict)
+      and isinstance(_r96_init.get("feed_subreddits_missing"), list)
+      and isinstance(_r96_init.get("arctic_by_sub"), dict)
+      and all(key in _r96_init for key in (
+          "arctic_subreddits_with_posts", "arctic_subreddits_empty",
+          "arctic_subreddits_failed", "arctic_subreddits_circuit_open")),
+      sorted(_r96_init)[:5])
+
+_r96_src = open(os.path.join(ROOT, "testing area/reddit_main_v3.py"), encoding="utf-8").read()
+check("r96: the engine names the subreddits the combined feed did not cover",
+      "run_stats[\"feed_subreddits_missing\"] = sorted(" in _r96_src
+      and "set(SUBREDDITS) - covered" in _r96_src
+      and "run_stats[\"feed_subreddits_with_entries\"] = dict(_per_sub_entries)" in _r96_src)
+check("r96: every archive attempt records posts/empty/failed/circuit_open per subreddit",
+      'run_stats["arctic_by_sub"][sub] = {' in _r96_src
+      and '_arctic_status = "failed"' in _r96_src
+      and '_arctic_status = "empty"' in _r96_src
+      and '_arctic_status = "circuit_open"' in _r96_src
+      and "no posts in the last" in _r96_src)
+check("r96: a delivery records the post itself, not only a count",
+      'run_stats["delivered_posts"].append({' in _r96_src
+      and '"latency_seconds": round(_latency, 1)' in _r96_src
+      and '"held_reason": (_pend_entry.get("reason")' in _r96_src)
+check("r96: the FULL MODE post-JSON probe outcome is recorded (403 was log-only)",
+      "def _note_json_probe(" in _r96_src
+      and '_note_json_probe(f"http_{resp.status}")' in _r96_src
+      and '_note_json_probe(f"ok_{source}")' in _r96_src)
+
+# Same shape as production run #11533, rendered through the real workflow step.
+_r96_fake = {
+    "combined_entries": 100, "combined_subreddits_covered": 5,
+    "subreddits_represented": 5, "subreddits_configured": 6,
+    "combined_fetch_status": "ok", "fallback_status": "not_attempted",
+    "arctic_candidates": 4, "arctic_subreddits_tried": 5,
+    "feed_subreddits_with_entries": {"Genshin_Impact_Leaks": 46,
+                                     "HonkaiStarRail_leaks": 24,
+                                     "Zenlesszonezeroleaks_": 18,
+                                     "WutheringWavesLeaks": 9, "AnantaLeaks": 3},
+    "feed_subreddits_missing": ["HonkaiNexusAnimeLeaks"],
+    "arctic_by_sub": {"AnantaLeaks": {"posts": 4, "status": "posts"},
+                      "HonkaiStarRail_leaks": {"posts": 3, "status": "posts"},
+                      "HonkaiNexusAnimeLeaks": {"posts": 0, "status": "empty"},
+                      "WutheringWavesLeaks": {"posts": 10, "status": "posts"},
+                      "Zenlesszonezeroleaks_": {"posts": 11, "status": "posts"}},
+    "json_probe_by_status": {"http_403": 1},
+    "unposted_candidates_considered": 4, "candidates_entering_processing": 1,
+    "delivered": 1,
+    "delivered_posts": [{"key": "Genshin_Impact_Leaks_1xj77do",
+                         "subreddit": "Genshin_Impact_Leaks", "media": "video",
+                         "mode": "native-dash", "items": 1,
+                         "latency_seconds": 168.3, "held_reason": None,
+                         "message_id": "1"}],
+    "failed_delivery": 0, "known_pending_suppressed": 3,
+    "known_pending_by_reason": {"removal_notice": 3},
+    "for_the_rest": 0, "dedup_skipped_in_run": 124, "completed": True,
+    "dry_run": False, "persistence_status": "saved", "liveness_probe_enabled": True,
+}
+_r96_summary = _app_summary_shell_with_json("reddit", None, fake_data=_r96_fake)
+check("r96: the summary names the subreddit the feed missed (no log needed)",
+      "Subreddits missing from the combined feed: HonkaiNexusAnimeLeaks" in _r96_summary,
+      [ln for ln in _r96_summary.splitlines() if "missing" in ln][:2])
+check("r96: the summary states that the archive answered EMPTY for it (not silently skipped)",
+      "Archive coverage: 5 subreddit(s) without RSS news tried" in _r96_summary
+      and "4 with posts, 1 empty" in _r96_summary
+      and "HonkaiNexusAnimeLeaks=empty" in _r96_summary,
+      [ln for ln in _r96_summary.splitlines() if "Archive" in ln or "by subreddit" in ln][:2])
+check("r96: the summary lists the delivered post with its latency",
+      "Genshin_Impact_Leaks_1xj77do — video/native-dash, 1 item(s), LATENCY 2.8 min"
+      in _r96_summary,
+      [ln for ln in _r96_summary.splitlines() if "1xj77do" in ln][:2])
+check("r96: the summary says cards were built in native mode when the JSON probe failed",
+      "FULL MODE post-JSON probe: http_403: 1" in _r96_summary
+      and "native mode this run" in _r96_summary)
+# A failed archive lookup must be called out, never rendered as a quiet empty run.
+_r96_fail = dict(_r96_fake)
+_r96_fail["arctic_by_sub"] = {"HonkaiNexusAnimeLeaks": {"posts": 0, "status": "failed"}}
+_r96_fail_summary = _app_summary_shell_with_json("reddit", None, fake_data=_r96_fail)
+check("r96: a failed archive lookup is a visible warning in the summary",
+      "1 failed" in _r96_fail_summary
+      and "coverage for that subreddit is unconfirmed" in _r96_fail_summary,
+      [ln for ln in _r96_fail_summary.splitlines() if "failed" in ln][:3])
+# Older run records (before round 96) must still render — no new keys required.
+_r96_old = {"combined_entries": 100, "subreddits_represented": 5,
+            "subreddits_configured": 6, "completed": True, "delivered": 0}
+_r96_old_summary = _app_summary_shell_with_json("reddit", None, fake_data=_r96_old)
+check("r96: a round-95 or older run record still renders (new keys are optional)",
+      "Combined-feed entries: 100" in _r96_old_summary
+      and "Archive coverage:" not in _r96_old_summary)
+
 # ---- Round 89: no GitHub Actions annotation may leak out of this suite ----
 # Restore the real stdout first, then judge what the suite actually emitted.
 sys.stdout = _stdout_guard.stream
