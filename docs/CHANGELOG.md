@@ -1,5 +1,56 @@
 # Changelog
 
+## Unreleased — Round 98: stale archive snapshots no longer strand live posts (2026-10-30)
+
+### Two holds that outlived their evidence
+
+- **The archive's "removed" verdict is only a snapshot.** Six `r/HonkaiStarRail_leaks`
+  "Official" posts (Fun with Aha, Affinitive Eidolon, Star Lotto, the 4.7 program brief,
+  4.7 bonuses, 4.7 trailer) and one Genshin post sat in `pending_reddit.json` as
+  `liveness_removed` for 2–4 h **while reddit.com's own listing carried them** — they
+  were captured in the mod queue, approved later, and the archived row still said
+  `removed_by_category`. New rule: a snapshot `removed` verdict is overridden when BOTH
+  (a) the post is in **Reddit's own feed** this run (the combined feed, or a reddit.com
+  per-subreddit feed — never a redlib/eddrit proxy and never the archive) and (b) it has
+  been listed there for **3 consecutive runs** (`STALE_SNAPSHOT_TICKS`, ~15 min at the
+  5-minute cron). A removed post leaves reddit's own listing within minutes, so it
+  cannot reach the streak; one run without the post resets the count. **Live post-JSON
+  evidence is never overridden** (`post-json` is a live read; only `arctic-entry` /
+  `arctic-lookup` snapshots qualify).
+- **A held post that no source lists any more was never re-read.** `HonkaiStarRail_leaks_1xjdkwf`
+  froze at `last_checked` 12:10Z because it had dropped out of both the feed and the
+  archive sweep; nothing in the pipeline ever looked at it again. New pass: up to
+  `RECLAIM_MAX_PER_RUN` (5) held posts per run that nothing has listed are re-read from
+  the archive in **one batched `ids=` request**, oldest first, only for retryable
+  reasons (`liveness_removed`, `liveness_unverified`, `not_live`, `pending approval`,
+  `sources_down`) and only inside the 48 h window. A clean record is re-admitted into
+  the **existing** pipeline (dedup, both liveness gates, fresh hold, flood cap); a still
+  removed record just gets `last_checked` refreshed. Archive errors are a no-op — a post
+  is never posted on a guess, and `removal_notice` holds are never reclaimed (they
+  return only via RSS).
+- Cost: **one** extra archive request per run, and only when a reclaim candidate exists
+  (typically 1–2 keys). Both decisions are visible in the summary —
+  `Stale-snapshot overrides: N` with the keys, and `Held posts re-probed: N` with
+  `re-admitted / still removed` plus one line per probe.
+- **Edge cases closed before merge** (each has a check): a record with no usable
+  timestamp is never re-admitted and never writes a bogus `published_ts`; a future
+  timestamp is clamped so the fresh-age floor cannot hold a post forever; a record whose
+  own subreddit disagrees with the pending key is never re-admitted (no wrong-channel
+  post); a held key for a subreddit that is no longer tracked is skipped before it costs
+  an archive request or a "no webhook" ERROR line; the summary skips malformed entries
+  and truncates long text.
+- `AGENTS.md` size table updated (largest step script 14.5 KB). Smoke suite gains eight
+  checks that **execute** both new pure functions (streak reset, native-only listing, no
+  post-JSON override, reclaim selection/limit) **and five that run the real `main()`**
+  with the network mocked (reclaim → delivered, override at streak 3 → delivered, streak
+  1 → still held, still-removed reclaim → held with the clock refreshed, `removal_notice`
+  → never reclaimed and no archive request).
+- Three real bugs were caught before merge: `num()` called without its `tail` argument
+  in the summary (the step would have exited 1), `native_keys` initialised only in the
+  feed branch (TEST POST mode → `UnboundLocalError`), and the reclaim pass placed *after*
+  the "no candidates" early return (a quiet tick would have skipped exactly the holds it
+  exists to rescue).
+
 ## Unreleased — Round 97c: the summary step is a third smaller (2026-10-30)
 
 ### Hardening after the 21,000-character outage

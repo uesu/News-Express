@@ -48,7 +48,7 @@ summary formatting, taking the `Write monitor run summary` step from 18.5 KB to
 1. Never grow a `run:` block by pasting formatting/printing code into it. Values the
    engine already knows belong in the engine (e.g. `_settings_line()`); the workflow
    prints them.
-2. Current sizes (keep the largest well under the cap): Reddit summary ~14.1 KB,
+2. Current sizes (keep the largest well under the cap): Reddit summary ~14.5 KB,
    Reddit cache-persist 4.7 KB, Twitter summary ~7.3 KB. Aim for ≤ 16 KB.
 3. `yaml.safe_load()` and the offline smoke suite **cannot** see this limit — YAML is
    valid and every test passes. Only GitHub's loader rejects it. Trust the guard, not
