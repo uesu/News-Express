@@ -11342,6 +11342,12 @@ _r97_fake = {
                            "dedup_per_sub_cap": 250, "dedup_total_cap": 10000,
                            "liveness_probe": True, "liveness_strict": False,
                            "liveness_probe_budget": 10},
+    "settings_line": v3._settings_line({"fresh_hold_seconds": 60,
+                                        "pending_recheck_seconds": 300,
+                                        "max_age_hours": 48, "max_posts_per_run": 25,
+                                        "dedup_per_sub_cap": 250, "dedup_total_cap": 10000,
+                                        "liveness_probe": True, "liveness_strict": False,
+                                        "liveness_probe_budget": 10}),
     "liveness_probe_enabled": True, "dedup_skipped_in_run": 115,
     "completed": True, "dry_run": False, "persistence_status": "saved",
 }
@@ -11359,6 +11365,7 @@ check("r97: each waiting post is named with its age and the floor that held it",
 _r97_off = dict(_r97_fake)
 _r97_off["effective_settings"] = dict(_r97_fake["effective_settings"],
                                       fresh_hold_seconds=0, liveness_probe=False)
+_r97_off["settings_line"] = v3._settings_line(_r97_off["effective_settings"])
 _r97_off_summary = _app_summary_shell_with_json("reddit", None, fake_data=_r97_off)
 check("r97: a disabled floor and probe are stated as off",
       "fresh hold off (0 s)" in _r97_off_summary
@@ -11383,6 +11390,27 @@ check("r97: a record without the new fields still renders (no Settings line)",
       "Fresh-age hold: 2" in _r97_old_summary
       and "**Settings:**" not in _r97_old_summary
       and "waiting:" not in _r97_old_summary)
+check("r97: the settings line is built by the engine (workflow stays small)",
+      v3._init_run_stats().get("settings_line", "").startswith("**Settings:** fresh hold ")
+      and "pending_recheck_seconds" in v3._init_run_stats().get("settings_line", "")
+      and v3._settings_line({}) == "")
+# GitHub refuses a workflow whose step script exceeds 21,000 characters: prod
+# #11568 (2026-10-30 08:40Z) failed with "Exceeded max expression length 21000"
+# at 21,058 chars, taking the WHOLE monitor down because the summary step had
+# grown. Keep a 1,000-character margin and prove it for every workflow here.
+import yaml as _r97_yaml
+_r97_worst = []
+for _wf_name in ("reddit_monitor.yml", "twitter_monitor.yml"):
+    _wf_data = _r97_yaml.safe_load(open(os.path.join(ROOT, ".github/workflows", _wf_name),
+                                        encoding="utf-8"))
+    for _job in _wf_data["jobs"].values():
+        for _step in _job.get("steps", []):
+            _script = _step.get("run")
+            if isinstance(_script, str):
+                _r97_worst.append((len(_script), _wf_name, str(_step.get("name"))[:40]))
+_r97_worst.sort(reverse=True)
+check("r97: no workflow step script approaches GitHub's 21,000-character cap",
+      _r97_worst and _r97_worst[0][0] <= 20000, _r97_worst[:2])
 _r97_src = open(os.path.join(ROOT, "testing area/reddit_main_v3.py"), encoding="utf-8").read()
 check("r97: the fresh-age gate records the key it deferred",
       '_note_key(run_stats, "fresh_hold_keys",' in _r97_src
