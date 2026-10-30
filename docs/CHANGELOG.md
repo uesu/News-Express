@@ -6,12 +6,12 @@
 
 - **A quiet subreddit is now a stated fact, not an inference.** Run #11533
   (`05:45Z`) fetched 100 combined-feed entries covering **5 of 6** subreddits;
-  `HonkaiNexusAnimeLeaks` had no entry (it takes ~2 contributions a week) and the
+  `HonkaiNexusAnimaLeaks` had no entry (it takes ~2 contributions a week) and the
   archive legitimately returned nothing for it. That was provable **only** by the
   *absence* of an `Arctic Shift search unavailable` line in the Actions log — which
   nobody can check later without the log. The summary now prints:
   - `Feed entries by subreddit: …` and
-    `Subreddits missing from the combined feed: HonkaiNexusAnimeLeaks`,
+    `Subreddits missing from the combined feed: HonkaiNexusAnimaLeaks`,
   - `Archive coverage: 5 subreddit(s) without RSS news tried — 4 with posts,
     1 empty (nothing inside the posting window), 0 failed, 0 skipped (circuit open)`
     plus a `by subreddit: … =empty` breakdown,

@@ -11057,7 +11057,7 @@ check("r95c: an unpersisted dedup cache is called out as a re-post risk",
                                                              twitter_cache="success"))
 
 # ---- Round 96 (2026-10-30): the run summary must prove coverage by itself ----
-# Live #11533: one configured subreddit (HonkaiNexusAnimeLeaks) was absent from the
+# Live #11533: one configured subreddit (HonkaiNexusAnimaLeaks) was absent from the
 # 100-entry combined feed and the archive returned nothing. The only proof that the
 # archive had actually been asked was the ABSENCE of an "Arctic Shift search
 # unavailable" line in the Actions log — invisible to anyone without the log. These
@@ -11102,10 +11102,10 @@ _r96_fake = {
                                      "HonkaiStarRail_leaks": 24,
                                      "Zenlesszonezeroleaks_": 18,
                                      "WutheringWavesLeaks": 9, "AnantaLeaks": 3},
-    "feed_subreddits_missing": ["HonkaiNexusAnimeLeaks"],
+    "feed_subreddits_missing": ["HonkaiNexusAnimaLeaks"],
     "arctic_by_sub": {"AnantaLeaks": {"posts": 4, "status": "posts"},
                       "HonkaiStarRail_leaks": {"posts": 3, "status": "posts"},
-                      "HonkaiNexusAnimeLeaks": {"posts": 0, "status": "empty"},
+                      "HonkaiNexusAnimaLeaks": {"posts": 0, "status": "empty"},
                       "WutheringWavesLeaks": {"posts": 10, "status": "posts"},
                       "Zenlesszonezeroleaks_": {"posts": 11, "status": "posts"}},
     "json_probe_by_status": {"http_403": 1},
@@ -11123,12 +11123,12 @@ _r96_fake = {
 }
 _r96_summary = _app_summary_shell_with_json("reddit", None, fake_data=_r96_fake)
 check("r96: the summary names the subreddit the feed missed (no log needed)",
-      "Subreddits missing from the combined feed: HonkaiNexusAnimeLeaks" in _r96_summary,
+      "Subreddits missing from the combined feed: HonkaiNexusAnimaLeaks" in _r96_summary,
       [ln for ln in _r96_summary.splitlines() if "missing" in ln][:2])
 check("r96: the summary states that the archive answered EMPTY for it (not silently skipped)",
       "Archive coverage: 5 subreddit(s) without RSS news tried" in _r96_summary
       and "4 with posts, 1 empty" in _r96_summary
-      and "HonkaiNexusAnimeLeaks=empty" in _r96_summary,
+      and "HonkaiNexusAnimaLeaks=empty" in _r96_summary,
       [ln for ln in _r96_summary.splitlines() if "Archive" in ln or "by subreddit" in ln][:2])
 check("r96: the summary lists the delivered post with its latency",
       "Genshin_Impact_Leaks_1xj77do — video/native-dash, 1 item(s), LATENCY 2.8 min"
@@ -11139,7 +11139,7 @@ check("r96: the summary says cards were built in native mode when the JSON probe
       and "native mode this run" in _r96_summary)
 # A failed archive lookup must be called out, never rendered as a quiet empty run.
 _r96_fail = dict(_r96_fake)
-_r96_fail["arctic_by_sub"] = {"HonkaiNexusAnimeLeaks": {"posts": 0, "status": "failed"}}
+_r96_fail["arctic_by_sub"] = {"HonkaiNexusAnimaLeaks": {"posts": 0, "status": "failed"}}
 _r96_fail_summary = _app_summary_shell_with_json("reddit", None, fake_data=_r96_fail)
 check("r96: a failed archive lookup is a visible warning in the summary",
       "1 failed" in _r96_fail_summary
