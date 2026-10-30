@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — Round 97b: keep the summary step under GitHub's script cap (2026-10-30)
+
+### Regression fix (prod Reddit monitor)
+
+- **Round 97 broke prod load, and the smoke suite could not see it.** Its ~2.5 KB
+  of summary formatting pushed the `Write monitor run summary` step's `run:`
+  script to **21,058 characters**; GitHub refuses any step script over
+  **21,000**, so the *entire* workflow became unloadable — prod run **#11568**
+  (2026-10-30 08:40Z, `3b4b518`) failed with
+  `Invalid workflow file … (Line: 302, Col: 14): Exceeded max expression length 21000`,
+  and no job was even created. `yaml.safe_load` and the offline suite both
+  passed: the limit lives only in GitHub's loader.
+- **The settings line is now built by the engine** (`_settings_line()`), and the
+  workflow prints it with two lines. The greeting-style formatting lived in the
+  workflow only because the value was not known there; the engine always knew it.
+  The summary step is back to **19,622** characters (main was 18,549).
+- **Guard**: the smoke suite now fails if *any* `run:` script in either workflow
+  exceeds **20,000** characters — a 1,000-character margin under GitHub's cap —
+  so this class of breakage can never reach production again.
+
 ## Unreleased — Round 97: the summary states the settings it ran with (2026-10-30)
 
 ### Observability only (no delivery decision changes, no extra requests)
