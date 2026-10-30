@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased — Round 95c: stale-backlog guard, one-tick re-check wait, agent-readable Twitter summary (2026-10-30)
+
+### Correctness
+
+- **A degraded nitter fleet can no longer turn an old backlog into "new" posts.**
+  Run #12043 (`2026-10-30T00:55Z`) had four mirrors return 502 and one 429 while every
+  account still reported `feed OK`, and `TYPEII_EN` posted three tweets that were 46 h,
+  94 h and 257 h old. Those three keys were **never** in `posted_tweets.json` before that
+  run (checked across all 100 commits that touch the file), so they were first-time posts
+  of an old backlog, not duplicates: the dedup cache only protects keys it already holds.
+  New `TWITTER_MAX_AGE_HOURS` (default **24**, `0` = off) refuses any feed entry older than
+  the floor, logged as `STALE-SKIP`, **before** the tweet-data fetch — so a stale feed costs
+  zero requests. Age comes from the feed date, else the tweet-id snowflake; unknown age
+  still posts (fail-open) and `TEST_TWEET_ID` is exempt. No delivery-path change, no added
+  request on a normal run. See `docs/history/ROUND_95C.md`.
+
+### Timing
+
+- **`PENDING_RECHECK_SECONDS` default `1800` → `300`** (one 5-minute cron tick). A post held
+  for a transient reason was waiting up to 30 min for its re-probe while the workflow ran
+  every 5 min, so an approved post could sit missing for 25 extra minutes. At 300 s the hold
+  is re-checked on the next run. Removed/deleted posts are still never re-checked
+  (`_NO_RECHECK_REASONS`), and the extra work is bounded by the round-95 probe budget;
+  `PENDING_RECHECK_SECONDS=1800` restores the old wait.
+
+### Observability
+
+- The Twitter engine now prints one machine-readable state line
+  (`V3 SUMMARY: posted=… dedup_skipped=… stale_skipped=… cache_missing=… cache_keys=…
+  max_age_hours=…`) and the workflow summary renders it under **Dedup / backlog state**,
+  with a stale-backlog count, an explicit `engine: unavailable` when the line is missing,
+  and a re-post warning when the dedup cache could not be persisted. Workflow logs are not
+  readable by later agents; the step summary now carries the state.
+
+### Tests
+
+- 12 new guards (stale floor and fail-open paths, guard ordering before the fetch,
+  `TEST_TWEET_ID` exemption, summary rendering with and without the state line, cache-failure
+  warning); the round-30/32 throttle guards were retargeted to the 300 s default.
+
 ## Unreleased — Round 95: independent pre-delivery liveness probe + Reddit summary pressure reporting (2026-10-30)
 
 ### Correctness

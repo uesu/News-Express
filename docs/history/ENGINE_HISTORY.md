@@ -504,7 +504,8 @@ jobs:
   `DISCOHOOK_PREVIEW` (default on), `FEEDTOKEN_JSON_STAGGER` (default 65 s),
   `REDDIT_JSON_PROBE` (default `auto`), `PROXY_MEDIA` (default on),
   `PROXY_WARMUP_POST`, `EMBEDDIT_INSTANCE`, `YOUTUBE_LINK_MESSAGE` (default
-  on), `PENDING_RECHECK_SECONDS` (default 1800 s), and the round-42–50 gate,
+  on), `PENDING_RECHECK_SECONDS` (default 300 s since round 95c), and the
+  round-42–50 gate,
   listing, and proxy timing switches shown in [`.env.example`](../../.env.example).
   That template is the source of truth for the complete local switch list and
   its matching GitHub Actions repository Variables.
@@ -874,7 +875,7 @@ pending re-check
    | Pending reason | Re-check behavior |
    |---|---|
    | `removal_notice` / `removal notice` / `title marker` / `whole-body marker` / `removed by moderator` / `removed by moderators/filters` / `deleted by author` (removed / deleted) | **never re-verified** while the entry exists (self-expires at the 48 h window). A removed post cannot change state while removed — if a mod **restores** it, it re-enters via **RSS** with a fresh `updated` stamp, and the RSS path bypasses the skip so the full pipeline posts it (or re-queues it if a notice is still shown). |
-   | `not_live` / `pending approval` / `sources_down` (queued for approval, or a transient all-sources-down miss) / `media_wait` / `partial_gallery` | round 63: all re-checked on the **one uniform** `PENDING_RECHECK_SECONDS` interval (default 1800 s = 30 min, repo Variable). The mod-queue banner itself is still an explicit reason (`pending approval`) — a queued post is never mistaken for live even when a source renders the banner. |
+   | `not_live` / `pending approval` / `sources_down` (queued for approval, or a transient all-sources-down miss) / `media_wait` / `partial_gallery` | round 63: all re-checked on the **one uniform** `PENDING_RECHECK_SECONDS` interval (default 300 s = one 5-minute cron tick since round 95c; 1800 s before that). The mod-queue banner itself is still an explicit reason (`pending approval`) — a queued post is never mistaken for live even when a source renders the banner. |
 
 **No double posts:** a queued post is skipped and NOT added to the dedup cache; on approval
 it is posted exactly once and leaves the pending state (`posted.add` + `pending.pop`). The

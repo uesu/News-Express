@@ -1801,8 +1801,8 @@ check("r51: Read Post destination unchanged on profile crosspost cards",
 # ---- round 30 (2026-09-19): pending-post recheck cache --------------------
 # The four skip gates now record the post in pending_reddit.json and a
 # pending post is re-verified at most once every PENDING_RECHECK_SECONDS.
-check("r30 defaults: 30-min recheck, 48h prune window",
-      v3.PENDING_RECHECK_SECONDS == 1800
+check("r30 defaults: 5-min recheck (round 95c; was 30 min), 48h prune window",
+      v3.PENDING_RECHECK_SECONDS == 300 and v3.PENDING_RECHECK_SECONDS == 5 * 60
       and v3.PENDING_MAX_AGE_SECONDS == 48 * 3600
       and v3.PENDING_FILE == "pending_reddit.json")
 
@@ -2002,15 +2002,16 @@ check("r32: title-marker (deleted) post from the Arctic backup is skipped too",
       v3._pending_throttle_skip(_r32_pend("title marker"), "k", 4600.0, _r32_arctic) is True)
 check("r32: approval-queued post (not_live) is skipped before the round-30 throttle (+60 s)",
       v3._pending_throttle_skip(_r32_pend("not_live"), "k", 1060.0, _r32_arctic) is True)
-check("r32: approval-queued post (not_live) is DUE at the round-30 throttle (+30 min)",
-      v3._pending_throttle_skip(_r32_pend("not_live"), "k", 2800.0, _r32_arctic) is False)
-check("r32: 'pending approval' (banner) re-checks on the round-30 throttle (+30 min due)",
+check("r32: approval-queued post (not_live) is DUE at the throttle (+5 min, round 95c)",
+      v3._pending_throttle_skip(_r32_pend("not_live"), "k", 2800.0, _r32_arctic) is False
+      and v3._pending_throttle_skip(_r32_pend("not_live"), "k", 1310.0, _r32_arctic) is False)
+check("r32: 'pending approval' (banner) re-checks on the same throttle (+5 min due)",
       v3._pending_throttle_skip(_r32_pend("pending approval"), "k", 2800.0, _r32_arctic) is False)
 check("r32: sources_down (transient) re-checks on the round-30 throttle (+60 s skipped)",
       v3._pending_throttle_skip(_r32_pend("sources_down"), "k", 1060.0, _r32_arctic) is True)
-check("r32: media_wait keeps the round-30 30-min throttle (+60 s skipped, +30 min due)",
+check("r32: media_wait keeps the shared throttle (+60 s skipped, +5 min due)",
       v3._pending_throttle_skip(_r32_pend("media_wait"), "k", 1060.0, _r32_arctic) is True
-      and v3._pending_throttle_skip(_r32_pend("media_wait"), "k", 2800.0, _r32_arctic) is False)
+      and v3._pending_throttle_skip(_r32_pend("media_wait"), "k", 1310.0, _r32_arctic) is False)
 check("r32: unknown/missing reason falls back to the round-30 30-min throttle",
       v3._pending_throttle_skip(_r32_pend(None), "k", 1060.0, _r32_arctic) is True
       and v3._pending_throttle_skip(_r32_pend(None), "k", 2800.0, _r32_arctic) is False)
@@ -3124,7 +3125,7 @@ check("r64 cleanup: run-result file helpers exist (stable local record)",
       hasattr(v3, "_init_run_stats") and hasattr(v3, "_write_run_result")
       and hasattr(v3, "_RUN_RESULT_FILE"))
 check("r64 cleanup: pending/fresh dedup preserved — PENDING_RECHECK_SECONDS still parsed",
-      hasattr(v3, "PENDING_RECHECK_SECONDS") and v3.PENDING_RECHECK_SECONDS == 1800
+      hasattr(v3, "PENDING_RECHECK_SECONDS") and v3.PENDING_RECHECK_SECONDS == 300
       and hasattr(v3, "FRESH_HOLD_SECONDS"))
 check("r64 cleanup: workflow summary uses reddit_run_result.json, not log scraping",
       "reddit_run_result.json" in open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"), encoding="utf-8").read()
@@ -4322,7 +4323,7 @@ try:
            _r49b_reddit.MAX_CACHE_SIZE_TOTAL) == (250, 10000))
     check("r49b: reddit_main_v3 empty scheduling Variables use defaults",
           (_r49b_reddit.MAX_POSTS_PER_RUN, _r49b_reddit.PENDING_RECHECK_SECONDS)
-          == (25, 1800))
+          == (25, 300))
     check("r49b: reddit_main_v3 empty feed stagger uses default",
           _r49b_reddit.FEEDTOKEN_JSON_STAGGER == 65)
     check("r52: empty true-by-default Variables keep their defaults",
@@ -10827,6 +10828,87 @@ _r95_answered = _app_summary_shell_with_json("reddit", "", fake_data={**_r95_dat
 check("r95: the Redlib warning appears only when nothing answered",
       "no Redlib mirror answered this run" not in _r95_answered,
       [ln for ln in _r95_answered.splitlines() if "Redlib" in ln])
+
+# ---- Round 95c: a down/maintenance nitter instance cannot cause a re-post ----
+# Live 2026-10-30 (run #12043): every mirror answered 502/429 and the surviving
+# one served days-old entries, which were posted as if new. The cache is the
+# first line of defence; the stale floor is the second, and it costs no request.
+_x95c_now = (_r30_x.tweet_id_created_ts("2115271059188613499") + 46.35 * 3600)
+# ^ the wall clock of the real run #12043 (2026-10-30T00:55Z): the newest of
+#   the three backlog tweets was 46.35 h old at the moment it was posted.
+_x95c_max = _r30_x.TWITTER_MAX_AGE_SECONDS
+check("r95c: the pending re-check wait is exactly one 5-minute cron tick",
+      v3.PENDING_RECHECK_SECONDS == 300
+      and v3.PENDING_RECHECK_SECONDS == 5 * 60,
+      "300 s = one tick, so a hold is re-probed on the next run instead of up to 30 min later")
+check("r95c: removed/deleted holds are still never re-checked at the shorter interval",
+      v3._pending_throttle_skip({"k": {"reason": "removal notice", "last_checked": 0.0}},
+                                "k", 1e9, object()) is False
+      and v3._pending_throttle_skip(
+          {"k": {"reason": "removal notice", "last_checked": 0.0}}, "k", 1e9,
+          v3._ArcticEntry({"id": "x1", "subreddit": "AnantaLeaks"})) is True,
+      "a removed post must not be re-probed just because the interval shrank")
+check("r95c: the stale floor defaults to 24 h and is switchable",
+      _x95c_max == 24 * 3600 and _r30_x.TWITTER_MAX_AGE_HOURS == 24,
+      (_x95c_max, _r30_x.TWITTER_MAX_AGE_HOURS))
+check("r95c: the three entries posted by run #12043 are refused as stale backlog",
+      all(_r30_x.is_stale_entry(_r30_x.tweet_entry_age_seconds({}, _x95c_now, _tid))
+          for _tid in ("2115271059188613499", "2114559707734245394", "2112102702817972715")),
+      [_r30_x.tweet_entry_age_seconds({}, _x95c_now, _tid) for _tid in
+       ("2115271059188613499", "2114559707734245394", "2112102702817972715")])
+_x95c_fresh = "%d" % (((int(_x95c_now * 1000) - 4 * 60 * 1000) - _r30_x._TWITTER_SNOWFLAKE_EPOCH_MS) << 22)
+_x95c_fresh_age = _r30_x.tweet_entry_age_seconds({}, _x95c_now, _x95c_fresh)
+check("r95c: a genuinely new tweet (minutes old) is never refused",
+      _x95c_fresh_age is not None and 200 < _x95c_fresh_age < 400
+      and not _r30_x.is_stale_entry(_x95c_fresh_age),
+      _x95c_fresh_age)
+check("r95c: the guard fails OPEN — an entry it cannot date is posted, not dropped",
+      _r30_x.tweet_entry_age_seconds({}, _x95c_now, "") is None
+      and _r30_x.tweet_entry_age_seconds({}, _x95c_now, "not-an-id") is None
+      and _r30_x.tweet_entry_age_seconds({}, _x95c_now, "0") is None
+      and not _r30_x.is_stale_entry(None)
+      and not _r30_x.is_stale_entry(0.0),
+      "unknown age must still post (a strict guard would silently drop live tweets)")
+_x95c_dated = _r30_x.tweet_entry_age_seconds({"published_parsed": time.gmtime(_x95c_now - 3600)},
+                                            _x95c_now, "2112102702817972715")
+check("r95c: a feed-supplied date is preferred over the id, so a re-dated entry is judged on its own date",
+      # the id alone says 256 h (stale); the feed says 1 h, and the feed wins.
+      _x95c_dated is not None and _x95c_dated < 2 * 3600
+      and not _r30_x.is_stale_entry(_x95c_dated),
+      _x95c_dated)
+_x95c_src = open(os.path.join(ROOT, "testing area/twitter_v3.py"), encoding="utf-8").read()
+_x95c_loop = _x95c_src.split("for entry in entries:", 1)[1]
+_x95c_i_stale = _x95c_loop.find("is_stale_entry(entry_age)")
+_x95c_i_fetch = _x95c_loop.find("fetch_tweet_details_any")
+check("r95c: the stale check runs BEFORE the tweet-data fetch, so a stale backlog costs zero requests",
+      0 <= _x95c_i_stale < _x95c_i_fetch,
+      (_x95c_i_stale, _x95c_i_fetch))
+check("r95c: TEST_TWEET_ID stays exempt (an operator explicitly asked for that tweet)",
+      "if TWITTER_MAX_AGE_SECONDS and not test_tweet_id:" in _x95c_src)
+check("r95c: the stale skip is logged as its own greppable reason",
+      "STALE-SKIP:" in _x95c_src and "not posted." in _x95c_src)
+check("r95c: the engine emits one machine-readable state line for the workflow summary",
+      # must be INFO: the summary step greps the log, and DEBUG lines are not emitted.
+      'logging.info(f"V3 SUMMARY: posted=' in _x95c_src
+      and "dedup_skipped=" in _x95c_src and "stale_skipped=" in _x95c_src
+      and "cache_missing=" in _x95c_src,
+      [ln.strip() for ln in _x95c_src.splitlines() if "V3 SUMMARY" in ln][:2])
+_x95c_log = ("[INFO] V3 SUMMARY: posted=0 dedup_skipped=3 stale_skipped=3 "
+             "cache_missing=0 cache_keys=294 max_age_hours=24\n"
+             "[INFO] [TYPEII_EN_2112102702817972715] STALE-SKIP: entry is 257.3 h old\n")
+_x95c_summary = _app_summary_shell_with_json("twitter", _x95c_log)
+check("r95c: the summary carries the engine's dedup/backlog state without the raw log",
+      "posted=0 dedup_skipped=3 stale_skipped=3" in _x95c_summary
+      and "- entries refused as stale backlog: 1" in _x95c_summary
+      and "### Dedup / backlog state" in _x95c_summary,
+      [ln for ln in _x95c_summary.splitlines() if "stale" in ln][:3])
+check("r95c: a run that never reached the state line says so instead of implying zero re-posts",
+      "engine: unavailable" in _app_summary_shell_with_json("twitter", _app_tw_log))
+check("r95c: an unpersisted dedup cache is called out as a re-post risk",
+      "the dedup cache was not persisted this run" in _app_summary_shell("twitter", _app_tw_log,
+                                                                        twitter_cache="failed")
+      and "not persisted this run" not in _app_summary_shell("twitter", _app_tw_log,
+                                                             twitter_cache="success"))
 
 # ---- Round 89: no GitHub Actions annotation may leak out of this suite ----
 # Restore the real stdout first, then judge what the suite actually emitted.

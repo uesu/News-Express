@@ -69,7 +69,7 @@ explicitly labelled).
 
 The operational `pending_reddit.json` cache remains active. It records selected
 liveness/removal/approval and media-readiness holds. Retryable holds use the
-`PENDING_RECHECK_SECONDS` throttle (default 1800 seconds); confirmed
+`PENDING_RECHECK_SECONDS` throttle (default 300 seconds, one 5-minute cron tick; 1800 restores the round-30 30-minute wait); confirmed
 removed/deleted archive entries follow a no-recheck path unless they reappear
 via RSS (provenance-aware reconsideration, still subject to removal checks;
 archive/media presence is not proof of current visibility). The round-64

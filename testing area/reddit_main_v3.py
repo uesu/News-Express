@@ -373,7 +373,20 @@ MAX_AGE_SECONDS = 48 * 3600
 # (2.5-3.5 min) and the window in which overlapping runs could double-post.
 # ---------------------------------------------------------------------------
 PENDING_FILE = "pending_reddit.json"
-PENDING_RECHECK_SECONDS = _env_int("PENDING_RECHECK_SECONDS", 1800)  # 30 min
+PENDING_RECHECK_SECONDS = _env_int("PENDING_RECHECK_SECONDS", 300)  # 5 min
+# Round 95c (2026-10-30): 30 min was the old default and it is too slow for the
+# one thing this throttle now gates — the round-95 liveness hold. A post that
+# was briefly unverified (archive snapshot stale, media still filling in, a mod
+# approval landing) waited up to half an hour for a re-check even though the
+# workflow fires every 5 minutes, so the operator saw an approved post sit
+# missing for 25 extra minutes. 300 s = exactly one cron tick: the hold is
+# re-probed on the NEXT run and posts within ~5 min of the condition clearing,
+# worst case one run later. Cost is bounded — the re-check goes through the
+# same round-95 probe budget (LIVENESS_PROBE_BUDGET per run) and one Arctic
+# lookup per due post (~0.8 s typical, 8 s timeout, fail-open), and removed /
+# deleted posts are still NEVER re-checked (the _NO_RECHECK_REASONS set), so
+# this raises the cadence for the small held set only. Override with the
+# PENDING_RECHECK_SECONDS Variable (set 1800 to restore the old behaviour).
 PENDING_MAX_AGE_SECONDS = 48 * 3600  # matches the 48h posting window
 
 # Round 44: delivered-post retraction/tombstone. Disabled by default; when on
@@ -7238,8 +7251,9 @@ async def main():
             for subreddit, post_path, unique_key, published_ts, activity_ts, entry in new_posts:
                 # Round 30/32: pending-post recheck throttle — previously
                 # rejected/held posts are only re-checked once every
-                # PENDING_RECHECK_SECONDS (default 30 min), and removed/deleted
-                # posts are not re-checked unless restored via RSS.
+                # PENDING_RECHECK_SECONDS (round 95c: default 5 min = one cron
+                # tick), and removed/deleted posts are not re-checked unless
+                # restored via RSS.
                 if (not TEST_POST_ID and not DRY_RUN
                         and unique_key in pending
                         and _pending_throttle_skip(pending, unique_key, now, entry)):
