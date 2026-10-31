@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased — Round 99: megathread format corrections + REDLIB-REACH says why (2026-10-31)
+
+### Card formatting (live `HonkaiStarRail_leaks/1xkgd9m`, applies to every post)
+
+- **Escaped spoiler openers stay literal.** `\>!spoiler tagged text here!<` (the author
+  *showing* the syntax) no longer becomes a broken `>\||…||` Discord spoiler that swallowed
+  the next line; the plain-Markdown path now renders it `>!spoiler tagged text here!<`,
+  exactly as the HTML path always did. Real `>!x!<` spoilers still become `||x||`.
+- **Reddit quotes get Discord's space.** `>Spoiler Topic` → `> Spoiler Topic` (Reddit does
+  not need the space, Discord does); `>>nested` flattens to one level like the HTML path.
+- **Consecutive quote paragraphs join into one quote block** at the card-build choke point
+  (`_format_quote_blocks`, every body source): `> Spoiler Topic` / `> >!…!<` / `> >!…!<`
+  render as one bar instead of three bars with unquoted gaps.
+- **One-column Markdown tables render.** `|Previous Megathreads|` / `|:-|` / `|[Latest
+  Megathread](…) …|` / `| [All Previous Megathreads](…)|` used to reach the card as raw pipe
+  lines (the detector required two cells). They now render as a titled list — heading line,
+  then each row on its own line with blank lines between — and the same table with blank
+  lines between its boundary-piped rows (Reddit's rich-text export) reads as one table.
+  Prose with a pipe, a lone `|x|` line, and every round-66/71 malformed shape are still
+  byte-identical; multi-column tables keep the round-71 row blocks. Links, URLs, wording and
+  media are never altered.
+
+### `REDLIB-REACH: 0/26` explained, and made self-explaining
+
+- Investigated upstream: Reddit has answered anonymous thread JSON with a 403 since
+  2026-10-20 (redlib#591) — every stock Redlib **post page** is an error page, which the
+  round-83c detection correctly counts as `0/1` — and started blocking anonymous listings
+  around 2026-10-29; the official instance list fell from 11 to 2–3 hosts. **v0.40.0
+  (2026-10-22) is still the latest release and contains no post-page fix** (the fixes are
+  unmerged PRs #603/#599 and forks). Not an engine or fleet defect; no fleet change
+  (`redlib.cow.rip` stays deliberately excluded, `redlib.privadency.com` already seated).
+- New log line, zero requests: `REDLIB-REACH-WHY: error-page:failed to parse page json
+  data ×22, http-403 ×3, timeout ×1` follows `REDLIB-REACH:` whenever a probe missed.
+  Non-200s, non-HTML, challenge splashes, error pages, timeouts and exceptions were all
+  silently discarded before. The `REDLIB-REACH:` line, the run record and the workflow
+  summary are unchanged.
+
+See [Round 99](history/ROUND_99.md) for the screenshot/log provenance, the approved payload,
+the upstream timeline and limits.
+
 ## Unreleased — Round 98b: the liveness evidence-source line stops contradicting itself (2026-10-30)
 
 ### Summary fix (output only — no engine behaviour changes)

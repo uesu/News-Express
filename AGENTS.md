@@ -211,7 +211,13 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   gate — invariant 2: same URL = provable, new URL = guesswork.
 - Benign log lines (do NOT "fix"): `dedup cache near cap` (eviction
   handles it), the OAuth-skip INFO line, `redlib gallery enrichment failed`
-  (fallback works). (The `MODQUEUE-LISTING ... fail open` line was removed
+  (fallback works). `REDLIB-REACH: 0/26` since 2026-10-20 is an UPSTREAM
+  outage, not a fleet bug: Reddit 403s anonymous thread JSON, so every stock
+  Redlib (incl. the latest release, v0.40.0) serves an error page for post
+  pages, and the round-83c detection rightly counts it 0/1; read the
+  `REDLIB-REACH-WHY:` line (round 99) before touching the fleet — a dominant
+  `error-page:…` is upstream, a dominant `no-post-dom`/`http-403` is the
+  runner being challenged/blocked (that is the re-rank signal). (The `MODQUEUE-LISTING ... fail open` line was removed
   with the mod-queue gate in round 63 — if you see it in old logs only.)
 - Long Reddit bodies deliver as the main card + content-driven text-only
   continuation messages (no generated heading; no fixed page/body truncation). Gallery, stats and
