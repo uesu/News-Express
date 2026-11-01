@@ -103,6 +103,11 @@ The following domains are requested for this app:
 - `media` lists direct image/video URLs only when Reddit's listing exposes them;
   galleries that are still processing may arrive with an empty list — the consumer
   already handles that case (media-wait).
+- `intakeWebhook` is `isSecret: true` and therefore has **no** `defaultValue` — Reddit's
+  config schema forbids the combination (`devvit upload` fails with
+  `settings.global.intakeWebhook is not exactly one from …`). Until the secret is set the
+  poll runs in polling-only mode and reports `intakeWebhook is empty …` in `devvit logs`.
+  A unit test guards this rule.
 
 ## Commands
 

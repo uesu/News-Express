@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import {readFileSync} from 'node:fs'
 import {test} from 'node:test'
 import {
   CONTENT_BUDGET,
@@ -157,4 +158,26 @@ test('sortOldestFirst: chronological and non-mutating', () => {
     xs.map(x => x.created),
     [3, 1, 2],
   )
+})
+
+test('devvit.json: secret settings carry no defaultValue (upload schema rule)', () => {
+  // Reddit's config-file.v1.json rejects a GlobalStringSetting that has both
+  // isSecret:true and defaultValue — `devvit upload` fails with
+  // "settings.global.<key> is not exactly one from …". Guard it here so the
+  // mistake is caught by `npm test` instead of at upload time.
+  const cfgPath = new URL('../../devvit.json', import.meta.url)
+  const cfg = JSON.parse(readFileSync(cfgPath, 'utf8')) as {
+    settings?: {global?: Record<string, Record<string, unknown>>}
+  }
+  const globals = cfg.settings?.global ?? {}
+  assert.ok(globals.intakeWebhook, 'intakeWebhook setting must exist')
+  for (const [key, def] of Object.entries(globals)) {
+    if (def.isSecret === true) {
+      assert.equal(
+        'defaultValue' in def,
+        false,
+        `${key}: secret settings must not define defaultValue`,
+      )
+    }
+  }
 })
