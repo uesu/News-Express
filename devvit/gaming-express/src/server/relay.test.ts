@@ -241,7 +241,7 @@ test('parseUsers: strips u/ and user/, de-dups, keeps Reddit-legal names only', 
   assert.deepEqual(parseUsers(''), [])
 })
 
-test('settings defaults: the twelve subreddits and five official accounts parse untouched', () => {
+test('settings defaults: the twelve subreddits and three verified publisher accounts parse untouched', () => {
   const cfg = JSON.parse(
     readFileSync(new URL('../../devvit.json', import.meta.url), 'utf8'),
   ) as {
@@ -262,13 +262,24 @@ test('settings defaults: the twelve subreddits and five official accounts parse 
     'AnantaOfficial',
   ])
     assert.ok(parseSubreddits(subs).includes(s), s)
+  // Verified + active only (Arctic Shift audit 2026-11-02). u/ZZZ_Official (one post,
+  // 2024-04) and u/AnantaOfficial (one post, 2024-12, removed) are dormant; their
+  // official content is community re-posts under "Official Media" in their subreddit.
   assert.deepEqual(parseUsers(users), [
     'genshinimpact',
     'HonkaiStarRail',
-    'ZZZ_Official',
     'HonkaiNexusAnima',
-    'AnantaOfficial',
   ])
+  for (const dormant of [
+    'ZZZ_Official',
+    'AnantaOfficial',
+    'WutheringWaves',
+    'WutheringWavesMod',
+  ])
+    assert.ok(
+      !parseUsers(users).includes(dormant),
+      `${dormant} must not be a default`,
+    )
   // `devvit upload` from a fresh zip no longer tries to create a playtest subreddit.
   assert.equal(cfg.dev?.subreddit, 'gaming_express_dev')
 })

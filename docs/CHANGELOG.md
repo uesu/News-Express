@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased — Devvit relay 0.0.5: `officialUsers` = verified, active publisher accounts only (2026-11-02)
+
+`devvit/` + `docs/DEVVIT_SETUP.md` only. No engine, workflow or cache change.
+
+- **Audit (Arctic Shift + live profiles):** `u/genshinimpact`, `u/HonkaiStarRail`, `u/HonkaiNexusAnima`
+  are verified and post (daily / when there is news) — always into their own subreddit, which the
+  relay already polls. `u/ZZZ_Official` (one post, 2024-04) and `u/AnantaOfficial` (one post,
+  2024-12, removed) are dormant; their games' official content reaches `r/ZZZ_Official` /
+  `r/AnantaOfficial` as community re-posts under `Official Media`, exactly like Wuthering Waves'
+  `Official News`. The full table is in `docs/DEVVIT_SETUP.md` §1.
+- **Change:** `officialUsers` default → `genshinimpact,HonkaiStarRail,HonkaiNexusAnima`; label/help
+  text mark it optional (second path; subreddits are the primary path; may be empty). Unit test
+  pins the three and asserts the dormant/unrelated names are absent. Poll line becomes
+  `12 subs, 3 users`. Settings persist across versions, so the owner re-pins `officialUsers` once.
+- **Consumer rule unchanged** (author in verified set ∪ flair `\bofficial\b` ∪ distinguished) and
+  recorded as the contract for the Phase C/D intake readers. Game-Express note for Phase D: its
+  `reddit.official` for ZZZ/Ananta points at the dormant accounts and bypasses the subreddit listing,
+  so its Reddit backup for those two games is currently dead — fix is subreddit-first with the same
+  rule (not started; no handoff yet).
+- Tests: `npm test` 17/17; `tests/test_smoke.py` ALL PASS.
+
 ## Unreleased — Devvit relay 0.0.4: `distinguished` + how official Wuthering Waves content arrives (2026-11-02)
 
 `devvit/gaming-express/` + `docs/DEVVIT_SETUP.md` only. No engine, workflow or cache change.

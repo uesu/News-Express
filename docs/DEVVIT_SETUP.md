@@ -80,11 +80,31 @@ Messages are sent with `allowed_mentions: {parse: []}`, so a title can never pin
 | Setting | Default |
 | --- | --- |
 | `subreddits` | `AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_` (News-Express) + `Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima,AnantaOfficial` (Game-Express `reddit.subreddits`) |
-| `officialUsers` | `genshinimpact,HonkaiStarRail,ZZZ_Official,HonkaiNexusAnima,AnantaOfficial` (Game-Express `reddit.official`; Wuthering Waves has none — see the `Official News` note above) |
+| `officialUsers` | `genshinimpact,HonkaiStarRail,HonkaiNexusAnima` — the verified accounts that actually post (audit below). Optional: every one of them posts only into its own subreddit, which is already in `subreddits`, so this is a second path, not the only one. May be left empty. |
 | `relayEnabled` | `true` |
 
-12 subreddit calls + 5 account calls every 2 minutes ≈ 8.5 requests/min, far inside the
+12 subreddit calls + 3 account calls every 2 minutes ≈ 7.5 requests/min, far inside the
 platform's 100 requests/min budget.
+
+### Publisher-account audit (Arctic Shift archive + live profiles, 2026-11-02)
+
+"Official" is decided by the consumer from `sub` + `author` + `flair` (+ `distinguished`), never
+by which list a post came through. The audit that fixed the default:
+
+| Game | Account | Verified | Posts | Where official content actually appears | In default? |
+| --- | --- | --- | --- | --- | --- |
+| Genshin | `u/genshinimpact` | yes | daily (25 in 8 days), all in `r/Genshin_Impact`, flair `Official Media` / `Official Post` | own posts | **yes** |
+| HSR | `u/HonkaiStarRail` | yes | daily, all in `r/HonkaiStarRail`, flair `Official Announcement` (e.g. `1xjdyj9` "A Brief on the Version 4.7 Special Program") | own posts | **yes** |
+| HNA | `u/HonkaiNexusAnima` | yes | when there is news (last burst 2026-07, Evolution Test), flair `Official Announcement` | own posts | **yes** |
+| ZZZ | `u/ZZZ_Official` | no | one post ever (2024-04 merch raffle); `u/Bangboo_ZZZ` (mod) last 2024-12 | community re-posts in `r/ZZZ_Official` under `Official Media` (`1xktjo2`, `1xk0ohy`, `1xfnbwk`) | no — dormant |
+| Ananta | `u/AnantaOfficial` | no | one post ever (2024-12, removed) | community re-posts in `r/AnantaOfficial` under `Official Media` (`1wrpgo9`) | no — dormant |
+| WuWa | — | — | no publisher account (`u/WutheringWaves` is unrelated; `u/WutheringWavesMod` posts only megathreads) | community re-posts in `r/WutheringWaves` under `Official News` | no account exists |
+
+Consumer rule (Game-Express `_is_official_subreddit_post`, kept by the intake reader): author in
+the verified set **or** flair matching `\bofficial\b` (`Official Media`, `Official Announcement`,
+`Official Post`, `Official News`) **or** `distinguished`. Flair-matched posts are community
+re-posts: de-duplicate by title/link and treat as unverified. Adding a subreddit or an account
+later is a settings change only (`npx devvit settings set …`), no code or upload.
 
 ## 2. Prerequisites (once)
 
@@ -140,7 +160,7 @@ platform's 100 requests/min budget.
    npx devvit settings set subreddits
    → AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_,Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima,AnantaOfficial
    npx devvit settings set officialUsers
-   → genshinimpact,HonkaiStarRail,ZZZ_Official,HonkaiNexusAnima,AnantaOfficial
+   → genshinimpact,HonkaiStarRail,HonkaiNexusAnima
    npx devvit settings set relayEnabled
    → true
    npx devvit settings list
@@ -157,7 +177,7 @@ platform's 100 requests/min budget.
    Expected line every 2 minutes:
 
    ```
-   poll: 12 subs, 5 users, N fetched, 0 sent, N seen, 0 failed, N bootstrapped
+   poll: 12 subs, 3 users, N fetched, 0 sent, N seen, 0 failed, N bootstrapped
    ```
 
    `bootstrapped` is non-zero only on the first poll after a target was added. From then on
@@ -218,6 +238,7 @@ Node.js › Uninstall → delete `%USERPROFILE%\.devvit`, `%APPDATA%\npm`,
 | 0.0.2 | 2026-11-01 | Redis keys on the bare post id — fixes the re-send of every post on every poll |
 | 0.0.3 | 2026-11-01 | `relayEnabled` accepts the CLI's text `"false"`; `officialUsers` setting (`getPostsByUser`); Game-Express subreddits and accounts in the defaults; in-poll de-dup across targets; `dev.subreddit` pinned; generic Directory readme; this document. Reached Reddit as **`0.0.2`** on 2026-11-01 20:20Z after a ~10 h server-side upload fault (0.0.2 itself never uploaded, so Reddit's counter is one behind this table). |
 | 0.0.4 | 2026-11-02 | intake record gains `distinguished` (`"moderator"`/`"admin"`/`null`); documented how official Wuthering Waves content reaches the relay (`Official News` flair on `r/WutheringWaves`, no publisher account, `officialUsers` unchanged); Biome schema 2.6.4; troubleshooting entries for the upload fault. Uploads as Reddit **`0.0.3`**. |
+| 0.0.5 | 2026-11-02 | `officialUsers` default trimmed to the verified, active accounts (`genshinimpact,HonkaiStarRail,HonkaiNexusAnima`); dormant `u/ZZZ_Official` / `u/AnantaOfficial` dropped (publisher-account audit above); setting documented as optional. Settings persist, so existing installs must re-pin `officialUsers` (§3 step 5). Uploads as Reddit **`0.0.4`**. |
 
 ## 9. Roadmap (each step its own PR, none started without an explicit go)
 

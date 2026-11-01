@@ -7,7 +7,7 @@ production repositories, and nothing here changes engine behaviour.
 
 | App | Reddit slug | Purpose | Status |
 | --- | --- | --- | --- |
-| [`gaming-express/`](gaming-express/readme.md) | `gaming-express` | Polls the public `/new` listings of the tracked subreddits (six News-Express leak subs + six Game-Express official subs) and the five official publisher accounts, and relays each new post once as a JSON record to a private Discord intake channel — the replacement for Reddit RSS discovery after Reddit retires RSS on 2026-11-13 (see `docs/history/ROUND_99_investigation_reddit_survival.md`). | live on `r/GamingExpressRelay` (0.0.3) — shadow mode: neither engine reads the intake channel yet |
+| [`gaming-express/`](gaming-express/readme.md) | `gaming-express` | Polls the public `/new` listings of the tracked subreddits (six News-Express leak subs + six Game-Express official subs) and the three verified, active publisher accounts (`u/genshinimpact`, `u/HonkaiStarRail`, `u/HonkaiNexusAnima`), and relays each new post once as a JSON record to a private Discord intake channel — the replacement for Reddit RSS discovery after Reddit retires RSS on 2026-11-13 (see `docs/history/ROUND_99_investigation_reddit_survival.md`). | live on `r/GamingExpressRelay` (Reddit 0.0.3 = 0.0.4 code; 0.0.5 pending upload) — shadow mode: neither engine reads the intake channel yet |
 
 Operator documentation (deploy/update from a zip, settings, expected log lines,
 troubleshooting, roadmap) lives in [`docs/DEVVIT_SETUP.md`](../docs/DEVVIT_SETUP.md). The
