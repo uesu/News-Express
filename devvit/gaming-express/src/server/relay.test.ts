@@ -32,6 +32,7 @@ function rec(over: Partial<RelayRecord> = {}): RelayRecord {
     created: 1793400000,
     author: 'AutoModerator',
     flair: 'Megathread',
+    distinguished: null,
     spoiler: false,
     nsfw: false,
     score: 1,
@@ -73,6 +74,29 @@ test('toContent: small record round-trips unchanged', () => {
   const out = toContent(r)
   assert.ok(out.length <= CONTENT_BUDGET)
   assert.deepEqual(parseContent(out), r)
+})
+
+test('toContent: an r/WutheringWaves "Official News" re-post keeps flair + distinguished through truncation', () => {
+  // Kuro has no u/ publisher account; official Wuthering Waves content reaches
+  // r/WutheringWaves as community re-posts under the "Official News" flair
+  // (e.g. 1xd9vyy "Insider Channel: Special Program" by u/cakeel-, not
+  // distinguished). Consumers classify from `flair`; `distinguished` is carried
+  // for mod/admin notices and is null for these.
+  const r = rec({
+    sub: 'WutheringWaves',
+    author: 'cakeel-',
+    flair: ':YangyangSide: Official News',
+    distinguished: null,
+    body: 'y'.repeat(5000),
+  })
+  const back = parseContent(toContent(r))
+  assert.equal(back.flair, ':YangyangSide: Official News')
+  assert.equal(back.distinguished, null)
+  assert.equal(back.author, 'cakeel-')
+  assert.equal(back.bodyTruncated, true)
+  assert.match(back.flair ?? '', /\bofficial\b/i)
+  const mod = parseContent(toContent(rec({distinguished: 'moderator'})))
+  assert.equal(mod.distinguished, 'moderator')
 })
 
 test('toContent: long body is truncated and flagged, identity fields intact', () => {

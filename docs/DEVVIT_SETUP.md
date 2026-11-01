@@ -43,7 +43,7 @@ Messages are sent with `allowed_mentions: {parse: []}`, so a title can never pin
 ```json
 {"v":1,"id":"1xkw3fk","sub":"Zenlesszonezeroleaks_","title":"…","permalink":"/r/…/comments/1xkw3fk/…/",
  "url":"https://v.redd.it/7uhsezpi4yyh1","created":1793514871,"author":"…","flair":"Reliable",
- "spoiler":false,"nsfw":false,"score":1,"comments":1,"removed":null,"xpost":null,
+ "distinguished":null,"spoiler":false,"nsfw":false,"score":1,"comments":1,"removed":null,"xpost":null,
  "media":["https://v.redd.it/7uhsezpi4yyh1/CMAF_1080.mp4?source=fallback","https://external-preview.redd.it/….png"],
  "body":"","bodyTruncated":false}
 ```
@@ -54,6 +54,21 @@ Messages are sent with `allowed_mentions: {parse: []}`, so a title can never pin
   `Genshin_Impact` when the account posted there — which is what Game-Express's
   `allowed_subs` (`u_<account>` + the game's subreddits) already expects.
 - A post that appears in both an account feed and a subreddit listing is relayed once.
+- `distinguished` (0.0.4 code / Reddit version `0.0.3`) is `"moderator"` / `"admin"` when the
+  post is distinguished, else `null`. Classification is the consumer's job; the relay only carries
+  the signals (`author`, `flair`, `distinguished`).
+- **Wuthering Waves has no publisher account on Reddit** (`u/WutheringWaves` is an unrelated
+  2022 account — never add it to `officialUsers`). Verified against the Arctic Shift archive on
+  2026-11-02: `u/WutheringWavesMod` posts **only** the Daily/Weekly megathreads (flair
+  `Megathread`, not distinguished), and the official content — Special Program (`1xd9vyy`,
+  `1wt05uz`), the 3.8 preview broadcast date (`1xj48d3`), codes, trailers, version news — arrives
+  as **community re-posts under the `Official News` flair** (`:YangyangSide: Official News`,
+  authors such as `cakeel-`, `Recent-Usual-9434`), also not distinguished. The relay already
+  delivers these from `r/WutheringWaves` with `"flair":":YangyangSide: Official News"`; the
+  Game-Express rule (`_is_official_subreddit_post`: configured author **or** distinguished **or**
+  flair matching `\bofficial\b`) matches them today, and the intake reader keeps that rule. The
+  flair is self-selected, so expect duplicates (the same Kuro tweet re-posted several times) and the
+  odd mis-flaired post — the consumer de-duplicates by title/link and treats them as unverified.
 - `body` is trimmed (and `bodyTruncated` set) when the message would exceed Discord's
   2000-character limit; identity fields are never trimmed. `score`/`comments` are the values
   at poll time.
@@ -65,7 +80,7 @@ Messages are sent with `allowed_mentions: {parse: []}`, so a title can never pin
 | Setting | Default |
 | --- | --- |
 | `subreddits` | `AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_` (News-Express) + `Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima,AnantaOfficial` (Game-Express `reddit.subreddits`) |
-| `officialUsers` | `genshinimpact,HonkaiStarRail,ZZZ_Official,HonkaiNexusAnima,AnantaOfficial` (Game-Express `reddit.official`) |
+| `officialUsers` | `genshinimpact,HonkaiStarRail,ZZZ_Official,HonkaiNexusAnima,AnantaOfficial` (Game-Express `reddit.official`; Wuthering Waves has none — see the `Official News` note above) |
 | `relayEnabled` | `true` |
 
 12 subreddit calls + 5 account calls every 2 minutes ≈ 8.5 requests/min, far inside the
@@ -170,6 +185,8 @@ Subreddit menu on `r/GamingExpressRelay` (`…` → **[Gaming Express] Poll now*
 | Symptom | Meaning / action |
 | --- | --- |
 | `npx devvit upload` → `"Create" failed after 3 attempts. First error: fetch failed` | The bundle upload never reached Reddit (local network/DNS/firewall). Nothing was created. Run `npx devvit upload` again. |
+| `upload` → `Create failed after 3 attempts. First error: fetch failed. Last error: You must be logged in to upload a new app version.` while `npx devvit whoami` works | **Not an auth problem.** Only the one large `AppVersion.Create` POST (the ~7 MB bundle) is failing; reads (`whoami`, the version check) are tiny and succeed. Observed 2026-11-01 ~10:00–18:00Z, five attempts, including after `logout`/`login`; the same command succeeded unchanged at ~20:20Z. Documented by Reddit as an intermittent server-side fault (Devvit FAQ). Re-logging in, re-downloading, or creating a new app does **not** help (a new app goes through the same call and burns the name). Wait and retry; to see the real cause of `fetch failed` run `set NODE_DEBUG=fetch` before the upload; try another network (phone hotspot) once. |
+| `npx devvit whoami` → not logged in / token error | The token at `%USERPROFILE%\.devvit\token` expired or was removed. `npx devvit login` (browser) and continue. |
 | `upload` → `settings.global.<key> is not exactly one from …` | `devvit.json` schema violation (for example `isSecret: true` together with `defaultValue`). The unit test guards the known case; validate against `node_modules/@devvit/shared-types/schemas/config-file.v1.json`. |
 | `install` → `Something went wrong…` | Transient on Reddit's side on a brand-new subreddit; retry once. |
 | logs: `intakeWebhook is empty or not a discord.com webhook URL — polling only` | Secret not set (or not a `discord.com/api/webhooks` URL). Set it; no posts are lost — they are remembered, not sent. |
@@ -199,7 +216,8 @@ Node.js › Uninstall → delete `%USERPROFILE%\.devvit`, `%APPDATA%\npm`,
 | --- | --- | --- |
 | 0.0.1 | 2026-11-01 | first live install on `r/GamingExpressRelay`; six News-Express subreddits |
 | 0.0.2 | 2026-11-01 | Redis keys on the bare post id — fixes the re-send of every post on every poll |
-| 0.0.3 | 2026-11-01 | `relayEnabled` accepts the CLI's text `"false"`; `officialUsers` setting (`getPostsByUser`); Game-Express subreddits and accounts in the defaults; in-poll de-dup across targets; `dev.subreddit` pinned; generic Directory readme; this document |
+| 0.0.3 | 2026-11-01 | `relayEnabled` accepts the CLI's text `"false"`; `officialUsers` setting (`getPostsByUser`); Game-Express subreddits and accounts in the defaults; in-poll de-dup across targets; `dev.subreddit` pinned; generic Directory readme; this document. Reached Reddit as **`0.0.2`** on 2026-11-01 20:20Z after a ~10 h server-side upload fault (0.0.2 itself never uploaded, so Reddit's counter is one behind this table). |
+| 0.0.4 | 2026-11-02 | intake record gains `distinguished` (`"moderator"`/`"admin"`/`null`); documented how official Wuthering Waves content reaches the relay (`Official News` flair on `r/WutheringWaves`, no publisher account, `officialUsers` unchanged); Biome schema 2.6.4; troubleshooting entries for the upload fault. Uploads as Reddit **`0.0.3`**. |
 
 ## 9. Roadmap (each step its own PR, none started without an explicit go)
 

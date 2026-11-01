@@ -15,6 +15,11 @@ export type RelayRecord = {
   created: number // unix seconds
   author: string
   flair: string | null
+  /** "moderator" | "admin" when the post is distinguished, else null (0.0.4 code).
+   *  Classification stays with the consumer: for a publisher without a u/
+   *  account (Wuthering Waves) the signal is `flair` ("Official News" on
+   *  r/WutheringWaves, community-posted); this field adds mod/admin notices. */
+  distinguished: string | null
   spoiler: boolean
   nsfw: boolean
   score: number

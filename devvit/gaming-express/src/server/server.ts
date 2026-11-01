@@ -314,6 +314,7 @@ function toRecord(
     createdAt: Date
     authorName: string
     flair?: {text?: string} | undefined
+    distinguishedBy?: string | undefined
     spoiler: boolean
     nsfw: boolean
     score: number
@@ -347,6 +348,7 @@ function toRecord(
     created: Math.floor(p.createdAt.getTime() / 1000),
     author: p.authorName,
     flair: p.flair?.text ?? null,
+    distinguished: p.distinguishedBy ?? null,
     spoiler: !!p.spoiler,
     nsfw: !!p.nsfw,
     score: p.score ?? 0,

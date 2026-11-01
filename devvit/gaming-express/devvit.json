@@ -27,6 +27,7 @@
       "officialUsers": {
         "type": "string",
         "label": "Official publisher accounts to relay (comma separated, no u/)",
+        "helpText": "Publishers without a u/ account (Wuthering Waves) are covered by their subreddit: records carry flair (e.g. Official News) and distinguished.",
         "defaultValue": "genshinimpact,HonkaiStarRail,ZZZ_Official,HonkaiNexusAnima,AnantaOfficial"
       },
       "relayEnabled": {
