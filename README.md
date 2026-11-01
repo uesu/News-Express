@@ -166,7 +166,7 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 │   └── fixtures/posted_cards.py   # production-card replay fixtures
 ├── AGENTS.md                      # onboarding for AI coding agents
 ├── posted_tweets.json · posted_reddit.json · pending_reddit.json · proxy_health.json
-│                                  # auto-committed runtime caches
+│   · media_heal_carry.json        # auto-committed runtime caches
 ├── PRIVACY_POLICY.md · TERMS_OF_SERVICE.md
 ├── requirements.txt               # feedparser, aiohttp, python-dotenv
 ├── .env.example                   # local testing template + every switch documented
@@ -231,8 +231,8 @@ in Variables, Markdown, or tracked `.env` files.
 
 For existing production repositories or a migration, **do not reset caches**. Pause the
 old scheduler, let its running job finish and persist caches, then retain the freshest
-`posted_tweets.json`, `posted_reddit.json`, `pending_reddit.json`, `proxy_health.json`
-and `posted_messages.json` where present. Keep each live repository's own state on later
+`posted_tweets.json`, `posted_reddit.json`, `pending_reddit.json`, `proxy_health.json`,
+`media_heal_carry.json` and `posted_messages.json` where present. Keep each live repository's own state on later
 code uploads; development and production do not coordinate dedup state automatically.
 
 Only for a genuinely new installation with no delivery history, initialize its dedup
@@ -364,6 +364,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `MEDIA_HEAL_SCOPE` | `video` | `on`/`all` = also heal photos/gif/webp; `off` = never re-edit |
 | `MEDIA_HEAL_DELAY_SECONDS` | `45` | wait before each re-edit (30–60 is sane) |
 | `MEDIA_HEAL_ATTEMPTS` | `4` | max same-payload re-edits per message; hard-capped at 4 |
+| `MEDIA_HEAL_CARRY_HOURS` | `6` | round 100: a message still unresolved after the in-run edits is carried over in `media_heal_carry.json` and gets one GET + at most one identical edit **per later run** until it renders or this many hours pass; `0` = off (warn and forget, pre-round-100) |
 | `TWITTER_HIGH_VIDEO_LIMIT` | unset (`256 MiB`) | opt-in `1`/`true`/`yes`/`on` = **350 MiB** gallery video cap. Unset, empty, `0`, `false`, `off`, `350` and any other value keep the proven 256 MiB cap; the 350 MiB ceiling is not yet proven on Discord's proxy, so raise it only after review |
 | `TWITTER_MAX_AGE_HOURS` | `24` | round 95c stale-backlog floor: a feed entry older than this is **not a new tweet** and is skipped (`STALE-SKIP`) before any tweet-data request, so a down/restoring nitter instance that answers with a days-old backlog cannot be posted. Age is judged by two witnesses, in **UTC**: for the account's own tweet the **tweet id** wins (immutable — a mirror that re-stamps an old entry, or mangles the date, cannot smuggle it through); for a **repost** the feed date wins (reposting an older tweet is a legitimate post). An entry whose age cannot be established still posts (fail-open), and `TEST_TWEET_ID` is exempt. `0` disables the guard and restores pre-95c behaviour exactly |
 
@@ -600,10 +601,16 @@ See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
   Opting in with `TWITTER_HIGH_VIDEO_LIMIT=1` raises it to 350 MiB; that ceiling
   is still unproven on Discord's proxy, so the default stays 256 MiB. The card
   still plays a smaller rendition or links out to X either way.
-* **A video tile says "image not found" (X)** — rare, transient Discord proxy
-  hiccup (the same URL plays fine when re-posted). Delete the message →
-  remove the tweet from `posted_tweets.json` → re-run. If it ever becomes
-  frequent, lower `GALLERY_VIDEO_LIMIT`.
+* **A video tile says "Image failed to load" (X)** — Discord's media proxy has
+  not resolved the rendition yet (cold proxy; large files can take far longer
+  than one run). MEDIA-HEAL re-edits the message up to 4 times in the run and,
+  since round 100, carries it over to the next runs (`media_heal_carry.json`,
+  one identical edit per run for up to `MEDIA_HEAL_CARRY_HOURS`, default 6 h) —
+  exactly what pressing *Edit* in Discohook does by hand. Look for
+  `MEDIA-HEAL CARRY <key>: media resolved after carried edit #N` in a later
+  run. Only if it is still broken after the window: delete the message →
+  remove the tweet from `posted_tweets.json` → re-run, and consider lowering
+  `GALLERY_VIDEO_LIMIT`.
 * **A GIF shows as a video player instead of an animated image** — every GIF
   converter was unreachable at post time; the mp4 is the safe fallback
   (deliberately preferred over a possibly-static AVIF tile). They recover on
@@ -698,6 +705,9 @@ The Twitter workflow supports these post-delivery media-heal controls:
 - `MEDIA_HEAL_DELAY_SECONDS` — delay before each re-edit; default: 45 seconds.
 - `MEDIA_HEAL_ATTEMPTS` — maximum same-payload re-edits; default: 4, hard-capped
   at 4.
+- `MEDIA_HEAL_CARRY_HOURS` — round 100: how long a still-unresolved message is
+  carried over to later runs (one identical edit per run); default: 6 hours,
+  `0` disables the carry-over.
 
 Twitter V3 requests Discord's created-message response (`wait=true`) and
 inspects the returned media metadata. Only unresolved media eligible for the
@@ -709,8 +719,12 @@ The default scope is video-only, and healthy media gets no edit:
 a card Discord reports as resolved — or reports nothing conclusive about — is
 posted immediately, with no revalidation request and no delay, and which
 provider supplied the media never triggers a repair on its own.
-This per-message Twitter repair queue is not persisted and is distinct from
-Reddit's `pending_reddit.json` operational candidate-recheck cache.
+The in-run repair queue lives in memory; since round 100 a message that is
+still unresolved when it runs out of edits is written to `media_heal_carry.json`
+(account, message id and the identical payload — never a webhook URL) and the
+next runs give it one GET and at most one identical edit each, for up to
+`MEDIA_HEAL_CARRY_HOURS`. That file is distinct from Reddit's
+`pending_reddit.json` operational candidate-recheck cache.
 
 The former Reddit content-advisory/NSFW classification and gating settings are
 not active configuration. Do not add or enable `NSFW_ALLOWLIST`,

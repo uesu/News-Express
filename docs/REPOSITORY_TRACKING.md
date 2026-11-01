@@ -8,7 +8,7 @@ This document tracks current monitor observability and selected workflow variabl
 | --- | --- |
 | Inputs | `ACCOUNTS`, `DISCORD_WEBHOOK_URL`, per-account `WEBHOOK_*`, optional `NITTER_RSS_TOKEN` |
 | Cache | `MAX_CACHE_SIZE_PER_ACCOUNT`, `MAX_CACHE_SIZE_TOTAL` |
-| Media healing | `MEDIA_HEAL`, `MEDIA_HEAL_SCOPE`, `MEDIA_HEAL_DELAY_SECONDS`, `MEDIA_HEAL_ATTEMPTS` |
+| Media healing | `MEDIA_HEAL`, `MEDIA_HEAL_SCOPE`, `MEDIA_HEAL_DELAY_SECONDS`, `MEDIA_HEAL_ATTEMPTS`, `MEDIA_HEAL_CARRY_HOURS` (round 100: cross-run carry-over, state in `media_heal_carry.json`) |
 | Media cap | `TWITTER_HIGH_VIDEO_LIMIT` (opt-in 350 MiB; unset keeps the proven 256 MiB) |
 
 `MEDIA_HEAL_SCOPE=video` is the default. `off` disables the pass; `on` or
