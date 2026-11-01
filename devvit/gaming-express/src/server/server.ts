@@ -10,6 +10,7 @@ import {
   classifyStatus,
   failKey,
   isDiscordWebhook,
+  legacySeenKey,
   parseSubreddits,
   type RelayRecord,
   seenKey,
@@ -198,7 +199,7 @@ async function runPoll(): Promise<PollResult> {
       continue
     }
     for (const p of posts) {
-      if (await redis.get(seenKey(p.id))) {
+      if (await isSeen(p.id)) {
         result.skipped++
         continue
       }
@@ -242,6 +243,12 @@ async function runPoll(): Promise<PollResult> {
   await redis.incrBy('total:sent', result.sent)
   console.log(summarize(result))
   return result
+}
+
+/** De-dup lookup: current key spelling first, then the v0.0.1 spelling. */
+async function isSeen(id: string): Promise<boolean> {
+  if (await redis.get(seenKey(id))) return true
+  return !!(await redis.get(legacySeenKey(id)))
 }
 
 function ttl(): Date {

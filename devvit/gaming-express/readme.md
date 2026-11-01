@@ -108,6 +108,10 @@ The following domains are requested for this app:
   `settings.global.intakeWebhook is not exactly one from …`). Until the secret is set the
   poll runs in polling-only mode and reports `intakeWebhook is empty …` in `devvit logs`.
   A unit test guards this rule.
+- Redis keys are always built from the **bare** post id (`1xkvvda`, never `t3_1xkvvda`).
+  v0.0.1 mixed the two spellings and re-sent the same post on every poll; v0.0.2 fixes
+  it and still reads the old `seen:t3_<id>` markers so an upgrade never replays the
+  bootstrap. A unit test guards the key spelling.
 
 ## Commands
 
