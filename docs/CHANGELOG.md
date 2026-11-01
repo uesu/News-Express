@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — Devvit relay: `devvit upload` schema fix (2026-11-01, no engine change)
+
+- `devvit/gaming-express/devvit.json`: the secret `intakeWebhook` setting no longer declares
+  `defaultValue: ""`. Reddit's `config-file.v1.json` forbids `isSecret: true` together with
+  `defaultValue`, so the first real `npx devvit upload` (owner's PC, Node 26.13.0, npm 11.20)
+  failed with `settings.global.intakeWebhook is not exactly one from <GlobalStringSetting>…`.
+  Validated the whole file against the schema shipped in `@devvit/shared-types@0.15.1`
+  (0 errors after the change). New unit test `devvit.json: secret settings carry no
+  defaultValue` (11 tests total) fails on the old file. Nothing under `testing area/` or
+  `tests/` changed; prod repos are untouched by this entry.
+- Context: PR #97 (Round 99 + relay app + survival investigation) merged to `main` on
+  2026-11-01 04:10Z; `sync_prod.yml` deployed `0612504` to `7jkxmy9nvbc` (`2a4ab8a`) and
+  `wvkhabh2s22` (`ca37b4a`); first live run on the new engine (`Reddit Feed Monitor #12070`)
+  was clean.
+
 ## Unreleased — Round 99: megathread format corrections + REDLIB-REACH says why (2026-10-31)
 
 ### Card formatting (live `HonkaiStarRail_leaks/1xkgd9m`, applies to every post)

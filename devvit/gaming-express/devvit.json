@@ -17,7 +17,6 @@
       "intakeWebhook": {
         "type": "string",
         "label": "Discord intake webhook URL (private channel)",
-        "defaultValue": "",
         "isSecret": true
       },
       "subreddits": {
