@@ -1,5 +1,47 @@
 # Changelog
 
+## Unreleased — Round 100: the X media heal outlives the run (2026-11-01)
+
+Engine: `testing area/twitter_v3.py`; workflow `twitter_monitor.yml` (one Variable, one cache
+file in the persist step); `.gitignore`. Reddit engine untouched.
+
+- **Observed (`Twitter Feed Monitor #12739`, `wvkhabh2s22`, 11:00Z):** the Wuthering Waves LA
+  concert tweet (`2116847734669873623`, 5:04, ~813 MB 4K) was correctly downgraded to its
+  ~235 MB 1920x1080 rendition (`Video downgraded: 813MB -> 235MB variant`). Discord returned the
+  tile unresolved (0x0, no content type); MEDIA-HEAL's four identical edits (45 s apart) did not
+  resolve it and `#wuwa-news` showed **"Image failed to load"** 40 minutes later. The operator
+  then opened the message in Discohook and pressed *Edit* without changing anything — the same
+  identical edit, ~45 min after posting — and the video played. The proxy was simply cold for
+  longer than one run can wait; the rendition choice was right (4K itself has played before).
+- **Fix — carry-over.** `heal_unresolved_media()` now **returns** the messages it could not heal.
+  New `carry_over_media_heal()` records them in **`media_heal_carry.json`** (account, message
+  id, the identical payload, `first_seen`/`last_checked`/`runs` — **never a webhook URL**; the
+  webhook is re-read from the environment on the next run) and, on every later run, gives each
+  carried message one GET (resolved on its own → dropped) and at most **one** identical edit
+  (resolved → dropped and logged with the age; still cold → kept for the next run; GET/PATCH
+  401/403/404 → dropped; transient error → kept). Records older than
+  **`MEDIA_HEAL_CARRY_HOURS`** (new Variable, default **6**, `0` = off = pre-round-100
+  behaviour) are dropped with a warning; at most 20 carried messages are touched per run.
+  Nothing is posted twice — only the same message is edited — and the in-run heal
+  (45 s × 4, video scope), the video size caps and the card are unchanged.
+- **Persistence.** The Twitter persist step stages `media_heal_carry.json` next to
+  `posted_tweets.json` when present (normal and recovery path), copies it aside before the
+  reset and passes it to `merge_monitor_caches.py` (dict merge, newest `last_checked` wins).
+  The file name deliberately avoids `pending`: the merge script's hygiene rule drops
+  pending-dict keys covered by the posted list, and these keys *are* dedup keys. The engine
+  writes the file (even `{}`) every run, byte-stable, so quiet runs create no cache commit.
+  `.gitignore` lists it like the other caches. Persist step script is 3.0 k chars (cap 16 k).
+- **Guards:** `tests/test_twitter_media.py` section 4b (39 `r100` checks: leftovers returned
+  only when still unresolved; record shape and no-webhook invariant; next-run GET→edit→resolved,
+  still-cold keeps `runs`/`last_checked`, resolved-on-its-own, 401/403/404, HTTP 500 kept,
+  window edge and expiry, no webhook, malformed records, 20/run bound, `0` = off; file
+  round-trip, byte-stable re-save, `{}` when empty, unreadable → `{}`; a real
+  `merge_monitor_caches.py` run keeps the record and is byte-identical; wiring order; workflow
+  and `.gitignore`), eight `r100` smoke guards (incl. the empty-string Variable default). All
+  three suites ALL PASS in dev and inside a `sync_tree()` production checkout.
+- Docs: `docs/history/ROUND_100.md`, README (Variables table, media-heal section,
+  troubleshooting, tree), `AGENTS.md` Variables, `docs/REPOSITORY_TRACKING.md`.
+
 ## Unreleased — sync follow-up 2: the Dependabot guard holds in production checkouts too (2026-11-01, no engine change)
 
 - The `r87 sync_prod:` guard added with #102 asserted that *this checkout's* `dependabot.yml`

@@ -283,6 +283,10 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   and #8989 (`1xbc1mn` vxReddit 720p retained after EmbedEZ, heal skipped
   after revalidation) are recorded as successful, not defects.
 - `MEDIA_HEAL_SCOPE` — `video` (default) | `on`/`all` | `off` (round 56/56b).
+- `MEDIA_HEAL_CARRY_HOURS` — `6` (default) | `0` = off (round 100). A message still
+  unresolved after the in-run edits is carried in `media_heal_carry.json` (committed
+  beside `posted_tweets.json`; account + message id + identical payload, never a webhook
+  URL) and gets one identical edit per later run until it renders or the window ends.
 - `RETRACT_DEAD_POSTS` — default OFF; `1` enables dead-post tombstoning
   (round 44; requires two independent proofs before touching a message).
   (Round 66 removed the workflow mappings for the round-42-45 gate Variables
