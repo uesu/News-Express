@@ -2676,7 +2676,20 @@ def intake_content_html(rec: dict) -> str:
     through _clean_selftext in intake_base_data instead.
     """
     parts = []
-    for u in rec.get("media") or []:
+    seen = set()
+    urls = list(rec.get("media") or [])
+    # Inline rich-text images live in the markdown body as bare preview.redd.it
+    # / i.redd.it URLs (live records 1xlgs9j, 1xlh3fw). Reddit's RSS content
+    # carried them as anchors, so the native extractor must still see them.
+    try:
+        urls += [m.group(0) for m in REDDIT_MEDIA_URL_RE.finditer(
+            str(rec.get("body") or "").replace("\\_", "_"))]
+    except Exception:
+        pass
+    for u in urls:
+        if not u or u in seen:
+            continue
+        seen.add(u)
         esc = html_lib.escape(u, quote=True)
         parts.append(f'<a href="{esc}">{esc}</a>')
     url = str(rec.get("url") or "").strip()
@@ -3119,7 +3132,28 @@ def _clean_plain_body(text) -> str:
     if text in ("[removed]", "[deleted]"):
         return ""
     text = _normalize_reddit_markdown(html_lib.unescape(str(text or "")))
+    text = _unescape_markdown_in_urls(text)
     return _collapse_blanks(_line_stage([line.strip() for line in text.splitlines()]))
+
+
+# Bare autolinked URLs only: a `[label](url)` target is left as written (the
+# round-99 operator-approved megathread card keeps `HonkaiStarRail\_leaks` there).
+_BARE_URL_TOKEN_RE = re.compile(r"(?<!\()https?://[^\s<>()]+")
+_MD_ESCAPED_PUNCT_RE = re.compile(r"\\([_*~#\-\[\]])")
+
+
+def _unescape_markdown_in_urls(text: str) -> str:
+    """Round 101: raw Reddit markdown escapes punctuation inside bare URLs
+    (`https://x.com/minmyouk\_xx/status/…`, live record 1xlhem9). Reddit's
+    renderer resolves `\_` to `_` before anyone sees it (the RSS HTML never
+    carried the backslash); Discord does not, and the autolink breaks at the
+    backslash. Only bare URL tokens are touched — prose escapes (incl. the
+    round-99 literal `\>!…!<`) and markdown link targets stay as written."""
+    try:
+        return _BARE_URL_TOKEN_RE.sub(
+            lambda m: _MD_ESCAPED_PUNCT_RE.sub(r"\1", m.group(0)), text or "")
+    except Exception:
+        return text or ""
 
 
 _HTML_TAG_RE = re.compile(r"(?i)</?[a-z][a-z0-9]*(?:\s[^<>]*)?/?>")

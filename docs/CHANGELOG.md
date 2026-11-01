@@ -30,7 +30,11 @@
   `INTAKE_STALE_SECONDS`, `INTAKE_LOOKBACK_SECONDS` (Variables) in `reddit_monitor.yml`;
   `.env.example`. Owner steps (bot + Message Content intent + channel permission + secret +
   Variable) in `docs/DEVVIT_SETUP.md` §9.
-- Tests: `r101:` guards; three suites ALL PASS (also in a `sync_tree()` production checkout).
+- **First-live-records corrections:** inline body images (`media: []` text posts) are anchored
+  into the synthetic `content_html` so the native extractor still sees them; markdown escapes
+  inside bare URLs (`x.com/minmyouk\_xx`) are resolved on the plain-body path (bare tokens only;
+  `[label](url)` targets and prose escapes untouched, round-99 card byte-identical).
+- Tests: `r101:` + `r101b:` guards; three suites ALL PASS (also in a `sync_tree()` production checkout).
 
 ## Unreleased — Devvit relay 0.0.5: `officialUsers` = verified, active publisher accounts only (2026-11-02)
 

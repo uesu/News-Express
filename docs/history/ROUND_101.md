@@ -103,6 +103,22 @@ approval the round-98 override was guessing at from the feed streak. Neither new
   `.env.example` documents them. The bot token travels only in the `Authorization` header and
   is never logged or written.
 
+### Corrections from the first live records (owner screenshots, 06:27–07:15 PHT)
+
+- **Inline rich-text images** (`1xlgs9j`, `1xlh3fw`: `media: []`, preview.redd.it URLs in the
+  markdown body) — Reddit's RSS carried those as anchors, so `extract_native_media` found them;
+  the synthetic `content_html` now also anchors every redd.it image URL in the body (after
+  `media[]`, deduplicated), so text posts with pasted images keep their gallery.
+- **Markdown escapes inside bare URLs** (`1xlhem9`: `https://x.com/minmyouk\_xx/status/…`) —
+  Reddit's renderer resolves `\_` before RSS/HTML consumers see it; raw markdown (relay and
+  archive bodies) still carries it and Discord's autolink breaks at the backslash.
+  `_unescape_markdown_in_urls` (in `_clean_plain_body`) strips backslash escapes inside **bare**
+  URL tokens only; prose escapes and `[label](url)` targets stay as written (the round-99
+  operator-approved card is byte-identical).
+- Relay latency observed: `1xlhem9` created 1793574792 → channel message 07:15 (≈2 min, one
+  2-minute poll); galleries arrive with the full `media[]` (3/3 for `1xlhem9`, 3/3 for
+  `1xlh8pv`); `poll:` lines steady at `0 failed, 0 bootstrapped`.
+
 ## Operator steps (owner; the engine does nothing new until both exist)
 
 1. Discord developer portal → New Application → Bot → **Reset Token** (copy once) → *Privileged

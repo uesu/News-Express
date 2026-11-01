@@ -12221,6 +12221,29 @@ check("r101: the summary learns the outcome through the existing settings line (
                                                  "records_for_this_engine", "newest_age_seconds",
                                                  "pages", "detail"}
       and "_intake_line(intake)" in inspect.getsource(v3._settings_line))
+# r101b — first live records (owner screenshots, 2026-11-02 06:27–07:15 PHT).
+_r101b_inline = dict(_r101_rec, id="1xlh3fw", media=[], url="https://www.reddit.com/r/Genshin_Impact/comments/1xlh3fw/x/",
+                     body="https://preview.redd.it/fg9aonrlz2zh1.png?width=1805&format=png&auto=webp&s=3f05\n\n"
+                          "https://preview.redd.it/d6jmman303zh1.png?width=1809&format=png&auto=webp&s=7efc\n\nhot take")
+check("r101b: inline rich-text images in a text post's markdown body (live 1xlh3fw, 1xlgs9j) reach "
+      "the native extractor like RSS anchors did; gallery records keep their media[] order",
+      [m["url"] for m in v3.extract_native_media(
+          v3.intake_base_data(v3._IntakeEntry(_r101b_inline, "1"))["content_html"])]
+      == ["https://preview.redd.it/fg9aonrlz2zh1.png?width=1805&format=png&auto=webp&s=3f05",
+          "https://preview.redd.it/d6jmman303zh1.png?width=1809&format=png&auto=webp&s=7efc"]
+      and [m["url"] for m in v3.extract_native_media(v3.intake_content_html(
+          dict(_r101_rec, url="https://www.reddit.com/gallery/1xlhem9", body="",
+               media=["https://preview.redd.it/6ymlc2ap23zh1.jpeg?width=1706&s=b",
+                      "https://preview.redd.it/a5jn0lcp23zh1.jpeg?width=1290&s=d"])))]
+      == ["https://i.redd.it/6ymlc2ap23zh1.jpeg", "https://i.redd.it/a5jn0lcp23zh1.jpeg"])
+check("r101b: markdown backslash escapes inside BARE URLs are resolved (live 1xlhem9 "
+      "`x.com/minmyouk\\_xx`); prose escapes and [label](url) targets (round-99 approved card) "
+      "untouched — the plain-body path (relay + archive)",
+      v3._clean_selftext("src https://x.com/minmyouk\\_xx/status/21?a=2R\\_Rt&s=19 and snake\\_case")
+      == "src https://x.com/minmyouk_xx/status/21?a=2R_Rt&s=19 and snake\\_case"
+      and v3._unescape_markdown_in_urls("[t](https://e.com/a\\_b) https://e.com/c\\_d")
+          == "[t](https://e.com/a\\_b) https://e.com/c_d"
+      and "_unescape_markdown_in_urls(text)" in inspect.getsource(v3._clean_plain_body))
 check("r101: the media-wait and partial-gallery gates understand relay media lists",
       'if isinstance(entry, _IntakeEntry) and entry.record.get("media"):' in _r101_main
       and "isinstance(entry, (_ArcticEntry, _IntakeEntry))" in _r101_main)
