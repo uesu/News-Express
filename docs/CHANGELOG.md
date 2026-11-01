@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased — Devvit relay 0.0.4: `distinguished` for official Wuthering Waves posts (2026-11-02)
+
+`devvit/gaming-express/` + `docs/DEVVIT_SETUP.md` only. No engine, workflow or cache change.
+
+- **Why:** the relay's `officialUsers` default lists a publisher account for every game except
+  Wuthering Waves. Kuro has no `u/` account (`u/WutheringWaves` is an unrelated 2022 account);
+  its official Reddit posts — special program, codes, version news — are moderator-distinguished,
+  "Official"-flaired posts on `r/WutheringWaves`, which the relay already polls. The record had no
+  way to tell them apart from community posts.
+- **Change:** intake record gains `distinguished` (`"moderator"` / `"admin"` / `null`, from
+  `Post.distinguishedBy`), placed after `flair`; `v` stays `1` (additive). `officialUsers` default
+  unchanged — no WW account is added. Consumers classify WW official posts the way Game-Express
+  already does (`distinguished` ∈ {moderator, admin} ∪ flair `\bofficial\b`).
+- Setting `officialUsers` gets a `helpText` explaining the above; readme row updated.
+- `biome.jsonc` migrated to the installed 2.6.4 schema (`nursery.recommended` → `preset`).
+- Docs: record example, field notes, default-targets table, troubleshooting rows for the
+  2026-11-01 upload fault (`fetch failed` → "You must be logged in" while `whoami` works: wait and
+  retry, not an auth problem), version table (Reddit counter is one behind: 0.0.3 code = Reddit 0.0.2,
+  this 0.0.4 code uploads as Reddit 0.0.3).
+- Tests: `npm test` 17/17 (new: a mod-distinguished `r/WutheringWaves` post keeps `distinguished`
+  through truncation); `tests/test_smoke.py` ALL PASS.
+
 ## Unreleased — Round 100: the X media heal outlives the run (2026-11-01)
 
 Engine: `testing area/twitter_v3.py`; workflow `twitter_monitor.yml` (one Variable, one cache

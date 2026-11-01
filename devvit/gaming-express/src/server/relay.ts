@@ -15,6 +15,11 @@ export type RelayRecord = {
   created: number // unix seconds
   author: string
   flair: string | null
+  /** "moderator" | "admin" when the post is distinguished, else null (0.0.3+).
+   *  Official Wuthering Waves posts on r/WutheringWaves are mod-distinguished
+   *  posts — the publisher has no u/ account — so consumers classify them
+   *  from this field + flair rather than from `officialUsers`. */
+  distinguished: string | null
   spoiler: boolean
   nsfw: boolean
   score: number

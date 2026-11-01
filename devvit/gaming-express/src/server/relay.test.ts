@@ -32,6 +32,7 @@ function rec(over: Partial<RelayRecord> = {}): RelayRecord {
     created: 1793400000,
     author: 'AutoModerator',
     flair: 'Megathread',
+    distinguished: null,
     spoiler: false,
     nsfw: false,
     score: 1,
@@ -73,6 +74,25 @@ test('toContent: small record round-trips unchanged', () => {
   const out = toContent(r)
   assert.ok(out.length <= CONTENT_BUDGET)
   assert.deepEqual(parseContent(out), r)
+})
+
+test('toContent: a mod-distinguished r/WutheringWaves post keeps `distinguished` through truncation', () => {
+  // Kuro has no u/ publisher account (u/WutheringWaves is an unrelated 2022
+  // account); its official posts are moderator-distinguished posts with an
+  // "Official" flair on r/WutheringWaves. Consumers classify from this field.
+  const r = rec({
+    sub: 'WutheringWaves',
+    author: 'WutheringWavesMod',
+    flair: 'Official Content',
+    distinguished: 'moderator',
+    body: 'y'.repeat(5000),
+  })
+  const back = parseContent(toContent(r))
+  assert.equal(back.distinguished, 'moderator')
+  assert.equal(back.flair, 'Official Content')
+  assert.equal(back.author, 'WutheringWavesMod')
+  assert.equal(back.bodyTruncated, true)
+  assert.equal(parseContent(toContent(rec())).distinguished, null)
 })
 
 test('toContent: long body is truncated and flagged, identity fields intact', () => {
