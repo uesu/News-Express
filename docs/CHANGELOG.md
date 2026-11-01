@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased — Round 101: the Devvit relay is the primary Reddit listing (2026-11-02)
+
+`testing area/reddit_main_v3.py`, `.github/workflows/reddit_monitor.yml` (env only),
+`.env.example`, `tests/test_smoke.py`, docs. No card, cache or Twitter change. Full record:
+[`docs/history/ROUND_101.md`](history/ROUND_101.md).
+
+- **Why:** Reddit RSS is retired on 2026-11-13 and anonymous JSON already 403s; the relay app
+  (Phase A) has been writing every new post into `#reddit-intake` within a minute since 2026-11-01.
+- **Discovery:** `fetch_intake_records()` reads the channel back (bot token, `after=` snowflake
+  window, ≤ 8 pages). `INTAKE_READER=primary` (default): a healthy relay (HTTP 200, newest message
+  younger than `INTAKE_STALE_SECONDS`=1800) is the listing — combined feed, per-subreddit fallback
+  and archive sweep are skipped (`combined_fetch_status=relay`). Any other state logs one
+  `INTAKE-FALLBACK` line and runs the old chain exactly as before (relay records it did get are
+  still added). `shadow` = compare only; `off` = never read. Unconfigured = old chain.
+- **Entry adapter:** `_IntakeEntry` + `intake_base_data` — markdown body through `_clean_selftext`,
+  title unescaped once, synthetic RSS-shaped `content_html` for the media/outbound extractors,
+  `xpost` → id-only crosspost source resolved by the existing archive hop, truncated bodies left
+  for the archive/proxy fill-in with the relayed part as last resort. Pipeline after discovery
+  (holds, liveness, media, Components v2 card, continuations, retraction, heal) untouched.
+- **Liveness:** relay entries carry provenance `relay` (never `reddit-native`), so a replayed
+  record cannot build the round-98 feed streak. Instead, statelessly: the record's own
+  `removed` holds (`relay-record`), and an archive "removed" row whose `retrieved_on` is older
+  than the relay sighting is treated as stale → live (`relay-listing`). A newer archive row still
+  holds. Replayed records of never-re-check holds are skipped like archive resurfaces.
+- **Reporting:** run result `intake{…}` (no ids/token); the summary's existing settings line
+  gains `intake primary (relay ok; N record(s), newest S s)` — summary `run:` not grown.
+- **Wiring:** `DISCORD_BOT_TOKEN` (secret), `INTAKE_CHANNEL_ID`, `INTAKE_READER`,
+  `INTAKE_STALE_SECONDS`, `INTAKE_LOOKBACK_SECONDS` (Variables) in `reddit_monitor.yml`;
+  `.env.example`. Owner steps (bot + Message Content intent + channel permission + secret +
+  Variable) in `docs/DEVVIT_SETUP.md` §9.
+- Tests: `r101:` guards; three suites ALL PASS (also in a `sync_tree()` production checkout).
+
 ## Unreleased — Devvit relay 0.0.5: `officialUsers` = verified, active publisher accounts only (2026-11-02)
 
 `devvit/` + `docs/DEVVIT_SETUP.md` only. No engine, workflow or cache change.
