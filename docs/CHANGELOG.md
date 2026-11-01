@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — sync follow-up 2: the Dependabot guard holds in production checkouts too (2026-11-01, no engine change)
+
+- The `r87 sync_prod:` guard added with #102 asserted that *this checkout's* `dependabot.yml`
+  carries the npm entry — true in `News-Express`, false by design in `7jkxmy9nvbc` /
+  `wvkhabh2s22` (the sync strips it), so both production `ci.yml` smoke runs went red at
+  `bb8ea0b` / `b1d2d15`. The guard now asserts the invariant that holds everywhere — every
+  Dependabot `directory:` exists in the checkout — and expects the npm entry only when
+  `devvit/gaming-express/package.json` is present. Verified by running the full suite inside a
+  production checkout produced by `sync_tree()` (ALL PASS) as well as in dev.
+
 ## Unreleased — Devvit relay: Biome no longer formats Markdown (2026-11-01, no engine change)
 
 - The first Dependabot PR opened by the new npm block (#101: `@biomejs/biome` 2.5.15 → 2.6.4,
