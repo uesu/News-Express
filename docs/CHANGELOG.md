@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — sync follow-up: production never inherits the devvit CI job or npm Dependabot entry (2026-11-01, no engine change)
+
+- **Observed right after PR #100 merged:** `sync_prod.yml` also copies `.github/workflows/ci.yml`
+  and `.github/dependabot.yml` (both are in `sync_prod.py`'s allowlist), so `7jkxmy9nvbc@7d0ece0`
+  and `wvkhabh2s22@8b6ea84` received the new `devvit` CI job and the `/devvit/gaming-express`
+  npm Dependabot entry although neither repository has a `devvit/` folder. Left alone, the job
+  would fail on every cache auto-commit in production and Dependabot would report a permanently
+  failing npm run.
+- **Fix:** `ci.yml` `devvit` job is guarded with `if: github.repository == 'uesu/News-Express'`
+  (the same guard `sync_prod.yml` uses) — skipped, not red, in production.
+  `sync_prod.py` gains `filter_dependabot_bytes()`: `.github/dependabot.yml` is copied minus any
+  `updates:` entry whose `directory` does not exist in the destination checkout (pip and
+  github-actions entries at `/` are untouched; result byte-stable across runs). Module docstring
+  guarantee 7 documents it. The next sync (this merge) repairs both production repositories.
+- **Guards:** four new `r87 sync_prod:` checks — dev file carries the npm entry; the synced
+  production copy drops it and keeps pip + actions; the filter is byte-for-byte identity when
+  every directory exists; the production `ci.yml` carries the repository guard on the `devvit`
+  job. Python suites ALL PASS. `testing area/` untouched; `tests/test_smoke.py` and
+  `.github/scripts/sync_prod.py` are the only synced files that change.
+
 ## Unreleased — Devvit relay 0.0.3: pause switch, official accounts, Game-Express targets, CI (2026-11-01, no engine change)
 
 - **Defect (live, 14:39–15:11 PHT):** `npx devvit settings set relayEnabled` → `false` did not
