@@ -168,7 +168,7 @@ async function runPoll(): Promise<PollResult> {
   }
 
   // 1. Fetch all listings concurrently: one call per subreddit (`/new`) and one
-  //    per official account (`u/<name>` submitted, newest first). 12 + 5 calls
+  //    per official account (`u/<name>` submitted, newest first). 12 + 3 calls
   //    every 2 minutes is well inside the 100 QPM budget.
   type Listing = {
     target: string

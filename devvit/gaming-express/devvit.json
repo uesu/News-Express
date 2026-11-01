@@ -26,9 +26,9 @@
       },
       "officialUsers": {
         "type": "string",
-        "label": "Official publisher accounts to relay (comma separated, no u/)",
-        "helpText": "Publishers without a u/ account (Wuthering Waves) are covered by their subreddit: records carry flair (e.g. Official News) and distinguished.",
-        "defaultValue": "genshinimpact,HonkaiStarRail,ZZZ_Official,HonkaiNexusAnima,AnantaOfficial"
+        "label": "Verified publisher accounts to relay (comma separated, no u/; optional)",
+        "helpText": "Only verified accounts that actually post. Their subreddits are polled anyway, so this is a second path, not the only one. Dormant accounts (ZZZ_Official, AnantaOfficial) and publishers without an account (Wuthering Waves) are covered by their subreddit via flair. Leave empty to poll subreddits only.",
+        "defaultValue": "genshinimpact,HonkaiStarRail,HonkaiNexusAnima"
       },
       "relayEnabled": {
         "type": "boolean",
