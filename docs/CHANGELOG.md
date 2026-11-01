@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased — Devvit relay 0.0.3: pause switch, official accounts, Game-Express targets, CI (2026-11-01, no engine change)
+
+- **Defect (live, 14:39–15:11 PHT):** `npx devvit settings set relayEnabled` → `false` did not
+  pause the relay. The CLI stores the typed text, so the setting arrived as the string
+  `"false"`; `enabledRaw !== false` stayed true and both ZZZ posts kept being re-sent (and two
+  new ones, `1xkwfsz`/`1xkwk61`, were relayed correctly within 1–2 min). Fix: `parseEnabled()`
+  treats `false`, `"false"`, `"0"`, `"no"`, `"off"`, `"paused"` as paused; anything unset or
+  unrecognised stays enabled. Status toast now shows `relay on` / `relay PAUSED`.
+- **Official publisher accounts:** new global setting `officialUsers` (comma list, default
+  `genshinimpact,HonkaiStarRail,ZZZ_Official,HonkaiNexusAnima,AnantaOfficial`) polled with
+  `reddit.getPostsByUser({sort:'new'})`. Records from an account feed carry the subreddit the
+  post was actually made in (`u_<account>` for profile posts) — the spelling Game-Express's
+  `RedditClient.items()` already filters on (`allowed_subs` = `u_<acc>` + game subreddits).
+  Bootstrap key `boot:u/<account>`; a post seen in both an account feed and a subreddit
+  listing is relayed once (`uniqueById`).
+- **Game-Express targets in the defaults:** `subreddits` now also lists `Genshin_Impact,
+  HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima,AnantaOfficial`
+  (`config/games.json` → `reddit.subreddits` in `uesu/Game-Express`, whose Special-Program
+  fallback and community code corroboration ride the same RSS/redlib/Arctic chain that
+  Reddit retires on 2026-11-13 / 2027-01-12). 12 + 5 calls per 2-min poll ≈ 8.5 req/min. The
+  poll line becomes `poll: 12 subs, 5 users, N fetched, N sent, N seen, N failed, N bootstrapped`.
+- `devvit.json`: `dev.subreddit = gaming_express_dev` so `devvit upload` from a fresh zip no
+  longer announces a new playtest subreddit. Validated against `config-file.v1.json` (0 errors).
+- **Directory page:** `devvit/gaming-express/readme.md` reduced to a generic description with
+  no repository names or links (Reddit renders it on the unpublished app page). All operator
+  documentation moved to the new **`docs/DEVVIT_SETUP.md`** (zip route in Command Prompt,
+  expected outputs, settings commands incl. the full target lists, troubleshooting table with
+  the `"Create" failed … fetch failed` upload error, data handling, clean uninstall, version
+  history, roadmap for the News-Express and Game-Express intake readers).
+- **Keeping it updated:** `.github/dependabot.yml` gains an `npm` block for
+  `/devvit/gaming-express` (weekly, grouped, `deps(devvit)` prefix, labels `dependencies` +
+  `devvit`); `ci.yml` gains a `devvit` job (`actions/setup-node@v7.1.0` SHA-pinned with a bare
+  version comment per r89, Node from `.nvmrc`, `npm ci && npm test`) so a dependency bump must
+  typecheck, lint, test and bundle before it can merge. Unit tests 12 → 16 (`parseUsers`,
+  settings defaults + `dev.subreddit` guard, `parseEnabled` text forms, `uniqueById`).
+- Nothing under `testing area/` or `tests/` changed; `sync_prod.yml` copies nothing from
+  this entry; both production repositories are untouched. Python suites ALL PASS.
+
 ## Unreleased — Devvit relay 0.0.2: one post per post (2026-11-01, no engine change)
 
 - **Defect (first live run, `r/GamingExpressRelay`, 14:21–14:27 PHT):** the same post

@@ -29,13 +29,59 @@ export type RelayRecord = {
 /** Discord message content hard limit is 2000; keep a margin for the fence. */
 export const CONTENT_BUDGET = 1900
 
-export function parseSubreddits(raw: string | undefined | null): string[] {
+function parseNames(raw: string | undefined | null, prefix: RegExp): string[] {
   const out: string[] = []
   for (const part of (raw ?? '').split(',')) {
-    const name = part.trim().replace(/^\/?r\//i, '')
+    const name = part.trim().replace(prefix, '')
     if (!name) continue
-    if (!/^[A-Za-z0-9_]{2,50}$/.test(name)) continue
+    if (!/^[A-Za-z0-9_-]{2,50}$/.test(name)) continue
     if (!out.some(x => x.toLowerCase() === name.toLowerCase())) out.push(name)
+  }
+  return out
+}
+
+/** `subreddits` setting → unique subreddit names (accepts `r/Name`, `/r/Name`, `Name`). */
+export function parseSubreddits(raw: string | undefined | null): string[] {
+  return parseNames(raw, /^\/?r\//i)
+}
+
+/** `officialUsers` setting → unique account names (accepts `u/Name`, `/u/Name`, `Name`). */
+export function parseUsers(raw: string | undefined | null): string[] {
+  return parseNames(raw, /^\/?u(?:ser)?\//i)
+}
+
+/**
+ * `relayEnabled` as actually stored. The CLI (`npx devvit settings set relayEnabled`)
+ * writes the typed text, so a paused relay may arrive as the string `"false"` rather
+ * than the boolean `false`; v0.0.2 compared `!== false` and kept sending (observed
+ * 2026-11-01 14:39–15:11 PHT). Anything unset or unrecognised means enabled.
+ */
+export function parseEnabled(raw: unknown): boolean {
+  if (raw === false) return false
+  if (typeof raw === 'string') {
+    const v = raw.trim().toLowerCase()
+    if (
+      v === 'false' ||
+      v === '0' ||
+      v === 'no' ||
+      v === 'off' ||
+      v === 'paused'
+    )
+      return false
+  }
+  return true
+}
+
+/** Drop records whose id already appeared earlier in the list (an official account's
+ *  post shows up both in its `u/` feed and in the subreddit listing). Keeps the first. */
+export function uniqueById<T extends {id: string}>(xs: T[]): T[] {
+  const seen = new Set<string>()
+  const out: T[] = []
+  for (const x of xs) {
+    const k = bareId(x.id).toLowerCase()
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(x)
   }
   return out
 }
@@ -64,9 +110,15 @@ export function legacySeenKey(id: string): string {
   return `seen:t3_${bareId(id)}`
 }
 
-/** Redis key marking that a subreddit's first poll already ran (bootstrap). */
-export function bootKey(sub: string): string {
-  return `boot:${sub.toLowerCase()}`
+/** Redis key marking that a target's first poll already ran (bootstrap).
+ *  Subreddits keep the v0.0.1 spelling (`boot:<sub>`); user feeds use `boot:u/<name>`. */
+export function bootKey(target: string): string {
+  return `boot:${target.toLowerCase()}`
+}
+
+/** Bootstrap-key label for an official account feed. */
+export function userTarget(user: string): string {
+  return `u/${user}`
 }
 
 /** Redis key counting delivery failures for a post (always the bare id). */

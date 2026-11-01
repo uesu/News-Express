@@ -22,7 +22,12 @@
       "subreddits": {
         "type": "string",
         "label": "Subreddits to relay (comma separated, no r/)",
-        "defaultValue": "AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_"
+        "defaultValue": "AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_,Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima,AnantaOfficial"
+      },
+      "officialUsers": {
+        "type": "string",
+        "label": "Official publisher accounts to relay (comma separated, no u/)",
+        "defaultValue": "genshinimpact,HonkaiStarRail,ZZZ_Official,HonkaiNexusAnima,AnantaOfficial"
       },
       "relayEnabled": {
         "type": "boolean",
@@ -59,6 +64,9 @@
   },
   "triggers": {
     "onAppInstall": "/internal/on/app/install"
+  },
+  "dev": {
+    "subreddit": "gaming_express_dev"
   },
   "scripts": {
     "dev": "npm run watch"
