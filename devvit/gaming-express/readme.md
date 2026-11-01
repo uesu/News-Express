@@ -18,7 +18,7 @@ one compact JSON message to a private Discord channel owned by the developer.
 | --- | --- |
 | `intakeWebhook` (secret) | `https://discord.com/api/webhooks/…` of the private channel |
 | `subreddits` | comma-separated subreddit names to poll |
-| `officialUsers` | comma-separated publisher account names to poll (`u/…` submissions). Publishers without an account are covered by their subreddit: each record carries `distinguished` (`moderator`/`admin`/`null`) and `flair` |
+| `officialUsers` | comma-separated publisher account names to poll (`u/…` submissions). Publishers without an account are covered by their subreddit: each record carries `flair` (e.g. `Official News`) and `distinguished` (`moderator`/`admin`/`null`) |
 | `relayEnabled` | `false` pauses delivery (posts are still remembered, nothing is sent) |
 
 ## Fetch Domains

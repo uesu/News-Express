@@ -1,26 +1,27 @@
 # Changelog
 
-## Unreleased — Devvit relay 0.0.4: `distinguished` for official Wuthering Waves posts (2026-11-02)
+## Unreleased — Devvit relay 0.0.4: `distinguished` + how official Wuthering Waves content arrives (2026-11-02)
 
 `devvit/gaming-express/` + `docs/DEVVIT_SETUP.md` only. No engine, workflow or cache change.
 
 - **Why:** the relay's `officialUsers` default lists a publisher account for every game except
-  Wuthering Waves. Kuro has no `u/` account (`u/WutheringWaves` is an unrelated 2022 account);
-  its official Reddit posts — special program, codes, version news — are moderator-distinguished,
-  "Official"-flaired posts on `r/WutheringWaves`, which the relay already polls. The record had no
-  way to tell them apart from community posts.
+  Wuthering Waves. Kuro has no `u/` account (`u/WutheringWaves` is an unrelated 2022 account).
+- **Finding (Arctic Shift, 2026-11-02):** `u/WutheringWavesMod` posts only Daily/Weekly megathreads
+  (not distinguished). Official content — Special Program (`1xd9vyy`, `1wt05uz`), 3.8 preview
+  broadcast date (`1xj48d3`), trailers, codes — reaches `r/WutheringWaves` as **community re-posts
+  under the `Official News` flair** (`:YangyangSide: Official News`), not distinguished. The relay
+  already polls that subreddit and carries `flair`, so these posts are already in `#reddit-intake`;
+  Game-Express's `_is_official_subreddit_post` flair rule (`\bofficial\b`) matches them today and
+  the intake reader keeps it. Consumers must de-duplicate re-posts and treat them as unverified.
 - **Change:** intake record gains `distinguished` (`"moderator"` / `"admin"` / `null`, from
-  `Post.distinguishedBy`), placed after `flair`; `v` stays `1` (additive). `officialUsers` default
-  unchanged — no WW account is added. Consumers classify WW official posts the way Game-Express
-  already does (`distinguished` ∈ {moderator, admin} ∪ flair `\bofficial\b`).
-- Setting `officialUsers` gets a `helpText` explaining the above; readme row updated.
+  `Post.distinguishedBy`), after `flair`; `v` stays `1` (additive). `officialUsers` default
+  unchanged — no WW account is added; the setting gets a `helpText`; readme row updated.
 - `biome.jsonc` migrated to the installed 2.6.4 schema (`nursery.recommended` → `preset`).
-- Docs: record example, field notes, default-targets table, troubleshooting rows for the
-  2026-11-01 upload fault (`fetch failed` → "You must be logged in" while `whoami` works: wait and
-  retry, not an auth problem), version table (Reddit counter is one behind: 0.0.3 code = Reddit 0.0.2,
-  this 0.0.4 code uploads as Reddit 0.0.3).
-- Tests: `npm test` 17/17 (new: a mod-distinguished `r/WutheringWaves` post keeps `distinguished`
-  through truncation); `tests/test_smoke.py` ALL PASS.
+- Docs: record example, WW note, default-targets table, troubleshooting rows for the 2026-11-01
+  upload fault (`fetch failed` → "You must be logged in" while `whoami` works: wait and retry, not an
+  auth problem), version table (Reddit counter is one behind: 0.0.3 code = Reddit 0.0.2, this 0.0.4
+  code uploads as Reddit 0.0.3).
+- Tests: `npm test` 17/17; `tests/test_smoke.py` ALL PASS.
 
 ## Unreleased — Round 100: the X media heal outlives the run (2026-11-01)
 

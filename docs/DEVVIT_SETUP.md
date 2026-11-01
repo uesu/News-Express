@@ -54,15 +54,21 @@ Messages are sent with `allowed_mentions: {parse: []}`, so a title can never pin
   `Genshin_Impact` when the account posted there — which is what Game-Express's
   `allowed_subs` (`u_<account>` + the game's subreddits) already expects.
 - A post that appears in both an account feed and a subreddit listing is relayed once.
-- `distinguished` (added in the 0.0.3 upload, Reddit version `0.0.3`) is `"moderator"` /
-  `"admin"` when the post is distinguished, else `null`. **This is how official Wuthering
-  Waves posts are recognised:** Kuro has no `u/` publisher account (`u/WutheringWaves` on
-  live Reddit is an unrelated 2022 account and must not be added to `officialUsers`), so
-  its official posts — special-program announcements, codes, version news — are
-  moderator-distinguished posts with an "Official" flair on `r/WutheringWaves`, which is
-  already in `subreddits`. Game-Express applies the same rule today
-  (`is_verified_reddit_author`: configured accounts **or** `distinguished` moderator/admin
-  **or** an "official" flair); the intake reader keeps it.
+- `distinguished` (0.0.4 code / Reddit version `0.0.3`) is `"moderator"` / `"admin"` when the
+  post is distinguished, else `null`. Classification is the consumer's job; the relay only carries
+  the signals (`author`, `flair`, `distinguished`).
+- **Wuthering Waves has no publisher account on Reddit** (`u/WutheringWaves` is an unrelated
+  2022 account — never add it to `officialUsers`). Verified against the Arctic Shift archive on
+  2026-11-02: `u/WutheringWavesMod` posts **only** the Daily/Weekly megathreads (flair
+  `Megathread`, not distinguished), and the official content — Special Program (`1xd9vyy`,
+  `1wt05uz`), the 3.8 preview broadcast date (`1xj48d3`), codes, trailers, version news — arrives
+  as **community re-posts under the `Official News` flair** (`:YangyangSide: Official News`,
+  authors such as `cakeel-`, `Recent-Usual-9434`), also not distinguished. The relay already
+  delivers these from `r/WutheringWaves` with `"flair":":YangyangSide: Official News"`; the
+  Game-Express rule (`_is_official_subreddit_post`: configured author **or** distinguished **or**
+  flair matching `\bofficial\b`) matches them today, and the intake reader keeps that rule. The
+  flair is self-selected, so expect duplicates (the same Kuro tweet re-posted several times) and the
+  odd mis-flaired post — the consumer de-duplicates by title/link and treats them as unverified.
 - `body` is trimmed (and `bodyTruncated` set) when the message would exceed Discord's
   2000-character limit; identity fields are never trimmed. `score`/`comments` are the values
   at poll time.
@@ -74,7 +80,7 @@ Messages are sent with `allowed_mentions: {parse: []}`, so a title can never pin
 | Setting | Default |
 | --- | --- |
 | `subreddits` | `AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_` (News-Express) + `Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima,AnantaOfficial` (Game-Express `reddit.subreddits`) |
-| `officialUsers` | `genshinimpact,HonkaiStarRail,ZZZ_Official,HonkaiNexusAnima,AnantaOfficial` (Game-Express `reddit.official`; Wuthering Waves has none — see `distinguished` above) |
+| `officialUsers` | `genshinimpact,HonkaiStarRail,ZZZ_Official,HonkaiNexusAnima,AnantaOfficial` (Game-Express `reddit.official`; Wuthering Waves has none — see the `Official News` note above) |
 | `relayEnabled` | `true` |
 
 12 subreddit calls + 5 account calls every 2 minutes ≈ 8.5 requests/min, far inside the
@@ -211,7 +217,7 @@ Node.js › Uninstall → delete `%USERPROFILE%\.devvit`, `%APPDATA%\npm`,
 | 0.0.1 | 2026-11-01 | first live install on `r/GamingExpressRelay`; six News-Express subreddits |
 | 0.0.2 | 2026-11-01 | Redis keys on the bare post id — fixes the re-send of every post on every poll |
 | 0.0.3 | 2026-11-01 | `relayEnabled` accepts the CLI's text `"false"`; `officialUsers` setting (`getPostsByUser`); Game-Express subreddits and accounts in the defaults; in-poll de-dup across targets; `dev.subreddit` pinned; generic Directory readme; this document. Reached Reddit as **`0.0.2`** on 2026-11-01 20:20Z after a ~10 h server-side upload fault (0.0.2 itself never uploaded, so Reddit's counter is one behind this table). |
-| 0.0.4 | 2026-11-02 | intake record gains `distinguished` (`"moderator"`/`"admin"`/`null`) so official Wuthering Waves posts on `r/WutheringWaves` are classifiable without a publisher account; Biome schema 2.6.4; troubleshooting entries for the upload fault. Uploads as Reddit **`0.0.3`**. |
+| 0.0.4 | 2026-11-02 | intake record gains `distinguished` (`"moderator"`/`"admin"`/`null`); documented how official Wuthering Waves content reaches the relay (`Official News` flair on `r/WutheringWaves`, no publisher account, `officialUsers` unchanged); Biome schema 2.6.4; troubleshooting entries for the upload fault. Uploads as Reddit **`0.0.3`**. |
 
 ## 9. Roadmap (each step its own PR, none started without an explicit go)
 

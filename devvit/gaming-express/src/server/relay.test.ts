@@ -76,23 +76,27 @@ test('toContent: small record round-trips unchanged', () => {
   assert.deepEqual(parseContent(out), r)
 })
 
-test('toContent: a mod-distinguished r/WutheringWaves post keeps `distinguished` through truncation', () => {
-  // Kuro has no u/ publisher account (u/WutheringWaves is an unrelated 2022
-  // account); its official posts are moderator-distinguished posts with an
-  // "Official" flair on r/WutheringWaves. Consumers classify from this field.
+test('toContent: an r/WutheringWaves "Official News" re-post keeps flair + distinguished through truncation', () => {
+  // Kuro has no u/ publisher account; official Wuthering Waves content reaches
+  // r/WutheringWaves as community re-posts under the "Official News" flair
+  // (e.g. 1xd9vyy "Insider Channel: Special Program" by u/cakeel-, not
+  // distinguished). Consumers classify from `flair`; `distinguished` is carried
+  // for mod/admin notices and is null for these.
   const r = rec({
     sub: 'WutheringWaves',
-    author: 'WutheringWavesMod',
-    flair: 'Official Content',
-    distinguished: 'moderator',
+    author: 'cakeel-',
+    flair: ':YangyangSide: Official News',
+    distinguished: null,
     body: 'y'.repeat(5000),
   })
   const back = parseContent(toContent(r))
-  assert.equal(back.distinguished, 'moderator')
-  assert.equal(back.flair, 'Official Content')
-  assert.equal(back.author, 'WutheringWavesMod')
+  assert.equal(back.flair, ':YangyangSide: Official News')
+  assert.equal(back.distinguished, null)
+  assert.equal(back.author, 'cakeel-')
   assert.equal(back.bodyTruncated, true)
-  assert.equal(parseContent(toContent(rec())).distinguished, null)
+  assert.match(back.flair ?? '', /\bofficial\b/i)
+  const mod = parseContent(toContent(rec({distinguished: 'moderator'})))
+  assert.equal(mod.distinguished, 'moderator')
 })
 
 test('toContent: long body is truncated and flagged, identity fields intact', () => {
