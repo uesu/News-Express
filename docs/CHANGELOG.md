@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Devvit relay: Biome no longer formats Markdown (2026-11-01, no engine change)
+
+- The first Dependabot PR opened by the new npm block (#101: `@biomejs/biome` 2.5.15 → 2.6.4,
+  `@types/node` 24.19.1 → 26.6.6) failed the new `devvit` CI job: Biome 2.6 formats Markdown
+  and wanted to rewrite the generic `readme.md` table. `biome.jsonc` now excludes `**/*.md`
+  (`npm test` verified green with both the current and the bumped versions). Dependabot PRs
+  stay PR-only; `#101` is rebased onto this change and merges only after review.
+
 ## Unreleased — sync follow-up: production never inherits the devvit CI job or npm Dependabot entry (2026-11-01, no engine change)
 
 - **Observed right after PR #100 merged:** `sync_prod.yml` also copies `.github/workflows/ci.yml`
