@@ -1,0 +1,67 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "gaming-express",
+  "server": {},
+  "permissions": {
+    "http": {
+      "enable": true,
+      "domains": ["discord.com"]
+    },
+    "redis": true,
+    "reddit": {
+      "enable": true
+    }
+  },
+  "settings": {
+    "global": {
+      "intakeWebhook": {
+        "type": "string",
+        "label": "Discord intake webhook URL (private channel)",
+        "defaultValue": "",
+        "isSecret": true
+      },
+      "subreddits": {
+        "type": "string",
+        "label": "Subreddits to relay (comma separated, no r/)",
+        "defaultValue": "AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_"
+      },
+      "relayEnabled": {
+        "type": "boolean",
+        "label": "Relay enabled (off = poll and remember, send nothing)",
+        "defaultValue": true
+      }
+    }
+  },
+  "scheduler": {
+    "tasks": {
+      "poll": {
+        "endpoint": "/internal/scheduler/poll",
+        "cron": "*/2 * * * *"
+      }
+    }
+  },
+  "menu": {
+    "items": [
+      {
+        "label": "[Gaming Express] Poll now",
+        "description": "Run one relay poll immediately and report the result.",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/poll-now"
+      },
+      {
+        "label": "[Gaming Express] Status",
+        "description": "Show last poll time, counters and configuration.",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/status"
+      }
+    ]
+  },
+  "triggers": {
+    "onAppInstall": "/internal/on/app/install"
+  },
+  "scripts": {
+    "dev": "npm run watch"
+  }
+}
