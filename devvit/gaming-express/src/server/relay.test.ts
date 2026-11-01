@@ -2,11 +2,15 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {test} from 'node:test'
 import {
+  bareId,
   CONTENT_BUDGET,
   classifyStatus,
+  failKey,
   isDiscordWebhook,
+  legacySeenKey,
   parseSubreddits,
   type RelayRecord,
+  seenKey,
   sortOldestFirst,
   toContent,
   toWebhookBody,
@@ -180,4 +184,19 @@ test('devvit.json: secret settings carry no defaultValue (upload schema rule)', 
       )
     }
   }
+})
+
+test('redis keys: listing id (t3_x) and record id (x) map to the same marker', () => {
+  // v0.0.1 defect: bootstrap/lookup keyed on `t3_1xkvvda`, the post-send
+  // marker on `1xkvvda` — the marker never matched and the same post was
+  // relayed on every 2-minute poll (observed 2026-11-01 14:21→14:27 PHT).
+  assert.equal(bareId('t3_1xkvvda'), '1xkvvda')
+  assert.equal(bareId('1xkvvda'), '1xkvvda')
+  assert.equal(seenKey('t3_1xkvvda'), seenKey('1xkvvda'))
+  assert.equal(seenKey('1xkvvda'), 'seen:1xkvvda')
+  assert.equal(failKey('t3_1xkvvda'), failKey('1xkvvda'))
+  // The upgrade path still recognises markers written by v0.0.1.
+  assert.equal(legacySeenKey('t3_1xkvvda'), 'seen:t3_1xkvvda')
+  assert.equal(legacySeenKey('1xkvvda'), 'seen:t3_1xkvvda')
+  assert.notEqual(legacySeenKey('1xkvvda'), seenKey('1xkvvda'))
 })

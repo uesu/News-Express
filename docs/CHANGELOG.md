@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — Devvit relay 0.0.2: one post per post (2026-11-01, no engine change)
+
+- **Defect (first live run, `r/GamingExpressRelay`, 14:21–14:27 PHT):** the same post
+  `Zenlesszonezeroleaks_/1xkvvda` was relayed to `#reddit-intake` on every 2-minute poll
+  (`poll: 6 subs, 150 fetched, 1 sent, 149 seen`) with rising score/comments. Cause: Reddit's
+  listing ids are `t3_<id>`; bootstrap and the seen-lookup keyed on that, but the post-send
+  marker was written under the bare `<id>` from the relayed record, so it never matched.
+- **Fix:** `bareId()` normalises every Redis key (`seenKey`, `failKey`); the lookup also reads
+  the v0.0.1 spelling (`legacySeenKey`, `seen:t3_<id>`) so upgrading never replays the 149
+  bootstrapped posts. New unit test `redis keys: listing id (t3_x) and record id (x) map to
+  the same marker` (12 tests). Record format, cadence, webhook body and settings unchanged.
+- Deployment is manual on the owner's PC: zip → `npm ci` → `npm test` → `npx devvit upload`
+  → `npx devvit install GamingExpressRelay` (upgrades the existing install to the new
+  version). Nothing under `testing area/` or `tests/` changed; prod repos untouched.
+
 ## Unreleased — Devvit relay: `devvit upload` schema fix (2026-11-01, no engine change)
 
 - `devvit/gaming-express/devvit.json`: the secret `intakeWebhook` setting no longer declares

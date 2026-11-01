@@ -40,9 +40,28 @@ export function parseSubreddits(raw: string | undefined | null): string[] {
   return out
 }
 
-/** Redis key for the per-post de-dup marker. */
+/**
+ * Bare post id: Reddit's listing returns `t3_1xkvvda`, the relayed record
+ * carries `1xkvvda`. Every Redis key must be built from the same form,
+ * otherwise a post sent under one spelling is never recognised under the
+ * other and is re-sent on every poll (the 2026-11-01 first-run defect).
+ */
+export function bareId(id: string): string {
+  return id.replace(/^t3_/i, '')
+}
+
+/** Redis key for the per-post de-dup marker (always the bare id). */
 export function seenKey(id: string): string {
-  return `seen:${id}`
+  return `seen:${bareId(id)}`
+}
+
+/**
+ * Key spelling used by v0.0.1 for bootstrap markers (`seen:t3_<id>`). Read
+ * alongside `seenKey` so an upgrade never re-sends posts that were already
+ * remembered under the old spelling; expires naturally with its 7-day TTL.
+ */
+export function legacySeenKey(id: string): string {
+  return `seen:t3_${bareId(id)}`
 }
 
 /** Redis key marking that a subreddit's first poll already ran (bootstrap). */
@@ -50,9 +69,9 @@ export function bootKey(sub: string): string {
   return `boot:${sub.toLowerCase()}`
 }
 
-/** Redis key counting delivery failures for a post. */
+/** Redis key counting delivery failures for a post (always the bare id). */
 export function failKey(id: string): string {
-  return `fail:${id}`
+  return `fail:${bareId(id)}`
 }
 
 /**
