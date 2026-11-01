@@ -3,17 +3,22 @@ import {readFileSync} from 'node:fs'
 import {test} from 'node:test'
 import {
   bareId,
+  bootKey,
   CONTENT_BUDGET,
   classifyStatus,
   failKey,
   isDiscordWebhook,
   legacySeenKey,
+  parseEnabled,
   parseSubreddits,
+  parseUsers,
   type RelayRecord,
   seenKey,
   sortOldestFirst,
   toContent,
   toWebhookBody,
+  uniqueById,
+  userTarget,
 } from './relay.ts'
 
 function rec(over: Partial<RelayRecord> = {}): RelayRecord {
@@ -199,4 +204,90 @@ test('redis keys: listing id (t3_x) and record id (x) map to the same marker', (
   assert.equal(legacySeenKey('t3_1xkvvda'), 'seen:t3_1xkvvda')
   assert.equal(legacySeenKey('1xkvvda'), 'seen:t3_1xkvvda')
   assert.notEqual(legacySeenKey('1xkvvda'), seenKey('1xkvvda'))
+})
+
+test('parseUsers: strips u/ and user/, de-dups, keeps Reddit-legal names only', () => {
+  assert.deepEqual(
+    parseUsers(
+      ' u/genshinimpact, /u/HonkaiStarRail ,honkaistarrail, user/ZZZ_Official, bad name!, ',
+    ),
+    ['genshinimpact', 'HonkaiStarRail', 'ZZZ_Official'],
+  )
+  assert.deepEqual(parseUsers(undefined), [])
+  assert.deepEqual(parseUsers(''), [])
+})
+
+test('settings defaults: the twelve subreddits and five official accounts parse untouched', () => {
+  const cfg = JSON.parse(
+    readFileSync(new URL('../../devvit.json', import.meta.url), 'utf8'),
+  ) as {
+    settings: {global: Record<string, {defaultValue?: string}>}
+    dev?: {subreddit?: string}
+  }
+  const subs = cfg.settings.global.subreddits?.defaultValue ?? ''
+  const users = cfg.settings.global.officialUsers?.defaultValue ?? ''
+  assert.equal(parseSubreddits(subs).length, 12)
+  assert.deepEqual(parseSubreddits(subs), subs.split(','))
+  // Game-Express sources (config/games.json → reddit.subreddits / reddit.official).
+  for (const s of [
+    'Genshin_Impact',
+    'HonkaiStarRail',
+    'ZZZ_Official',
+    'WutheringWaves',
+    'HonkaiNexusAnima',
+    'AnantaOfficial',
+  ])
+    assert.ok(parseSubreddits(subs).includes(s), s)
+  assert.deepEqual(parseUsers(users), [
+    'genshinimpact',
+    'HonkaiStarRail',
+    'ZZZ_Official',
+    'HonkaiNexusAnima',
+    'AnantaOfficial',
+  ])
+  // `devvit upload` from a fresh zip no longer tries to create a playtest subreddit.
+  assert.equal(cfg.dev?.subreddit, 'gaming_express_dev')
+})
+
+test('parseEnabled: the CLI stores typed text, so "false" must pause too', () => {
+  // v0.0.2 defect: `npx devvit settings set relayEnabled` → `false` was stored as the
+  // string "false", `enabledRaw !== false` stayed true and the relay kept sending.
+  for (const paused of [
+    false,
+    'false',
+    'False',
+    ' FALSE ',
+    '0',
+    'no',
+    'off',
+    'paused',
+  ])
+    assert.equal(parseEnabled(paused), false, String(paused))
+  for (const on of [
+    true,
+    'true',
+    'True',
+    '1',
+    'yes',
+    'on',
+    '',
+    undefined,
+    null,
+  ])
+    assert.equal(parseEnabled(on), true, String(on))
+})
+
+test('uniqueById: a post seen in both the u/ feed and the subreddit listing is sent once', () => {
+  const xs = [
+    {id: 't3_abc', sub: 'u_genshinimpact'},
+    {id: 'abc', sub: 'Genshin_Impact'},
+    {id: 'def', sub: 'Genshin_Impact'},
+    {id: 'ABC', sub: 'Genshin_Impact'},
+  ]
+  assert.deepEqual(uniqueById(xs), [xs[0], xs[2]])
+  assert.equal(userTarget('genshinimpact'), 'u/genshinimpact')
+  assert.notEqual(
+    bootKey(userTarget('HonkaiStarRail')),
+    bootKey('HonkaiStarRail'),
+  )
 })

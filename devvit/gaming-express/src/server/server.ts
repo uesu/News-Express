@@ -11,12 +11,16 @@ import {
   failKey,
   isDiscordWebhook,
   legacySeenKey,
+  parseEnabled,
   parseSubreddits,
+  parseUsers,
   type RelayRecord,
   seenKey,
   sortOldestFirst,
   toContent,
   toWebhookBody,
+  uniqueById,
+  userTarget,
 } from './relay.ts'
 
 // ---------------------------------------------------------------------------
@@ -44,6 +48,7 @@ type Endpoint =
 
 type PollResult = {
   subs: number
+  users: number
   fetched: number
   bootstrapped: number
   sent: number
@@ -129,6 +134,7 @@ async function route(
 async function runPoll(): Promise<PollResult> {
   const result: PollResult = {
     subs: 0,
+    users: 0,
     fetched: 0,
     bootstrapped: 0,
     sent: 0,
@@ -138,63 +144,72 @@ async function runPoll(): Promise<PollResult> {
   }
   const startedAt = Date.now()
 
-  const [webhookRaw, subsRaw, enabledRaw] = await Promise.all([
+  const [webhookRaw, subsRaw, usersRaw, enabledRaw] = await Promise.all([
     settings.get<string>('intakeWebhook'),
     settings.get<string>('subreddits'),
-    settings.get<boolean>('relayEnabled'),
+    settings.get<string>('officialUsers'),
+    settings.get<boolean | string>('relayEnabled'),
   ])
   const webhook = (webhookRaw ?? '').trim()
-  const enabled = enabledRaw !== false && isDiscordWebhook(webhook)
+  const enabled = parseEnabled(enabledRaw) && isDiscordWebhook(webhook)
   if (!isDiscordWebhook(webhook)) {
     result.errors.push(
       'intakeWebhook is empty or not a discord.com webhook URL — polling only',
     )
   }
   const subs = parseSubreddits(subsRaw)
+  const users = parseUsers(usersRaw)
   result.subs = subs.length
-  if (subs.length === 0) {
-    result.errors.push('no subreddits configured')
+  result.users = users.length
+  if (subs.length === 0 && users.length === 0) {
+    result.errors.push('no subreddits or official users configured')
     await redis.set('last:poll', JSON.stringify({at: startedAt, ...result}))
     return result
   }
 
-  // 1. Fetch all listings concurrently (6 calls; well inside 100 QPM).
-  const listings = await Promise.all(
-    subs.map(async sub => {
+  // 1. Fetch all listings concurrently: one call per subreddit (`/new`) and one
+  //    per official account (`u/<name>` submitted, newest first). 12 + 5 calls
+  //    every 2 minutes is well inside the 100 QPM budget.
+  type Listing = {
+    target: string
+    sub: string | null
+    posts: Awaited<ReturnType<typeof fetchSub>>
+    error: string | null
+  }
+  const listings: Listing[] = await Promise.all([
+    ...subs.map(async (sub): Promise<Listing> => {
       try {
-        const posts = await reddit
-          .getNewPosts({
-            subredditName: sub,
-            limit: LISTING_LIMIT,
-            pageSize: LISTING_LIMIT,
-          })
-          .get(LISTING_LIMIT)
-        return {sub, posts, error: null as string | null}
+        return {target: sub, sub, posts: await fetchSub(sub), error: null}
       } catch (err) {
-        return {
-          sub,
-          posts: [],
-          error: `${sub}: ${err instanceof Error ? err.message : err}`,
-        }
+        return {target: sub, sub, posts: [], error: describe(`r/${sub}`, err)}
       }
     }),
-  )
+    ...users.map(async (user): Promise<Listing> => {
+      const target = userTarget(user)
+      try {
+        return {target, sub: null, posts: await fetchUser(user), error: null}
+      } catch (err) {
+        return {target, sub: null, posts: [], error: describe(target, err)}
+      }
+    }),
+  ])
 
   // 2. Bootstrap / de-dup.
   const candidates: RelayRecord[] = []
-  for (const {sub, posts, error} of listings) {
+  for (const {target, sub, posts, error} of listings) {
     if (error) {
       result.errors.push(error)
       continue
     }
     result.fetched += posts.length
-    const booted = await redis.get(bootKey(sub))
+    const booted = await redis.get(bootKey(target))
     if (!booted) {
-      // First poll for this subreddit: remember everything, send nothing.
-      // Prevents a 25-post flood into the intake channel on install.
+      // First poll for this target: remember everything, send nothing.
+      // Prevents a 25-post flood into the intake channel on install or when
+      // a subreddit / account is added to the settings.
       for (const p of posts)
         await redis.set(seenKey(p.id), '1', {expiration: ttl()})
-      await redis.set(bootKey(sub), `${startedAt}`)
+      await redis.set(bootKey(target), `${startedAt}`)
       result.bootstrapped += posts.length
       continue
     }
@@ -203,12 +218,18 @@ async function runPoll(): Promise<PollResult> {
         result.skipped++
         continue
       }
-      candidates.push(toRecord(p, sub))
+      // Subreddit listings keep the configured spelling; a user-feed post is
+      // labelled with the subreddit it was actually posted in (`u_<name>` for a
+      // profile post), which is what the consumers key on.
+      candidates.push(toRecord(p, sub ?? p.subredditName))
     }
   }
 
-  // 3. Send oldest-first, bounded per poll.
-  for (const rec of sortOldestFirst(candidates).slice(0, MAX_SENDS_PER_POLL)) {
+  // 3. Send oldest-first, once per id, bounded per poll.
+  for (const rec of sortOldestFirst(uniqueById(candidates)).slice(
+    0,
+    MAX_SENDS_PER_POLL,
+  )) {
     if (!enabled) {
       // Relay paused: remember the post so it is not sent later in a burst.
       await redis.set(seenKey(rec.id), 'paused', {expiration: ttl()})
@@ -243,6 +264,31 @@ async function runPoll(): Promise<PollResult> {
   await redis.incrBy('total:sent', result.sent)
   console.log(summarize(result))
   return result
+}
+
+function fetchSub(sub: string) {
+  return reddit
+    .getNewPosts({
+      subredditName: sub,
+      limit: LISTING_LIMIT,
+      pageSize: LISTING_LIMIT,
+    })
+    .get(LISTING_LIMIT)
+}
+
+function fetchUser(user: string) {
+  return reddit
+    .getPostsByUser({
+      username: user,
+      sort: 'new',
+      limit: LISTING_LIMIT,
+      pageSize: LISTING_LIMIT,
+    })
+    .get(LISTING_LIMIT)
+}
+
+function describe(target: string, err: unknown): string {
+  return `${target}: ${err instanceof Error ? err.message : err}`
 }
 
 /** De-dup lookup: current key spelling first, then the v0.0.1 spelling. */
@@ -370,24 +416,28 @@ function sleep(ms: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function summarize(r: PollResult): string {
-  const base = `poll: ${r.subs} subs, ${r.fetched} fetched, ${r.sent} sent, ${r.skipped} seen, ${r.failed} failed, ${r.bootstrapped} bootstrapped`
+  const base = `poll: ${r.subs} subs, ${r.users} users, ${r.fetched} fetched, ${r.sent} sent, ${r.skipped} seen, ${r.failed} failed, ${r.bootstrapped} bootstrapped`
   return r.errors.length
     ? `${base}; ${r.errors.length} issue(s): ${r.errors[0]}`
     : base
 }
 
 async function statusText(): Promise<string> {
-  const [last, total, subsRaw, webhook] = await Promise.all([
-    redis.get('last:poll'),
-    redis.get('total:sent'),
-    settings.get<string>('subreddits'),
-    settings.get<string>('intakeWebhook'),
-  ])
+  const [last, total, subsRaw, usersRaw, enabledRaw, webhook] =
+    await Promise.all([
+      redis.get('last:poll'),
+      redis.get('total:sent'),
+      settings.get<string>('subreddits'),
+      settings.get<string>('officialUsers'),
+      settings.get<boolean | string>('relayEnabled'),
+      settings.get<string>('intakeWebhook'),
+    ])
   const subs = parseSubreddits(subsRaw)
+  const users = parseUsers(usersRaw)
   const lastAt = last
     ? new Date(JSON.parse(last).at as number).toISOString()
     : 'never'
-  return `last poll ${lastAt}; total sent ${total ?? 0}; ${subs.length} subs; webhook ${isDiscordWebhook(webhook) ? 'set' : 'MISSING'}`
+  return `last poll ${lastAt}; total sent ${total ?? 0}; ${subs.length} subs; ${users.length} users; relay ${parseEnabled(enabledRaw) ? 'on' : 'PAUSED'}; webhook ${isDiscordWebhook(webhook) ? 'set' : 'MISSING'}`
 }
 
 function writeJson<T extends PartialJsonValue>(
