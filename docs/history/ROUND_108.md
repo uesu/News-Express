@@ -113,3 +113,13 @@ No engine change needed. GE uses Arctic only as a last-resort single `/posts/ids
 inside `resolve_post` (its fetcher has its own retry/backoff machinery, `retries=0` there) and
 has no hold memory — the 1xlrj90 class of issue cannot occur (pinned by GE's
 `test_round107_post_approved_from_the_mod_queue_hours_later_is_a_plain_new_item`).
+
+## Addendum (2026-11-03): Devvit Directory readme
+
+`devvit/gaming-express/readme.md` rewritten as a full product readme for the app's Directory
+page (`developers.reddit.com/apps/gaming-express`): intro, how it works, delivery semantics,
+setup, settings table, inbox contract (`v:1` record and `v:2` update examples with a field
+table), moderator menu, fetch domains, permissions, sources, toolchain, current installation.
+It names no repository, no consumer and no retired Reddit feature. Ships with the next
+`npx devvit upload --copy-paste` + `install` (Reddit assigns the version; the code is 0.0.8
+unchanged). `docs/DEVVIT_SETUP.md` §1 / §4 / version table adjusted.

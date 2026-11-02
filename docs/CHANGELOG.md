@@ -9,6 +9,8 @@ counters, reclaim verdict, `_write_run_result` health fields, `_env_float`),
 `README.md`, `.env.example`, `AGENTS.md`, `tests/test_smoke.py` (`r108`, `r108b`; `r69` and the
 archive-call contract test adjusted for the single retry).
 Record: [`docs/history/ROUND_108.md`](history/ROUND_108.md).
+Addendum (2026-11-03): `devvit/gaming-express/readme.md` rewritten as a full product readme for
+the Directory page (no code change; `docs/DEVVIT_SETUP.md` adjusted).
 
 - **Why:** RSS is retired on 2026-11-13; with the relay paused the old chain is redlib + Arctic
   Shift. The archive times out on back-to-back requests, answers transient 429/5xx, and a

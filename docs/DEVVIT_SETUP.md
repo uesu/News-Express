@@ -2,8 +2,9 @@
 
 Operating notes for the Reddit Developer Platform app in
 [`devvit/gaming-express/`](../devvit/gaming-express/) (Reddit slug `gaming-express`).
-The app's own `readme.md` is deliberately short and generic because Reddit shows it on the
-app's Directory page; everything an operator needs is here instead.
+The app's own `readme.md` is the text Reddit shows on the app's Directory page: a generic
+product readme (behaviour, setup, settings, inbox contract, fetch domains, sources) that
+names no repository and no consumer. Operating notes for *this* deployment live here.
 
 The relay is **not part of the engine**. `sync_prod.yml` copies `testing area/**` and
 `tests/**` only, so nothing in `devvit/` reaches the production repositories, and the
@@ -227,9 +228,11 @@ Subreddit menu on `r/GamingExpressRelay` (`…` → **[Gaming Express] Poll now*
   `officialUsers`) with the full comma-separated list. Effective on the next poll.
 - **Stop completely:** `npx devvit uninstall GamingExpressRelay`.
 - **Directory page** (`developers.reddit.com/apps/gaming-express`): the app is unpublished
-  and installed only on the private subreddit. Keep the listing generic — no repository
-  links are needed because the app is not submitted for publication; the Terms/Privacy URL
-  fields can stay empty.
+  and installed only on the private subreddit. Keep the listing generic — the readme names
+  no repository, no consumer and no retired Reddit feature, and the Terms/Privacy URL fields
+  can stay empty because the app is not submitted for publication. The readme is part of the
+  upload bundle: a readme change ships with the next `npx devvit upload --copy-paste` +
+  `install` (§3 step 4); the version number is assigned by the server, nothing to bump.
 
 ## 5. Troubleshooting
 
@@ -282,6 +285,7 @@ the Reddit number.
 | 0.0.6 | 2026-11-02 | poll cadence 2 → **5 minutes** (owner's choice, matching the 5-minute engine crons; 3 requests/min); per-poll send cap 10 → 15 so the per-minute ceiling is unchanged. No record-format change. Uploads as Reddit **`0.0.5`**. |
 | 0.0.7 | 2026-11-02 | **the relay is the complete source** (round 103). (a) Every record message also carries **`record.json`** — the untrimmed record (full body, every media URL, video renditions, the crosspost parent as a nested record) — sent as a multipart webhook upload; the inline fenced record stays `v: 1` (new optional keys `full`, `mediaTruncated`, `edited`, `revision`, `xpostPermalink`, `video`), so older readers keep working. If Discord refuses the form, the record goes out as plain content exactly as before (`attachment refused` log line; three in a row pause the attachment for an hour). (b) **Post-delivery re-check**: each delivered post is looked at again ~10 min, 30 min, 2 h and 6 h after creation (`reddit.getPostById`, ≤ 20 per poll) and the result is written as one batched **`v: 2` update message** per poll (`{v:2,kind:"update",at,posts:[{id,sub,age,stage,removed,deleted,edited,spoiler,…,locked,score,comments}]}`) — the first look always, later looks only when the state changed. An **edited body** is re-sent as a `v: 1` record with `revision` ≥ 2 (readers keep the newest message per id). New Redis keys: `sent:z` (sorted set, 7.5 h), `stage:<id>`, `state:<id>`, `bh:<id>`, `rev:<id>`, `attach:fails`/`attach:off`. Poll line gains `; recheck N looked, N update msg, N re-sent`. Uploads as Reddit **`0.0.6`**. |
 | 0.0.8 | 2026-11-02 | **1:1 with the old chain** (round 104). (a) Re-check stages ~**5 min** / 30 min / 2 h / 6 h / **24 h** (the first look is the next poll after delivery; late approvals and late publisher comments are caught by the 24 h look). (b) A post first seen filtered/removed and later live (**approval**) is re-sent complete (`resent: "approved"`, `revision` ≥ 2; reasons join with `+`) so a reader whose 6 h window lost the first record still has the whole post. (c) Record keeps `v: 1`; `RECHECK_WINDOW` 24 h + 30 min. A publisher-comment follow-up was prototyped the same day and dropped at the owner's request before upload (neither engine shows OP comments). Uploads as Reddit **`0.0.7`**. |
+| 0.0.9 | 2026-11-03 | Directory readme rewritten as a full product readme (how it works, delivery semantics, setup, settings, inbox contract with `v:1` / `v:2` examples, permissions, Devvit/Discord sources, toolchain). No code change. |
 
 ## 9. News-Express reader (round 101 — the relay as the primary listing)
 
