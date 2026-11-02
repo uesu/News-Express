@@ -1,6 +1,6 @@
-# Python runtime policy — CPython 3.14.9
+# Python runtime policy — CPython 3.14.10
 
-**Current production/CI pin:** `3.14.9`
+**Current production/CI pin:** `3.14.10`
 
 **Reviewed:** 2026-10-26 against the `actions/python-versions` manifest
 and its release metadata
@@ -10,7 +10,7 @@ version through SHA-pinned `actions/setup-python@v7`:
 
 ```yaml
 with:
-  python-version: '3.14.9'
+  python-version: '3.14.10'
   cache: 'pip'
 ```
 
@@ -21,14 +21,14 @@ because the current pin changes.
 
 ## Official status reviewed for this pin
 
-Python **3.14.9** is the current News-Express runtime: a maintenance release
+Python **3.14.10** is the current News-Express runtime: a maintenance release
 in the same `3.14` series as 3.14.8, so it is an ordinary patch update and keeps
 the series ABI. The pin is taken from the `actions/python-versions` manifest —
 the exact list `actions/setup-python` downloads from — where the Linux x64 build
-for this pin (`3.14.9-39619022138`) was published on **October 21, 2026**:
+for this pin (`3.14.10-39619022138`) was published on **October 21, 2026**:
 
-* [Python 3.14.9 release page](https://www.python.org/downloads/release/python-3149/)
-* [`actions/python-versions` build 3.14.9-39619022138](https://github.com/actions/python-versions/releases/tag/3.14.9-39619022138)
+* [Python 3.14.10 release page](https://www.python.org/downloads/release/python-31410/)
+* [`actions/python-versions` build 3.14.10-39619022138](https://github.com/actions/python-versions/releases/tag/3.14.10-39619022138)
 
 As of this 2026-10-26 review, News-Express is **not** adopting Python 3.15:
 
