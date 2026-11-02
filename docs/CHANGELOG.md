@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — Round 105: the run summary speaks relay (2026-11-02)
+
+`.github/workflows/reddit_monitor.yml` (summary step only, 14,720 → 15,106 chars),
+`tests/test_smoke.py` (`r105`). Record: [`docs/history/ROUND_105.md`](history/ROUND_105.md).
+
+- **Why:** the first live relay-primary run (`7jkxmy9nvbc` #12256 — `INTAKE: relay ok`, 3 s,
+  zero Reddit/redlib/Arctic requests) still printed old-chain wording: "Combined-feed entries",
+  "Subreddits missing from the combined feed … (archive attempt below)", "fallback: not
+  attempted (combined succeeded)".
+- **Now, when `combined_fetch_status == "relay"`:** `Relay records for this engine (6 h
+  window)`, `Subreddits with no new post in the relay window: … (quiet, not missing; no archive
+  attempt)`, `Feed fallback: not attempted (relay is the listing)`. RSS runs unchanged (guarded).
+- No engine, card, cache or Twitter change; no heartbeat added (reasoning in the round record).
+
 ## Docs — Devvit upload path that works (2026-11-02, after PR #109)
 
 `docs/DEVVIT_SETUP.md` only (§2, §3 step 4–5, §5, §7, §8), `docs/history/ROUND_104.md`. No code.
