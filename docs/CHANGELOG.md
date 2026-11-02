@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — Round 106: SyntaxWarning in the production log (2026-11-02)
+
+`testing area/reddit_main_v3.py` (one docstring), `tests/test_smoke.py` (`r106`).
+Record: [`docs/history/ROUND_106.md`](history/ROUND_106.md).
+
+- **Why:** every production run since Round 101 logged
+  `reddit_main_v3.py:3346: SyntaxWarning: "\_" is an invalid escape sequence` — the
+  Round 101b docstring of `_unescape_markdown_in_urls` quoted `minmyouk\_xx` in a non-raw
+  string. Cosmetic at parse time, no run behaved differently; a future Python makes it a
+  `SyntaxError`.
+- **Fix:** the docstring is a raw string now (same text). `r106` compiles every `.py` under
+  `testing area/`, `tests/` and `.github/scripts/` with warnings recorded and fails on any
+  `SyntaxError` / `SyntaxWarning` / `DeprecationWarning` (file:line), on Python 3.11 and 3.12+.
+- No card, workflow or cache change.
+
 ## Unreleased — Round 105: the run summary speaks relay (2026-11-02)
 
 `.github/workflows/reddit_monitor.yml` (summary step only, 14,720 → 15,106 chars),

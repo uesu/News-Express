@@ -117,7 +117,8 @@ leftovers. Never advise deleting the "other" platform's files.
   (`relay_complete`: a complete relay record is served without archive / redlib /
   reddit.com calls) before touching discovery, liveness or `resolve_post_media`;
   `ROUND_105.md` has the first live relay-primary run and the relay wording of the
-  summary step.
+  summary step; `ROUND_106.md` is why `r106` compiles every `.py` with warnings as
+  failures (keep docstrings that quote backslashes raw).
 - `devvit/gaming-express/` — the Devvit relay app that runs on Reddit and
   writes one fenced-JSON record per new post into the private Discord intake channel
   (`docs/DEVVIT_SETUP.md`: deploy, settings, owner steps, uninstall). Its
