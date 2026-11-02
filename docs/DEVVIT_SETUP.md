@@ -122,7 +122,8 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
   (the readers skip every message that is not a relay record), but keep it reasonably quiet:
   the readers page newest-first through at most 800 messages per run, so a very busy
   channel only shortens the 6-hour look-back, it never hides fresh records.
-- `npx devvit login` once (opens the browser, links the CLI to the Reddit account).
+- `npx devvit login --copy-paste` once (opens the browser, you paste the code shown there
+  back into Command Prompt). See §3 step 4 for why the `--copy-paste` form is the one to use.
 
 ## 3. Fresh deploy or update (same procedure every time)
 
@@ -140,19 +141,40 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
 
    `npm ci` prints deprecation and audit warnings for transitive packages of the Devvit
    CLI — expected, not actionable here. `npm test` must end with `pass N` / `fail 0`
-   (16 tests as of 0.0.3) followed by the esbuild line.
+   (25 tests as of Reddit 0.0.5) followed by the esbuild line.
 
-4. Upload and switch the installation to the new version:
+4. Log in with the **copy-paste** flow, upload, switch the installation to the new version:
 
    ```
-   npx devvit upload
+   npx devvit logout
+   npx devvit login --copy-paste
+   npx devvit whoami
+   npx devvit upload --copy-paste
    npx devvit install GamingExpressRelay
    ```
 
-   `upload` prints `Automatically bumped app version to: 0.0.N` (the number comes from
-   Reddit's server, not from the zip) and ends with the version URL. `install` upgrades the
+   `login --copy-paste` prints a reddit.com link: open it, approve as the relay account,
+   copy the code the page shows, paste it into Command Prompt, Enter. `whoami` must name
+   the relay account. `upload` prints `Automatically bumped app version to: 0.0.N` (the
+   number comes from Reddit's server, not from the zip) and ends with
+   `✨ Visit https://developers.reddit.com/apps/gaming-express`. `install` upgrades the
    existing installation in place — one version runs at a time, the previous one stops the
-   moment the install completes; there is nothing to delete.
+   moment the install completes; there is nothing to delete. The **Update** button on
+   `developers.reddit.com/r/GamingExpressRelay/apps/gaming-express` does the same thing as
+   `install`; after using it the CLI answers `Version 0.0.N has already been installed`,
+   which is the confirmation, not an error.
+
+   **Why `--copy-paste`** (2026-11-02, CLI 0.15.1, Windows 11): the default
+   `npx devvit login` (localhost callback, OAuth client `Bep8X2RR…`) produced a token that
+   every tiny call accepted (`whoami`, `list apps`, `GetUserAccountInfoIfExists`,
+   `GetBySlug`, asset sync all `HTTP 200`) but that the Dev Portal refused on the one call
+   that matters: `AppVersion/Create` → `HTTP 401` → `Error: You must be logged in to upload a
+   new app version.` Logout/login did not change it, and it had cost a whole afternoon the
+   day before. The copy-paste login uses Reddit's second CLI OAuth client (`TWTsqXa5…`,
+   redirect `developers.reddit.com/cli-login`); with that token the same upload returned
+   `AppVersion/Create – HTTP 200` on the first try (Reddit 0.0.5). Nothing in the project
+   files was involved. `set NODE_DEBUG=fetch` before the command shows the per-request
+   status codes if this ever needs to be diagnosed again.
 
 5. Settings are global and persist across versions. First deploy only:
 
@@ -173,6 +195,8 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
    npx devvit settings list
    ```
 
+   `settings list` shows the keys, labels and types only — never the values — so a changed
+   webhook is confirmed by the next record arriving in the new channel, not by the CLI.
    Newly added targets are bootstrapped silently on their first poll (remembered, not sent).
 
 6. Watch two or three polls, then `Ctrl+C` → `Y`:
@@ -212,8 +236,8 @@ Subreddit menu on `r/GamingExpressRelay` (`…` → **[Gaming Express] Poll now*
 | Symptom | Meaning / action |
 | --- | --- |
 | `npx devvit upload` → `"Create" failed after 3 attempts. First error: fetch failed` | The bundle upload never reached Reddit (local network/DNS/firewall). Nothing was created. Run `npx devvit upload` again. |
-| `upload` → `Create failed after 3 attempts. First error: fetch failed. Last error: You must be logged in to upload a new app version.` while `npx devvit whoami` works | **Not an auth problem.** Only the one large `AppVersion.Create` POST (the ~7 MB bundle) is failing; reads (`whoami`, the version check) are tiny and succeed. Observed 2026-11-01 ~10:00–18:00Z, five attempts, including after `logout`/`login`; the same command succeeded unchanged at ~20:20Z. Documented by Reddit as an intermittent server-side fault (Devvit FAQ). Re-logging in, re-downloading, or creating a new app does **not** help (a new app goes through the same call and burns the name). Wait and retry; to see the real cause of `fetch failed` run `set NODE_DEBUG=fetch` before the upload; try another network (phone hotspot) once. |
-| `npx devvit whoami` → not logged in / token error | The token at `%USERPROFILE%\.devvit\token` expired or was removed. `npx devvit login` (browser) and continue. |
+| `upload` → `Error: You must be logged in to upload a new app version.` (with or without `Create failed after 3 attempts … fetch failed` in front) while `npx devvit whoami` works | The Dev Portal answers `HTTP 401` to `AppVersion/Create` for the token the default localhost login issued, while every other call succeeds. Seen 2026-11-01 (all afternoon) and again 2026-11-02 right after a fresh `logout`/`login`. **Fix: `npx devvit logout` → `npx devvit login --copy-paste` → `npx devvit upload --copy-paste`** (§3 step 4) — uploaded on the first try both times it was used. Re-downloading, editing `package.json`'s version (0.15.1 takes the number from the server) or creating a new app do **not** help (a new app burns the name). `set NODE_DEBUG=fetch` before the command shows the status code of each request. The FAQ entry for this message says to report it with `--verbose` output in r/Devvit if even that fails. |
+| `npx devvit whoami` → not logged in / token error | The token at `%USERPROFILE%\.devvit\token` expired or was removed. `npx devvit login --copy-paste` and continue. |
 | `upload` → `settings.global.<key> is not exactly one from …` | `devvit.json` schema violation (for example `isSecret: true` together with `defaultValue`). The unit test guards the known case; validate against `node_modules/@devvit/shared-types/schemas/config-file.v1.json`. |
 | `install` → `Something went wrong…` | Transient on Reddit's side on a brand-new subreddit; retry once. |
 | logs: `intakeWebhook is empty or not a discord.com webhook URL — polling only` | Secret not set (or not a `discord.com/api/webhooks` URL). Set it; no posts are lost — they are remembered, not sent. |
@@ -233,6 +257,7 @@ private Discord channel (the complete record as the message's `record.json` atta
 ## 7. Clean uninstall of the PC-side tooling
 
 Reddit side first: `npx devvit uninstall GamingExpressRelay`, then `npx devvit logout`.
+Do this only when the relay is being retired for good — every future upload needs the CLI.
 PC: delete `%USERPROFILE%\Downloads\News-Express-main` and the zip → Settings › Apps ›
 Node.js › Uninstall → delete `%USERPROFILE%\.devvit`, `%APPDATA%\npm`,
 `%APPDATA%\npm-cache`, `%LOCALAPPDATA%\npm-cache`, `%USERPROFILE%\.npm`,
@@ -240,6 +265,12 @@ Node.js › Uninstall → delete `%USERPROFILE%\.devvit`, `%APPDATA%\npm`,
 "Node.js JavaScript Runtime" Windows Firewall rules → reboot.
 
 ## 8. Version history
+
+The **code** versions below are the repository's numbering (rounds 99–104). Reddit numbers
+uploads itself: 0.0.1–0.0.4 were uploaded one by one; code 0.0.5–0.0.8 went up together as
+**Reddit 0.0.5** on 2026-11-02 (merge of PR #109, `--copy-paste` login), live on
+`r/GamingExpressRelay` since then. `npx devvit install` / the portal's **Update** button name
+the Reddit number.
 
 | Version | Date | Change |
 | --- | --- | --- |

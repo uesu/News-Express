@@ -104,7 +104,8 @@ pre-existing post-page parser (`parse_reddit_rss`, old chain) is untouched.
 
 ## Owner steps after merge
 
-Zip → `npx devvit upload` (0.0.8 code → Reddit 0.0.7) — settings persist, nothing else
-changes. Both repos' readers accept old and new records alike, so upload order does not
+Zip → `npx devvit upload` (0.0.8 code → Reddit **0.0.5**, done 2026-11-02 after switching to
+`npx devvit login --copy-paste`; see `DEVVIT_SETUP.md` §3 step 4 / §5) — settings persist,
+nothing else changes. Both repos' readers accept old and new records alike, so upload order does not
 matter. Activation of the readers is unchanged: secret `DISCORD_BOT_TOKEN` + Variable
 `INTAKE_CHANNEL_ID` (`docs/DEVVIT_SETUP.md` §9/§10).
