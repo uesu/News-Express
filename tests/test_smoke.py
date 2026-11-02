@@ -12381,21 +12381,19 @@ check("r103 summary: the intake line reports re-checks and completions without i
       and "re-checked" not in v3._intake_line(v3._intake_summary(_r101_ok)))
 
 # ---- Round 104 (relay 0.0.8): a complete relay record is served 1:1 without the old chain ----
-_r104_oc_full = [{"id": "c1aaaa", "body": "Maintenance ends 11:00 (UTC+8)", "created": 1762050100, "stickied": False},
-                 {"id": "c2bbbb", "body": "Compensation: 300 Stellar Jade", "created": 1762050400, "stickied": True}]
 _r104_inline = dict(_r103_plain, id="1xlofcl", permalink="/r/HonkaiStarRail_leaks/comments/1xlofcl/o/",
-                    author="HonkaiStarRail", opCommentCount=2, resent="comments", revision=2)
-_r104_cdn_full = dict(_r104_inline, parent=None, opComments=_r104_oc_full)
+                    author="HonkaiStarRail", resent="approved", revision=2)
+_r104_cdn_full = dict(_r104_inline, parent=None)
 _r104_c, _r104_cs = asyncio.run(_r103_reader(
     [_r103_msg(_r104_inline, 100), _r103_msg(_r103_plain, 200)],
     files={_cdn.format("1xlofcl"): _r104_cdn_full}))
 _r104_by = {r["id"]: r for r in _r104_c["records"]}
-check("r104 record.json: a 0.0.8 record announcing the author's comments (`opCommentCount`, for "
-      "Game-Express) is complete for THIS engine — no CDN request, no comments merged, nothing else changed",
+check("r104 record.json: a 0.0.8 re-sent record (`resent: approved`, revision 2) with nothing cut is "
+      "complete — no CDN request, `resent`/`revision` kept inline, nothing else changed",
       v3._intake_needs_full_record(_r104_inline) is False
       and v3._intake_needs_full_record(_r103_plain) is False
       and _r104_c["completed"] == 0 and _r104_cs.cdn_calls == []
-      and "opComments" not in _r104_by["1xlofcl"] and _r104_by["1xlofcl"]["revision"] == 2
+      and _r104_by["1xlofcl"]["resent"] == "approved" and _r104_by["1xlofcl"]["revision"] == 2
       and len(_r104_c["records"]) == 2)
 
 _r104_base = v3.intake_base_data(v3._IntakeEntry(_r104_by["1xlofcl"]))
@@ -12519,21 +12517,21 @@ check("r104 removed: the OP-comment feature is gone from the engine, the workflo
                                         "op_comment_text", "relay_op_comment", "parse_intake_op_comments"))
       and "REDDIT_OP_COMMENT" not in _r101_wf
       and "_top_comments" not in _r101_src and not re.search(r"\bop_line\b", _r101_src)
-      and '"op_comment"' not in _r104_src_rpm and "opComments" not in inspect.getsource(v3.apply_intake_full_record))
+      and '"op_comment"' not in _r104_src_rpm and "opComment" not in _r101_src)
 # Dev-only folder (never synced to production), so the reads are guarded.
 _r104_relay_ts = os.path.join(ROOT, "devvit", "gaming-express", "src", "server", "relay.ts")
 if os.path.isfile(_r104_relay_ts):
     _r104_ts = open(_r104_relay_ts, encoding="utf-8").read()
     _r104_srv = open(os.path.join(ROOT, "devvit", "gaming-express", "src", "server", "server.ts"),
                      encoding="utf-8").read()
-    check("r104 devvit 0.0.8: five re-check stages (5 min … 24 h), approval + comment re-sends, the "
-          "inline record carries only `opCommentCount`, record.json the comments",
+    check("r104 devvit 0.0.8: five re-check stages (5 min … 24 h), approval re-sends; the relay reads "
+          "no comments (owner's request — no `opComments`, no `post.comments.get`, no `oc:` key)",
           "300, 1800, 7200, 21600, 86400" in _r104_ts
-          and "opCommentCount?: number" in _r104_ts and "opComments?: OpComment[]" in _r104_ts
-          and "export function becameLive(" in _r104_ts and "export function isOfficialRecord(" in _r104_ts
+          and "export function becameLive(" in _r104_ts
           and "RECHECK_WINDOW_SECONDS = 86400 + 1800" in _r104_srv
-          and "reasons.push('approved')" in _r104_srv and "reasons.push('comments')" in _r104_srv
-          and "post.comments.get(OP_COMMENTS_LIMIT)" in _r104_srv)
+          and "reasons.push('approved')" in _r104_srv and "reasons.push('edited')" in _r104_srv
+          and "opComment" not in _r104_ts and "opComment" not in _r104_srv
+          and "comments.get(" not in _r104_srv and "'oc:'" not in _r104_srv and "`oc:" not in _r104_srv)
 _r101_main = inspect.getsource(v3.main)
 check("r101 main: the relay is read BEFORE the combined feed; `ok` in primary mode makes it the "
       "listing (combined request, per-sub fallback and archive sweep skipped, status 'relay'); "

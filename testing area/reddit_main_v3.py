@@ -2754,10 +2754,7 @@ def apply_intake_full_record(rec: dict, full) -> bool:
 
 def _intake_needs_full_record(rec: dict) -> bool:
     """Whether the inline record is missing something only `record.json`
-    carries: a cut body or media list, or an unnamed crosspost parent. The
-    relay's 0.0.8 `opComments` (the author's own comments of an official
-    post) are for Game-Express's comment merge; this engine does not use
-    them (the OP-comment card line was removed in round 104)."""
+    carries: a cut body or media list, or an unnamed crosspost parent."""
     return bool(rec.get("bodyTruncated") or rec.get("mediaTruncated")
                 or (rec.get("xpost") and not rec.get("xpostPermalink")))
 

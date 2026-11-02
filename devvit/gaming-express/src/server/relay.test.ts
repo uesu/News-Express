@@ -11,9 +11,7 @@ import {
   dueStage,
   failKey,
   isDiscordWebhook,
-  isOfficialRecord,
   legacySeenKey,
-  opCommentsHash,
   parseEnabled,
   parseSubreddits,
   parseUsers,
@@ -446,41 +444,6 @@ test('dueStage: five looks — 5 min, 30 min, 2 h, 6 h, 24 h', () => {
   assert.equal(dueStage(999999), 5)
 })
 
-test('isOfficialRecord: configured account, distinguished or an "official" flair', () => {
-  const users = ['genshinimpact', 'HonkaiStarRail']
-  assert.equal(isOfficialRecord(rec({author: 'GenshinImpact'}), users), true)
-  assert.equal(
-    isOfficialRecord(
-      rec({author: 'someone', distinguished: 'moderator'}),
-      users,
-    ),
-    true,
-  )
-  assert.equal(
-    isOfficialRecord(rec({author: 'someone', flair: 'Official Media'}), users),
-    true,
-  )
-  assert.equal(
-    isOfficialRecord(rec({author: 'someone', flair: 'Unofficial Art'}), users),
-    false,
-  )
-  assert.equal(
-    isOfficialRecord(rec({author: 'someone', flair: null}), users),
-    false,
-  )
-})
-
-test('opCommentsHash: stable, order- and body-sensitive', () => {
-  const a = [{id: 'c1', body: 'Patch notes', created: 1, stickied: true}]
-  const b = [
-    {id: 'c1', body: 'Patch notes (fixed)', created: 1, stickied: true},
-  ]
-  assert.equal(opCommentsHash(a), opCommentsHash([...a]))
-  assert.notEqual(opCommentsHash(a), opCommentsHash(b))
-  assert.notEqual(opCommentsHash(a), opCommentsHash([]))
-  assert.equal(opCommentsHash([]).length, 8)
-})
-
 test('becameLive: removed/filtered/deleted before and live now = approval', () => {
   const live = item({stage: 2, removed: null, deleted: false})
   assert.equal(becameLive(null, live), false, 'no earlier state known')
@@ -504,24 +467,10 @@ test('becameLive: removed/filtered/deleted before and live now = approval', () =
   )
 })
 
-test('FullRecord: opComments ride in record.json, the inline record only carries the count', () => {
-  const r = rec({opCommentCount: 2, resent: 'comments', revision: 2})
-  const full = {
-    ...r,
-    parent: null,
-    opComments: [
-      {id: 'c1', body: 'Maintenance ends 11:00', created: 1, stickied: true},
-      {id: 'c2', body: 'Compensation sent', created: 2, stickied: false},
-    ],
-  }
-  const inline = parseContent(toContent(r))
-  assert.equal(inline.opCommentCount, 2)
-  assert.equal(inline.resent, 'comments')
+test('a re-sent record carries `resent` and `revision` inline', () => {
+  const inline = parseContent(toContent(rec({resent: 'approved', revision: 2})))
+  assert.equal(inline.resent, 'approved')
   assert.equal(inline.revision, 2)
-  assert.equal((inline as Record<string, unknown>).opComments, undefined)
-  const {body} = toMultipartBody(toContent(r), full)
-  assert.ok(body.includes('Compensation sent'))
-  assert.ok(body.includes('"opCommentCount":2'))
 })
 
 test('shouldReport: the first look is always sent, later looks only when the state changed', () => {

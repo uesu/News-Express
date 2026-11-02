@@ -2,12 +2,12 @@
 
 **For:** the `uesu/Game-Express` maintainer session (dev repo → prod `uesu/8mqzv4k2n7c` via its
 own `sync_prod.yml`). **From:** News-Express rounds 101–104 (2026-11-02). **Base:** Game-Express
-`main` @ `ccfe564` (PR #135). **Scope:** Game-Express's needs only — the Reddit *listing* source;
+`main` @ `4973dc6` (PR #137). **Scope:** Game-Express's needs only — the Reddit *listing* source;
 no card, schedule, codes, beta or news logic is touched.
 
 The complete, tested patch is next to this file:
 [`game-express-intake-reader.patch`](game-express-intake-reader.patch) (`git am`-able, 19 files,
-+1081/−13). Everything below is a description of what that patch does and how to verify it.
++1019/−13). Everything below is a description of what that patch does and how to verify it.
 
 ## 1. What it does
 
@@ -60,15 +60,7 @@ missed; when it is, a served target costs nothing.
 - **Re-check stages** are now ~5 min / 30 min / 2 h / 6 h / 24 h. A post first relayed as
   filtered/removed and later shown live (approval) is **re-sent complete** (`resent: "approved"`),
   so the reader never depends on a record that may have left its 6 h window.
-- **Publisher comments**: for official posts (configured publisher account, distinguished, or an
-  "official" flair) the relay reads the author's own comments under the post at every re-check
-  and re-sends the record when they change — `opCommentCount` inline, the comments themselves in
-  `record.json` as `opComments: [{id, body, created, stickied}]` (oldest first). The reader
-  fetches the attachment for such records too (same ≤ 10 per run) and merges the comments into
-  the entry **exactly like `parse_reddit_rss` merges same-author comments** from a post page:
-  appended to `text`, their links/images into `links`/`images`, and `comments=[{id, author,
-  text}]`.
-- **`relay_complete`** on every entry (nothing cut, parent named, comments present). `items()` and
+- **`relay_complete`** on every entry (nothing cut, parent named). `items()` and
   `program_post()` never call `resolve_post()` for such an entry — an empty `text` is a title-only
   post, not a missing body — so a relay-served game costs **zero** redlib / reddit.com requests
   even for title-only posts and for the Special-Program backup lookup. Cut records (CDN read
@@ -78,12 +70,12 @@ missed; when it is, a served target costs nothing.
 
 | File | Change |
 |---|---|
-| `gamexpress/sources/reddit_intake.py` | **new** — `parse_intake_record`, `parse_intake_update`, `attachment_url`, `needs_full_record`, `parse_op_comments`, `apply_full_record`, `record_to_entry`, `IntakeReader` (`fetch`, `listing`, `summary_line`) |
+| `gamexpress/sources/reddit_intake.py` | **new** — `parse_intake_record`, `parse_intake_update`, `attachment_url`, `needs_full_record`, `apply_full_record`, `record_to_entry`, `IntakeReader` (`fetch`, `listing`, `summary_line`) |
 | `gamexpress/sources/reddit.py` | `RedditClient.__init__` creates `self.intake`; `_gather_listing()` returns the relay listing when available (6 lines); `items()` / `program_post()` skip `resolve_post()` for `relay_complete` entries (round 104) |
 | `gamexpress/config.py` | `Settings.intake_reader / discord_bot_token / intake_channel_id / intake_stale_seconds / intake_lookback_seconds` + env wiring (`GE_SECRETS_JSON` / `GE_VARS_JSON` already carry every secret/variable → **no workflow env edit**) |
 | `gamexpress/runner.py` | one `ctx.report` line from `reddit.intake.summary_line()` |
 | `gamexpress/__main__.py` | `validate` prints `Reddit intake=… bot_token=set/— channel_id=set/—` |
-| `tests/test_reddit_intake.py` | **new** — real first-day records (gallery + `\_` escapes, video + poster + truncated body, inline images, YouTube link, gif, official flair), every status, paging, shared-channel noise, `items()` for a publisher-account game and for Wuthering Waves, shadow/stale/unconfigured; 0.0.7 updates, `record.json` completion + bounds, edits, approvals; 0.0.8 comments merge, `relay_complete`, no-resolve `items()` / `program_post()` (7 blocks) |
+| `tests/test_reddit_intake.py` | **new** — real first-day records (gallery + `\_` escapes, video + poster + truncated body, inline images, YouTube link, gif, official flair), every status, paging, shared-channel noise, `items()` for a publisher-account game and for Wuthering Waves, shadow/stale/unconfigured; 0.0.7 updates, `record.json` completion + bounds, edits, approvals; 0.0.8 `relay_complete`, no-resolve `items()` / `program_post()` (7 blocks) |
 | `tests/test_smoke.py` | policy effective date `November 2, 2026` |
 | `.github/workflows/ci.yml`, `python_version_bump.yml` | run `tests/test_reddit_intake.py` (the "every test file is a gate" guard requires it) |
 | `.env.example`, `README.md`, `docs/CONFIGURATION.md`, `docs/SOURCES.md`, `docs/PROD-REPO-SETUP.md` (file count 47 → 48), `docs/changelog/CHANGELOG.md` + `README.md` index, `PRIVACY_POLICY.md`, `TERMS_OF_SERVICE.md`, `AGENTS.md` | documentation of the reader, the two settings, the bot's read-only scope |
@@ -215,7 +207,7 @@ index 31b101c..57bceda 100644
 ## 3. Apply & verify
 
 ```bash
-# in a Game-Express checkout on main @ ccfe564 (or later; the touched regions are stable)
+# in a Game-Express checkout on main @ 4973dc6 (or later; the touched regions are stable)
 gh api -H "Accept: application/vnd.github.raw" \
   "repos/uesu/News-Express/contents/docs/handoffs/game-express-intake-reader.patch" > /tmp/gx-intake.patch
 git am /tmp/gx-intake.patch                  # plain `git am` (a `--depth 1` clone cannot do --3way);
@@ -250,9 +242,8 @@ served a listing, or the fallback reason.
 (moderator|admin|null), spoiler, nsfw, score, comments, removed, xpost (parent fullname|null),
 media[] (preview/i.redd.it images, v.redd.it fallback mp4 for videos), body (markdown, may be
 cut), bodyTruncated`; 0.0.7 optional keys `full, mediaTruncated, edited, revision, xpostPermalink,
-video{fallback,hls,gif}`; 0.0.8 optional keys `opCommentCount, resent (edited|approved|comments,
-joined with +)`; attachment `record.json` = the same record untrimmed + `parent` + `opComments`
-(0.0.8, official posts with at least one author comment).
+video{fallback,hls,gif}`; 0.0.8 optional key `resent (edited|approved, joined with +)`;
+attachment `record.json` = the same record untrimmed + `parent`.
 Update messages: `{"v":2,"kind":"update","at":<epoch>,"posts":[{id,sub,age,stage,removed,
 deleted,edited,spoiler,nsfw,locked,score,comments}]}`. Subreddits polled: `AnantaLeaks, Genshin_Impact_Leaks,
 HonkaiNexusAnimaLeaks, HonkaiStarRail_leaks, WutheringWavesLeaks, Zenlesszonezeroleaks_,

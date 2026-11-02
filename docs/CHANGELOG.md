@@ -13,26 +13,24 @@ refreshed (Game-Express base `ccfe564`). No card, cache or Twitter change. Full 
   the fallback.
 - **Relay 0.0.8 (uploads as Reddit 0.0.7):** re-check stages ~5 min / 30 min / 2 h / 6 h /
   **24 h**; a post that flips removed/filtered → live is re-sent complete (`resent:
-  "approved"`); for official posts (publisher account, distinguished, "official" flair) each
-  re-check reads the author's own comments and re-sends the record when they change
-  (`opCommentCount` inline, `opComments` in `record.json`, `resent: "comments"`).
+  "approved"`).
 - **Reader:** `relay_complete` (nothing cut, parent named, comments present) on the base →
   `resolve_post_media` skips the archive (post, parent, child probe) and both redlib harvests,
   `main()` skips the reddit.com post JSON; counts from the record / newest re-check when no
   proxy served them. A clean relay record is live from the listing itself (`relay-listing`, no archive
   lookup); the retraction seatbelt skips the `/new` snapshot and mirror probe for re-checked
   posts. Records the CDN could not complete keep the full round-101/103 fill-in.
-- **Game-Express:** comments merged like the post-page parser (text/links/images/`comments`),
-  `relay_complete` entries never go through `resolve_post()` in `items()` / `program_post()`.
+- **Game-Express:** `relay_complete` entries never go through `resolve_post()` in `items()` /
+  `program_post()` (hand-off base `4973dc6`).
 - **Removed (owner's request):** the News-Express `💬 OP comment` card line and its
   `REDDIT_OP_COMMENT` Variable — FULL-MODE only, never seen on a live card. `extract_op_comment`,
   `op_comment_text`, the `_top_comments` collection in `fetch_post_json`, the workflow `env:`
   line, `.env.example` and README rows are gone; `resolve_post_media` no longer returns
-  `op_comment`. The relay's 0.0.8 `opComments` stay for Game-Express's own comment merge; this
-  engine ignores them (no extra CDN read for them).
-- Tests: 9 `r104` smoke guards (r101 liveness guard updated, OP-comment section removed), 27 Devvit unit tests; three
+  `op_comment`. The publisher-comment follow-up prototyped for relay 0.0.8 (and its Game-Express
+  merge) was dropped the same day, before any upload — the relay reads no comments.
+- Tests: 9 `r104` smoke guards (r101 liveness guard updated, OP-comment section removed), 25 Devvit unit tests; three
   suites ALL PASS here and in a `sync_tree()` production checkout; Game-Express intake 7/7 +
-  smoke 628/628 on a fresh `ccfe564` clone and its production checkout.
+  smoke 628/628 on a fresh `4973dc6` clone and its production checkout.
 
 ## Unreleased — Round 103: the relay is the complete Reddit source — relay 0.0.7 (2026-11-02)
 
