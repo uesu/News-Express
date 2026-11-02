@@ -353,6 +353,10 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `INTAKE_READER` | `primary` | `primary` = a healthy relay is the listing (combined feed / per-sub fallback / archive sweep skipped); `shadow` = read and compare only, the old chain decides; `off` = never read the channel |
 | `INTAKE_STALE_SECONDS` | `1800` | newest relay **record** older than this ⇒ this run uses the old chain (`INTAKE-FALLBACK: relay stale`); other bots sharing the channel never count (round 102) |
 | `INTAKE_LOOKBACK_SECONDS` | `21600` | how far back the channel is read each run (held posts re-enter while inside this window) |
+| `ARCTIC_MIN_SPACING` | `1.0` | round 108: seconds between consecutive Arctic Shift requests (back-to-back archive calls time out); `0` = no spacing |
+| `ARCTIC_RETRY_BUDGET` | `3` | round 108: how many archive requests per run may be retried once after a timeout / 429 / 5xx; `0` = never retry |
+| `ARCTIC_RESTORE_MAX_PER_RUN` | `5` | round 108: never-re-check holds the old chain may reopen per run when the archive re-reads the post clean **after** the hold (the live gates still decide); `0` = off |
+| `ARCTIC_RESTORE_MIN_SECONDS` | `1800` | round 108: a hold must be at least this old before an archive re-read may reopen it |
 
 **Caches & caps**
 

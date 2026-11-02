@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — Round 108: Arctic hardening for the backup chain (2026-11-02)
+
+`testing area/reddit_main_v3.py` (`_arctic_get_rows` shared by the four archive call sites,
+`archive_snapshot_time` / `archive_listed_after_hold`, main-loop restore block + `arctic_restores`
+counters, reclaim verdict, `_write_run_result` health fields, `_env_float`),
+`.github/workflows/reddit_monitor.yml` (four `env:` knobs; summary step 15,557 → 15,835 chars),
+`README.md`, `.env.example`, `AGENTS.md`, `tests/test_smoke.py` (`r108`, `r108b`; `r69` and the
+archive-call contract test adjusted for the single retry).
+Record: [`docs/history/ROUND_108.md`](history/ROUND_108.md).
+
+- **Why:** RSS is retired on 2026-11-13; with the relay paused the old chain is redlib + Arctic
+  Shift. The archive times out on back-to-back requests, answers transient 429/5xx, and a
+  removal snapshot can be reversed by a mod approval — in the old chain such a hold could only
+  "re-enter via RSS" (the 1xlrj90 case without the relay).
+- **Now:** one request helper spaces archive requests (`ARCTIC_MIN_SPACING` 1 s), retries once on
+  timeout/429/5xx within a per-run budget (`ARCTIC_RETRY_BUDGET` 3, `Retry-After` honoured ≤ 5 s),
+  parses rows strictly and always bounds the search with `after=`; strikes/circuits unchanged.
+  A never-re-check hold reopens when the archive **re-read the post after the hold** and the row
+  is clean (`archive_listed_after_hold`; hold ≥ 30 min old; ≤ 5 per run) — the full pipeline and
+  its live gates still decide. The reclaim judges fresh rows by `removed_by_category` and markers.
+  Summary: `Archive requests: N (retried N, failed N)`, `Held posts the archive re-read clean
+  (archive restore): N`. Relay-primary runs are untouched; Game-Express needs no change.
+
 ## Unreleased — Round 107: a held post Reddit lists again through the relay is a restore (2026-11-02)
 
 `testing area/reddit_main_v3.py` (`relay_listed_after_hold`, `_pending_throttle_skip`, main-loop
