@@ -2,7 +2,7 @@
 
 **For:** the `uesu/Game-Express` maintainer session (dev repo → prod `uesu/8mqzv4k2n7c` via its
 own `sync_prod.yml`). **From:** News-Express rounds 101–104 (2026-11-02). **Base:** Game-Express
-`main` @ `4973dc6` (PR #137). **Scope:** Game-Express's needs only — the Reddit *listing* source;
+`main` @ `71202ee4` (PR #140; the three doc conflicts from #138–#140 — changelog index, changelog, PROD-REPO-SETUP file count — are already resolved in the patch). **Scope:** Game-Express's needs only — the Reddit *listing* source;
 no card, schedule, codes, beta or news logic is touched.
 
 The complete, tested patch is next to this file:
@@ -207,14 +207,14 @@ index 31b101c..57bceda 100644
 ## 3. Apply & verify
 
 ```bash
-# in a Game-Express checkout on main @ 4973dc6 (or later; the touched regions are stable)
+# in a Game-Express checkout on main @ 71202ee4 (or later; the touched regions are stable)
 gh api -H "Accept: application/vnd.github.raw" \
   "repos/uesu/News-Express/contents/docs/handoffs/game-express-intake-reader.patch" > /tmp/gx-intake.patch
 git am /tmp/gx-intake.patch                  # plain `git am` (a `--depth 1` clone cannot do --3way);
                                              # or: git apply /tmp/gx-intake.patch
 pip install -r requirements.txt pyyaml ruff
 python tests/test_reddit_intake.py           # REDDIT INTAKE TEST: ALL PASS (7 blocks)
-python tests/test_smoke.py                   # 628/628 passed
+python tests/test_smoke.py                   # 610/610 passed (count as of 71202ee4)
 python tests/test_schedule_epithet_and_settled.py tests/test_gachawiki_placeholder.py   # and gachabase_kit / beta_sources
 ruff check .                                 # All checks passed
 DISCORD_BOT_TOKEN=x INTAKE_CHANNEL_ID=1 python -m gamexpress validate | grep "Reddit intake"

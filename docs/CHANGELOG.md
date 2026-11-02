@@ -35,7 +35,7 @@ refreshed (Game-Express base `ccfe564`). No card, cache or Twitter change. Full 
   lookup); the retraction seatbelt skips the `/new` snapshot and mirror probe for re-checked
   posts. Records the CDN could not complete keep the full round-101/103 fill-in.
 - **Game-Express:** `relay_complete` entries never go through `resolve_post()` in `items()` /
-  `program_post()` (hand-off base `4973dc6`).
+  `program_post()` (hand-off base `71202ee4`, refreshed after Game-Express PRs #138–#140).
 - **Removed (owner's request):** the News-Express `💬 OP comment` card line and its
   `REDDIT_OP_COMMENT` Variable — FULL-MODE only, never seen on a live card. `extract_op_comment`,
   `op_comment_text`, the `_top_comments` collection in `fetch_post_json`, the workflow `env:`
@@ -44,7 +44,7 @@ refreshed (Game-Express base `ccfe564`). No card, cache or Twitter change. Full 
   merge) was dropped the same day, before any upload — the relay reads no comments.
 - Tests: 9 `r104` smoke guards (r101 liveness guard updated, OP-comment section removed), 25 Devvit unit tests; three
   suites ALL PASS here and in a `sync_tree()` production checkout; Game-Express intake 7/7 +
-  smoke 628/628 on a fresh `4973dc6` clone and its production checkout.
+  smoke 610/610 on a fresh `71202ee4` clone and its production checkout.
 
 ## Unreleased — Round 103: the relay is the complete Reddit source — relay 0.0.7 (2026-11-02)
 

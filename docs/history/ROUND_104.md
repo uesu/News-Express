@@ -75,7 +75,7 @@ the relay and Game-Express ("it doesn't need it"): the 0.0.8 publisher-comment f
 calls `post.comments.get`, `record.json` is the record + `parent` only. Game-Express's
 pre-existing post-page parser (`parse_reddit_rss`, old chain) is untouched.
 
-## Game-Express (hand-off patch refreshed, base `main` @ `4973dc6` / PR #137)
+## Game-Express (hand-off patch refreshed, base `main` @ `71202ee4` / PR #140)
 
 - `reddit_intake.py`: `record_to_entry` sets `relay_complete = not needs_full_record(rec)`;
   relay entries carry `comments=[]` (the relay ships none).
@@ -85,7 +85,7 @@ pre-existing post-page parser (`parse_reddit_rss`, old chain) is untouched.
   the Special-Program backup lookup included.
 - `tests/test_reddit_intake.py` gains `test_relay_008_complete_records_need_no_resolve`
   (7 blocks now); docs (SOURCES, CHANGELOG, PRIVACY) updated. Verified on a fresh `--depth 1`
-  clone of `4973dc6` with plain `git am` (intake 7/7, smoke 628/628, ruff) and inside its
+  clone of `71202ee4` with `git am` (intake 7/7, smoke 610/610, ruff) and inside its
   `sync_tree()` production checkout. The hand-off doc's apply step now says plain `git am`
   (`--3way` cannot work on a shallow clone).
 
