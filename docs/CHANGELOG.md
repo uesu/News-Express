@@ -16,7 +16,8 @@ Record: [`docs/history/ROUND_107.md`](history/ROUND_107.md).
   the message that produced a hold is still skipped. One INFO line + summary lines
   (`Held posts Reddit listed again (relay restore)`, `Known-rejected candidates (held earlier; no
   newer listing)` in relay mode). Removed posts stay removed; no archive/mirror text can unlock a
-  hold; Arctic is not consulted. Game-Express needs no change (no hold memory there).
+  hold; Arctic is not consulted. Game-Express needs no engine change (no hold memory there); its hand-off patch was
+  regenerated on GE `main` `71202ee4` (no conflicts) with a cross-check test for the same case.
 
 ## Unreleased — Round 106: SyntaxWarning in the production log (2026-11-02)
 

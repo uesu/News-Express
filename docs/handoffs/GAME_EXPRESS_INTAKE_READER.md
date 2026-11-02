@@ -1,13 +1,12 @@
 # Hand-off — Game-Express: the Devvit relay as the primary Reddit listing (intake reader)
 
 **For:** the `uesu/Game-Express` maintainer session (dev repo → prod `uesu/8mqzv4k2n7c` via its
-own `sync_prod.yml`). **From:** News-Express rounds 101–104 (2026-11-02). **Base:** Game-Express
-`main` @ `71202ee4` (PR #140; the three doc conflicts from #138–#140 — changelog index, changelog, PROD-REPO-SETUP file count — are already resolved in the patch). **Scope:** Game-Express's needs only — the Reddit *listing* source;
+own `sync_prod.yml`). **From:** News-Express rounds 101–107 (2026-11-02). **Base:** Game-Express
+`main` @ `71202ee4` (PR #140) — regenerated on that exact commit on 2026-11-02 13:30Z: `git am` applies with **no conflicts** (changelog index, changelog order and the PROD-REPO-SETUP file count 47/49 are already right for #140). **Scope:** Game-Express's needs only — the Reddit *listing* source;
 no card, schedule, codes, beta or news logic is touched.
 
 The complete, tested patch is next to this file:
-[`game-express-intake-reader.patch`](game-express-intake-reader.patch) (`git am`-able, 19 files,
-+1019/−13). Everything below is a description of what that patch does and how to verify it.
+[`game-express-intake-reader.patch`](game-express-intake-reader.patch) (`git am`-able, 19 files). Everything below is a description of what that patch does and how to verify it.
 
 ## 1. What it does
 
@@ -66,6 +65,19 @@ missed; when it is, a served target costs nothing.
   even for title-only posts and for the Special-Program backup lookup. Cut records (CDN read
   failed) keep the old-chain fill-in exactly as before.
 
+### Round 107 cross-check — a post approved from the mod queue hours later
+
+Live 1xlrj90 (2026-11-02): created 07:31Z, held in the mod queue, approved ~12:35Z, listed by
+the relay at 12:36Z. In News-Express an old-chain archive hold (`removal_notice`) suppressed the
+relay record until the round-107 restore rule. **Game-Express has no equivalent defect and needs
+no port of that rule:** its Reddit source keeps no hold memory (a removed post is simply not an
+item), `items()` reads `LOOKBACK_HOURS` (72 h) back, and the reader lists any record whose relay
+message is inside its window — so the same record is a plain new item with `published_ts` = the
+Reddit creation time. The patch adds the test block
+`test_round107_post_approved_from_the_mod_queue_hours_later_is_a_plain_new_item` (8 blocks now)
+and one changelog sentence; it also pins the memory-free property (`removal_notice` /
+`pending_reddit` must not appear in `gamexpress/sources/reddit.py`).
+
 ## 2. Files in the patch
 
 | File | Change |
@@ -75,10 +87,10 @@ missed; when it is, a served target costs nothing.
 | `gamexpress/config.py` | `Settings.intake_reader / discord_bot_token / intake_channel_id / intake_stale_seconds / intake_lookback_seconds` + env wiring (`GE_SECRETS_JSON` / `GE_VARS_JSON` already carry every secret/variable → **no workflow env edit**) |
 | `gamexpress/runner.py` | one `ctx.report` line from `reddit.intake.summary_line()` |
 | `gamexpress/__main__.py` | `validate` prints `Reddit intake=… bot_token=set/— channel_id=set/—` |
-| `tests/test_reddit_intake.py` | **new** — real first-day records (gallery + `\_` escapes, video + poster + truncated body, inline images, YouTube link, gif, official flair), every status, paging, shared-channel noise, `items()` for a publisher-account game and for Wuthering Waves, shadow/stale/unconfigured; 0.0.7 updates, `record.json` completion + bounds, edits, approvals; 0.0.8 `relay_complete`, no-resolve `items()` / `program_post()` (7 blocks) |
+| `tests/test_reddit_intake.py` | **new** — real first-day records (gallery + `\_` escapes, video + poster + truncated body, inline images, YouTube link, gif, official flair), every status, paging, shared-channel noise, `items()` for a publisher-account game and for Wuthering Waves, shadow/stale/unconfigured; 0.0.7 updates, `record.json` completion + bounds, edits, approvals; 0.0.8 `relay_complete`, no-resolve `items()` / `program_post()`; round-107 mod-queue approval cross-check (8 blocks) |
 | `tests/test_smoke.py` | policy effective date `November 2, 2026` |
 | `.github/workflows/ci.yml`, `python_version_bump.yml` | run `tests/test_reddit_intake.py` (the "every test file is a gate" guard requires it) |
-| `.env.example`, `README.md`, `docs/CONFIGURATION.md`, `docs/SOURCES.md`, `docs/PROD-REPO-SETUP.md` (file count 47 → 48), `docs/changelog/CHANGELOG.md` + `README.md` index, `PRIVACY_POLICY.md`, `TERMS_OF_SERVICE.md`, `AGENTS.md` | documentation of the reader, the two settings, the bot's read-only scope |
+| `.env.example`, `README.md`, `docs/CONFIGURATION.md`, `docs/SOURCES.md`, `docs/PROD-REPO-SETUP.md` (file count 46 → 47 as of #140), `docs/changelog/CHANGELOG.md` + `README.md` index, `PRIVACY_POLICY.md`, `TERMS_OF_SERVICE.md`, `AGENTS.md` | documentation of the reader, the two settings, the bot's read-only scope |
 
 ### The wiring diff (the new module and tests are in the patch file)
 
@@ -213,7 +225,7 @@ gh api -H "Accept: application/vnd.github.raw" \
 git am /tmp/gx-intake.patch                  # plain `git am` (a `--depth 1` clone cannot do --3way);
                                              # or: git apply /tmp/gx-intake.patch
 pip install -r requirements.txt pyyaml ruff
-python tests/test_reddit_intake.py           # REDDIT INTAKE TEST: ALL PASS (7 blocks)
+python tests/test_reddit_intake.py           # REDDIT INTAKE TEST: ALL PASS (8 blocks)
 python tests/test_smoke.py                   # 610/610 passed (count as of 71202ee4)
 python tests/test_schedule_epithet_and_settled.py tests/test_gachawiki_placeholder.py   # and gachabase_kit / beta_sources
 ruff check .                                 # All checks passed

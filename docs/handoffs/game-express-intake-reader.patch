@@ -1,18 +1,20 @@
-From 151d1f8b3771c06bd261a4e1d0b8b9e359cf7dd7 Mon Sep 17 00:00:00 2001
+From c9c1756242bfa5f48f5a5481bf70b1af81c7edb0 Mon Sep 17 00:00:00 2001
 From: News-Express hand-off <noreply@github.com>
-Date: Mon, 2 Nov 2026 04:12:14 +0000
+Date: Mon, 2 Nov 2026 13:26:31 +0000
 Subject: [PATCH] Reddit: the Devvit relay is the primary listing (intake
  reader)
 
-Hand-off from News-Express rounds 101-104 (docs/handoffs/GAME_EXPRESS_INTAKE_READER.md).
+Hand-off from News-Express rounds 101-107 (docs/handoffs/GAME_EXPRESS_INTAKE_READER.md).
 RedditClient consults gamexpress/sources/reddit_intake.py before the redlib/reddit.com
 fleet; a healthy relay with records for the target is the listing (0 fleet requests),
 every other state falls back unchanged with one step-summary line. Relay 0.0.7: record.json
 completion (full body / media / crosspost parent), v2 re-check messages (removed, deleted,
 approved), re-sent records after edits. Relay 0.0.8: re-sent records after approvals, five
 re-check stages (5 min .. 24 h); complete records (relay_complete) are never passed to
-resolve_post() in items()/program_post(). Activation = secret DISCORD_BOT_TOKEN + Variable
-INTAKE_CHANNEL_ID (same names as News-Express).
+resolve_post() in items()/program_post(). Round 107 cross-check: a post approved from the
+mod queue hours later is a plain new item (no hold memory in Game-Express). Activation =
+secret DISCORD_BOT_TOKEN + Variable INTAKE_CHANNEL_ID (same names as News-Express).
+Rebased on Game-Express main 71202ee4 (PR #140): applies with git am, no conflicts.
 ---
  .env.example                              |  11 +
  .github/workflows/ci.yml                  |   3 +-
@@ -24,21 +26,21 @@ INTAKE_CHANNEL_ID (same names as News-Express).
  docs/CONFIGURATION.md                     |   6 +
  docs/PROD-REPO-SETUP.md                   |   4 +-
  docs/SOURCES.md                           |  36 ++
- docs/changelog/CHANGELOG.md               |  48 +++
+ docs/changelog/CHANGELOG.md               |  50 +++
  docs/changelog/README.md                  |   4 +-
  gamexpress/__main__.py                    |   4 +
  gamexpress/config.py                      |  13 +
  gamexpress/runner.py                      |   3 +
  gamexpress/sources/reddit.py              |  20 +-
- gamexpress/sources/reddit_intake.py       | 402 +++++++++++++++++++
- tests/test_reddit_intake.py               | 453 ++++++++++++++++++++++
+ gamexpress/sources/reddit_intake.py       | 402 ++++++++++++++++++
+ tests/test_reddit_intake.py               | 486 ++++++++++++++++++++++
  tests/test_smoke.py                       |   2 +-
- 19 files changed, 1019 insertions(+), 13 deletions(-)
+ 19 files changed, 1054 insertions(+), 13 deletions(-)
  create mode 100644 gamexpress/sources/reddit_intake.py
  create mode 100644 tests/test_reddit_intake.py
 
 diff --git a/.env.example b/.env.example
-index 6671e67..390956e 100644
+index 6671e67e..390956ea 100644
 --- a/.env.example
 +++ b/.env.example
 @@ -45,6 +45,17 @@ NITTER_RSS_TOKEN=
@@ -60,7 +62,7 @@ index 6671e67..390956e 100644
  # Ping role(s). Empty = NO ping. Comma-separate several roles. 'everyone' / 'here' allowed.
  # Resolution: PING_<FEATURE>_<GAME>  >  PING_<FEATURE>  >  PING_ROLE_ID     ('none' = explicitly off)
 diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
-index 3c6ead9..f7792be 100644
+index 3c6ead91..f7792bec 100644
 --- a/.github/workflows/ci.yml
 +++ b/.github/workflows/ci.yml
 @@ -72,7 +72,7 @@ jobs:
@@ -81,7 +83,7 @@ index 3c6ead9..f7792be 100644
        - name: Card preview renders (previews/index.html)
          run: python -m gamexpress preview --out /tmp/previews > /dev/null
 diff --git a/.github/workflows/python_version_bump.yml b/.github/workflows/python_version_bump.yml
-index 7337ce3..8cb7e17 100644
+index 7337ce3c..8cb7e177 100644
 --- a/.github/workflows/python_version_bump.yml
 +++ b/.github/workflows/python_version_bump.yml
 @@ -118,6 +118,7 @@ jobs:
@@ -93,7 +95,7 @@ index 7337ce3..8cb7e17 100644
  
        # Values reach the shell through env, never through ${{ }} inlined into `run:` —
 diff --git a/AGENTS.md b/AGENTS.md
-index 52744af..17482e5 100644
+index 52744af5..17482e58 100644
 --- a/AGENTS.md
 +++ b/AGENTS.md
 @@ -169,8 +169,8 @@ nothing more. Do not add `discord.py`, a token, a gateway, or any always-on proc
@@ -108,7 +110,7 @@ index 52744af..17482e5 100644
      2026-10-03). Do not add one "for completeness".
  15. **A posted Special Program card keeps its announcement.** The first post that gives an air time
 diff --git a/PRIVACY_POLICY.md b/PRIVACY_POLICY.md
-index 2fe7efb..15c68b2 100644
+index 2fe7efb6..15c68b2d 100644
 --- a/PRIVACY_POLICY.md
 +++ b/PRIVACY_POLICY.md
 @@ -1,6 +1,6 @@
@@ -142,10 +144,10 @@ index 2fe7efb..15c68b2 100644
    query parameters only when configured — public Redlib mirrors, rich-embed proxies `vxreddit.com`, `embedez.com`,
    and `embeddit.deltandy.me`, and the public `arctic-shift.photon-reddit.com` archive as a fallback);
 diff --git a/README.md b/README.md
-index 36e07ef..48f4a42 100644
+index 4bde87fe..9789861a 100644
 --- a/README.md
 +++ b/README.md
-@@ -416,6 +416,7 @@ webhooks. They are independent features, even if you choose the same destination
+@@ -417,6 +417,7 @@ webhooks. They are independent features, even if you choose the same destination
  | `DISCORD_WEBHOOK_CODES_ANANTA` | ANANTA codes |
  | `NITTER_RSS_TOKEN` | *optional* — the same token as News-Express; unlocks **both** `nitter.miningtcup.me` (X) and `redlib.miningtcup.me` (Reddit/Redlib) |
  | `REDDIT_FEED_TOKEN` | *optional* — from `old.reddit.com/prefs/feeds/`: paste `<40-char-key>&user=<your_username>` or any full `.rss?feed=…` / `.json?feed=…` link on `old.reddit.com`, `www.reddit.com`, or `reddit.com` (same as News-Express; drives `[0] www.reddit.com` → `[1] old.reddit.com` fast path + `.json` fallback) |
@@ -154,7 +156,7 @@ index 36e07ef..48f4a42 100644
  
  Create only destinations you intend to use; ANANTA is not a verified official-news adapter.
 diff --git a/TERMS_OF_SERVICE.md b/TERMS_OF_SERVICE.md
-index d7993f1..bc8490c 100644
+index d7993f1e..bc8490cf 100644
 --- a/TERMS_OF_SERVICE.md
 +++ b/TERMS_OF_SERVICE.md
 @@ -1,6 +1,6 @@
@@ -178,7 +180,7 @@ index d7993f1..bc8490c 100644
  
  Operational logs and completion summaries are best-effort diagnostics, not
 diff --git a/docs/CONFIGURATION.md b/docs/CONFIGURATION.md
-index 45b7c08..78c9823 100644
+index 45b7c087..78c9823c 100644
 --- a/docs/CONFIGURATION.md
 +++ b/docs/CONFIGURATION.md
 @@ -33,6 +33,12 @@ Sensitive — *Settings → Secrets and variables → Actions → **Secrets***.
@@ -195,22 +197,22 @@ index 45b7c08..78c9823 100644
  
  ```
 diff --git a/docs/PROD-REPO-SETUP.md b/docs/PROD-REPO-SETUP.md
-index 3a8cda5..7712fe0 100644
+index 959a9833..3a8cda5c 100644
 --- a/docs/PROD-REPO-SETUP.md
 +++ b/docs/PROD-REPO-SETUP.md
 @@ -218,8 +218,8 @@ cp -r --parents \
    /tmp/prod/
  
  find /tmp/prod -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null
--find /tmp/prod -type f | wc -l     # expect 47 (45 runtime + 2 policy files)
--                                  # 49 if you also copied the two python-bump files
-+find /tmp/prod -type f | wc -l     # expect 48 (46 runtime + 2 policy files)
-+                                  # 50 if you also copied the two python-bump files
+-find /tmp/prod -type f | wc -l     # expect 46 (44 runtime + 2 policy files)
+-                                  # 48 if you also copied the two python-bump files
++find /tmp/prod -type f | wc -l     # expect 47 (45 runtime + 2 policy files)
++                                  # 49 if you also copied the two python-bump files
  ```
  
  **Don't trust that number on its own — verify the package instead.** The count goes stale the
 diff --git a/docs/SOURCES.md b/docs/SOURCES.md
-index cc2be3f..9346ebe 100644
+index 23aff3bc..c7b4c9da 100644
 --- a/docs/SOURCES.md
 +++ b/docs/SOURCES.md
 @@ -417,6 +417,42 @@ page fetcher, and so were the ennead calendars. The production reachability of t
@@ -257,10 +259,10 @@ index cc2be3f..9346ebe 100644
  
  `sources/reddit.py` integrates Reddit and Redlib across all six configured games (`r/Genshin_Impact` / verified `u/genshinimpact`, `r/HonkaiStarRail` / verified `u/HonkaiStarRail`, `r/ZZZ_Official` / verified `u/ZZZ_Official`, `r/WutheringWaves` with `official: []` because live `u/WutheringWaves` is an unrelated 2022 squatter account, `r/HonkaiNexusAnima` / verified `u/HonkaiNexusAnima`, and `r/AnantaOfficial` / verified `u/AnantaOfficial`) under strict role separation and zero-waste request discipline:
 diff --git a/docs/changelog/CHANGELOG.md b/docs/changelog/CHANGELOG.md
-index 7468bd7..9a2abe1 100644
+index 10ef8cb5..f20d3282 100644
 --- a/docs/changelog/CHANGELOG.md
 +++ b/docs/changelog/CHANGELOG.md
-@@ -1,5 +1,53 @@
+@@ -1,5 +1,55 @@
  # Changelog — current entries
  
 +## 2026-11-02 — Reddit: the Devvit relay is the primary listing (intake reader)
@@ -309,27 +311,29 @@ index 7468bd7..9a2abe1 100644
 +  poster, inline images, YouTube link, gif, truncated body, `\_` escapes, shared-channel noise,
 +  paging, every status, `items()` for a publisher-account game and for Wuthering Waves; 0.0.7
 +  updates, `record.json` completion and bounds, edits, approvals; 0.0.8 complete records,
-+  no-resolve `items()` / `program_post()`).
++  no-resolve `items()` / `program_post()`; News-Express round-107 cross-check: a post approved
++  from the mod queue hours after creation is a plain new item here — Game-Express keeps no
++  Reddit hold memory, so the News-Express restore rule is not needed and must not be ported).
 +
- ## 2026-11-01 — Beta: per-item probe when the changelog is blocked
+ ## 2026-11-02 — Beta: translation removed; CN shown as CN; source order
  
- - **The 403 gap is closed in code, pending one live run.** With the gachabase changelog blocked, the
+ - **Glossary build removed.** The `build-glossary` command, its workflow, module, and glossary data
 diff --git a/docs/changelog/README.md b/docs/changelog/README.md
-index 5aad385..eaf483e 100644
+index d48965dd..4d6be6f0 100644
 --- a/docs/changelog/README.md
 +++ b/docs/changelog/README.md
 @@ -1,6 +1,8 @@
  # Changelog
  
--Latest: [Beta: per-item probe when the changelog is blocked](CHANGELOG.md#2026-11-01--beta-per-item-probe-when-the-changelog-is-blocked).
+-Latest: [Beta: translation removed; CN shown as CN; source order](CHANGELOG.md#2026-11-02--beta-translation-removed-cn-shown-as-cn-source-order).
 +Latest: [Reddit: the Devvit relay is the primary listing (intake reader)](CHANGELOG.md#2026-11-02--reddit-the-devvit-relay-is-the-primary-listing-intake-reader).
 +
-+Previous: [Beta: per-item probe when the changelog is blocked](CHANGELOG.md#2026-11-01--beta-per-item-probe-when-the-changelog-is-blocked).
++Previous: [Beta: translation removed; CN shown as CN; source order](CHANGELOG.md#2026-11-02--beta-translation-removed-cn-shown-as-cn-source-order).
  
- Previous: [Beta: ZZZ 3.4.2 card polish (subtext, placeholder names)](CHANGELOG.md#2026-11-01--beta-zzz-342-card-polish-subtext-placeholder-names).
+ Previous: [Beta: per-item probe when the changelog is blocked](CHANGELOG.md#2026-11-01--beta-per-item-probe-when-the-changelog-is-blocked).
  
 diff --git a/gamexpress/__main__.py b/gamexpress/__main__.py
-index 4f77ee1..52bf61a 100644
+index 566a957b..5d9bbee3 100644
 --- a/gamexpress/__main__.py
 +++ b/gamexpress/__main__.py
 @@ -389,6 +389,10 @@ def cmd_validate(_args) -> int:
@@ -344,7 +348,7 @@ index 4f77ee1..52bf61a 100644
            f"| article count cap=none "
            f"| timestamps={'on' if settings.news_timestamps else 'off'} "
 diff --git a/gamexpress/config.py b/gamexpress/config.py
-index d7be933..ec45d89 100644
+index d7be933b..ec45d897 100644
 --- a/gamexpress/config.py
 +++ b/gamexpress/config.py
 @@ -512,6 +512,13 @@ class Settings:
@@ -375,7 +379,7 @@ index d7be933..ec45d89 100644
          repost=_env(env, "REPOST").replace(" ", "").lower(),
          http_timeout=_int(env, "HTTP_TIMEOUT", 20),
 diff --git a/gamexpress/runner.py b/gamexpress/runner.py
-index 910c749..65dfc1b 100644
+index 910c7490..65dfc1b2 100644
 --- a/gamexpress/runner.py
 +++ b/gamexpress/runner.py
 @@ -367,6 +367,9 @@ async def run_once(settings: Settings, games_all: dict[str, Game] | None = None,
@@ -389,7 +393,7 @@ index 910c749..65dfc1b 100644
              log.exception("unexpected failure during run_once orchestration")
              ctx.errors.append(f"orchestration failed: {_summary_text(exc)}")
 diff --git a/gamexpress/sources/reddit.py b/gamexpress/sources/reddit.py
-index 31b101c..d446007 100644
+index 31b101c7..d4460071 100644
 --- a/gamexpress/sources/reddit.py
 +++ b/gamexpress/sources/reddit.py
 @@ -1008,6 +1008,10 @@ class RedditClient:
@@ -449,7 +453,7 @@ index 31b101c..d446007 100644
                  merged_detail = {
 diff --git a/gamexpress/sources/reddit_intake.py b/gamexpress/sources/reddit_intake.py
 new file mode 100644
-index 0000000..1e9d7f7
+index 00000000..1e9d7f7d
 --- /dev/null
 +++ b/gamexpress/sources/reddit_intake.py
 @@ -0,0 +1,402 @@
@@ -857,10 +861,10 @@ index 0000000..1e9d7f7
 +        return f"📡 reddit intake: relay {res['status']}{detail} — redlib/reddit.com chain used"
 diff --git a/tests/test_reddit_intake.py b/tests/test_reddit_intake.py
 new file mode 100644
-index 0000000..121c3ab
+index 00000000..ed945229
 --- /dev/null
 +++ b/tests/test_reddit_intake.py
-@@ -0,0 +1,453 @@
+@@ -0,0 +1,486 @@
 +"""Devvit relay intake reader (2026-11-02) — offline, no network, no secrets.
 +
 +Run:  python tests/test_reddit_intake.py     (CI runs it next to test_smoke.py)
@@ -1289,6 +1293,39 @@ index 0000000..121c3ab
 +    assert not hasattr(ri, "parse_op_comments") and "opComments" not in inspect.getsource(ri)
 +
 +
++def test_round107_post_approved_from_the_mod_queue_hours_later_is_a_plain_new_item():
++    """News-Express round 107 cross-check (live 1xlrj90, 2026-11-02): a post created 07:31Z sat in
++    the mod queue until ~12:35Z; the relay listed it at 12:36Z (`removed: null`, score 1). In
++    News-Express an archive hold from the old chain suppressed it. Game-Express keeps no hold
++    memory for Reddit (a removed post is simply not an item), so the same record must be a plain
++    new item — listing time is the message, `published_ts` stays the Reddit creation time, and
++    nothing older than the `lookback_hours` window is consulted through the old chain."""
++    created = int(NOW) - 5 * 3600 - 300                       # 5 h 05 min before the relay listed it
++    late = _rec(id="1xlrj90", sub="HonkaiStarRail", author="HonkaiStarRail", flair="Official Media",
++                permalink="/r/HonkaiStarRail/comments/1xlrj90/full_m0r1_sunbringer/", created=created,
++                title="Version 3.9 Maintenance Notice", body="Servers go down at 06:00 (UTC+8).",
++                score=1, comments=0, spoiler=True)
++    f = _Fetcher(_msgs([late], [240]))                        # relay message 4 min old
++    rc = RedditClient(f, _settings())  # type: ignore[arg-type]
++    rc.intake.now = NOW
++    res = _run(rc.intake.fetch(NOW))
++    assert [e["id"] for e in res["records"]] == ["1xlrj90"], "a fresh relay message lists an old post"
++    assert res["records"][0]["ts"] == created and res["records"][0]["relay_complete"] is True
++    items = _run(rc.items(load_games()["starrail"], lambda text: True, int(NOW) - 72 * 3600))
++    assert [it.id for it in items] == ["1xlrj90"] and items[0].published_ts == created
++    assert all("discord.com" in c[0] for c in f.calls), [c[0] for c in f.calls if "discord.com" not in c[0]]
++    # outside the lookback window the item is dropped by `since_ts` alone (no memory, no probe)
++    assert _run(rc.items(load_games()["starrail"], lambda text: True, int(NOW) - 3600)) == []
++    # a record the relay itself reports removed is not an item; an approval re-check lists it again
++    rc_gone = RedditClient(_Fetcher(_msgs([dict(late, removed="moderator")], [240])), _settings())  # type: ignore[arg-type]
++    rc_gone.intake.now = NOW
++    assert _run(rc_gone.intake.fetch(NOW))["records"] == [] and _run(rc_gone.intake.fetch(NOW))["seen"] == 1
++    from gamexpress.sources import reddit as rmod
++    src = inspect.getsource(rmod)
++    assert "removal_notice" not in src and "pending_reddit" not in src and not hasattr(rc, "pending"), \
++        "Game-Express must stay memory-free here: a hold store would need the round-107 restore rule"
++
++
 +def test_wiring_is_in_place():
 +    from gamexpress import runner
 +    from gamexpress.sources import reddit as rmod
@@ -1315,10 +1352,10 @@ index 0000000..121c3ab
 +if __name__ == "__main__":
 +    sys.exit(main())
 diff --git a/tests/test_smoke.py b/tests/test_smoke.py
-index 993c87b..f761ad6 100644
+index 76919976..32b501dd 100644
 --- a/tests/test_smoke.py
 +++ b/tests/test_smoke.py
-@@ -14964,7 +14964,7 @@ def test_final_pre_merge_edge_cases_and_repo_doc_consistency():
+@@ -14945,7 +14945,7 @@ def test_final_pre_merge_edge_cases_and_repo_doc_consistency():
          assert f"{len(config.DEFAULT_REDDIT)} Reddit/Redlib entries" in security_t
          assert "arknights" not in sources_t.lower()
          assert "Status: not integrated." not in sources_t

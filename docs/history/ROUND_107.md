@@ -62,8 +62,12 @@ round-101 rule still holds for it. No request, bookkeeping on data already in ha
   run for *retryable* holds that no listing refreshes) is unchanged; in relay mode it only
   ever sees leftovers that slid out of the 6 h relay window.
 - Game-Express: no equivalent defect. Its Reddit source keeps no hold memory (a removed post
-  is simply not an item), reads `lookback_hours` back, and a relay record newer than the last
-  run is a plain new item — the intake-reader patch needs no change for this.
+  is simply not an item), reads `LOOKBACK_HOURS` (72 h) back, and a relay record newer than the
+  last run is a plain new item. The hand-off patch
+  (`docs/handoffs/game-express-intake-reader.patch`) was regenerated on GE `main` `71202ee4`
+  (applies with `git am`, no conflicts) and now carries the cross-check test
+  `test_round107_post_approved_from_the_mod_queue_hours_later_is_a_plain_new_item` (GE suites:
+  intake 8/8, smoke 610/610, ruff clean).
 - Devvit relay: nothing to change — it already detected the approval (the post entered `/new`
   at ~12:35Z and the record went out at 12:36Z with `score: 1, comments: 0`).
 
