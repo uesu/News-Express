@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased — Round 104: the relay is 1:1 with the old chain — relay 0.0.8 (2026-11-02)
+
+`devvit/gaming-express` 0.0.8, `testing area/reddit_main_v3.py` (intake block, media resolver,
+liveness verdict, retraction seatbelt), `tests/test_smoke.py`, docs/policies, `docs/handoffs/`
+refreshed (Game-Express base `ccfe564`). No card, cache or Twitter change. Full record:
+[`docs/history/ROUND_104.md`](history/ROUND_104.md).
+
+- **Why:** the owner asked for full 1:1 coverage now — a relay-served post must need no redlib
+  instance, no reddit.com instance and no Arctic request in either engine; the vxreddit /
+  embedez / embeddit proxies are part of the relay structure and stay; the old chain stays as
+  the fallback.
+- **Relay 0.0.8 (uploads as Reddit 0.0.7):** re-check stages ~5 min / 30 min / 2 h / 6 h /
+  **24 h**; a post that flips removed/filtered → live is re-sent complete (`resent:
+  "approved"`); for official posts (publisher account, distinguished, "official" flair) each
+  re-check reads the author's own comments and re-sends the record when they change
+  (`opCommentCount` inline, `opComments` in `record.json`, `resent: "comments"`).
+- **Reader:** `relay_complete` (nothing cut, parent named, comments present) on the base →
+  `resolve_post_media` skips the archive (post, parent, child probe) and both redlib harvests,
+  `main()` skips the reddit.com post JSON; counts from the record / newest re-check when no
+  proxy served them; the publisher's stickied/first comment becomes the existing `💬 OP comment`
+  line. A clean relay record is live from the listing itself (`relay-listing`, no archive
+  lookup); the retraction seatbelt skips the `/new` snapshot and mirror probe for re-checked
+  posts. Records the CDN could not complete keep the full round-101/103 fill-in.
+- **Game-Express:** comments merged like the post-page parser (text/links/images/`comments`),
+  `relay_complete` entries never go through `resolve_post()` in `items()` / `program_post()`.
+- Tests: 8 `r104` smoke guards (r101 liveness guard updated), 27 Devvit unit tests; three
+  suites ALL PASS here and in a `sync_tree()` production checkout; Game-Express intake 7/7 +
+  smoke 628/628 on a fresh `ccfe564` clone and its production checkout.
+
 ## Unreleased — Round 103: the relay is the complete Reddit source — relay 0.0.7 (2026-11-02)
 
 `devvit/gaming-express` 0.0.7, `testing area/reddit_main_v3.py` (intake block, liveness verdict,

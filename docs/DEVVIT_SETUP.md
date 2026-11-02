@@ -181,7 +181,7 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
    npx devvit logs GamingExpressRelay
    ```
 
-   Expected line every 5 minutes (every 2 minutes before 0.0.6; 0.0.7 appends `; recheck N looked, N update msg, N re-sent`):
+   Expected line every 5 minutes (every 2 minutes before 0.0.6; 0.0.7+ appends `; recheck N looked, N update msg, N re-sent`):
 
    ```
    poll: 12 subs, 3 users, N fetched, 0 sent, N seen, 0 failed, N bootstrapped
@@ -226,8 +226,10 @@ Subreddit menu on `r/GamingExpressRelay` (`…` → **[Gaming Express] Poll now*
 Redis (per installation): `seen:<postId>` (7-day TTL), `boot:<subreddit>` /
 `boot:u/<account>`, `fail:<postId>`, `last:poll`, `total:sent`; since 0.0.7 also the
 re-check bookkeeping `sent:z`, `stage:<postId>`, `state:<postId>`, `bh:<postId>` (a short
-hash of the body, to notice edits), `rev:<postId>`, and `attach:fails` / `attach:off`. No
-user data beyond the public author name inside the relayed record. Records live only in the
+hash of the body, to notice edits), `rev:<postId>`, `attach:fails` / `attach:off`, and since
+0.0.8 `oc:<postId>` (a short hash of the author's own comments of an official post, to notice
+new ones). No user data beyond the public author name inside the relayed record and, for
+official posts, the author's own public comments under it. Records live only in the
 private Discord channel (the complete record as the message's `record.json` attachment).
 
 ## 7. Clean uninstall of the PC-side tooling
@@ -250,6 +252,7 @@ Node.js › Uninstall → delete `%USERPROFILE%\.devvit`, `%APPDATA%\npm`,
 | 0.0.5 | 2026-11-02 | `officialUsers` default trimmed to the verified, active accounts (`genshinimpact,HonkaiStarRail,HonkaiNexusAnima`); dormant `u/ZZZ_Official` / `u/AnantaOfficial` dropped (publisher-account audit above); setting documented as optional. Settings persist, so existing installs must re-pin `officialUsers` (§3 step 5). Uploads as Reddit **`0.0.4`**. |
 | 0.0.6 | 2026-11-02 | poll cadence 2 → **5 minutes** (owner's choice, matching the 5-minute engine crons; 3 requests/min); per-poll send cap 10 → 15 so the per-minute ceiling is unchanged. No record-format change. Uploads as Reddit **`0.0.5`**. |
 | 0.0.7 | 2026-11-02 | **the relay is the complete source** (round 103). (a) Every record message also carries **`record.json`** — the untrimmed record (full body, every media URL, video renditions, the crosspost parent as a nested record) — sent as a multipart webhook upload; the inline fenced record stays `v: 1` (new optional keys `full`, `mediaTruncated`, `edited`, `revision`, `xpostPermalink`, `video`), so older readers keep working. If Discord refuses the form, the record goes out as plain content exactly as before (`attachment refused` log line; three in a row pause the attachment for an hour). (b) **Post-delivery re-check**: each delivered post is looked at again ~10 min, 30 min, 2 h and 6 h after creation (`reddit.getPostById`, ≤ 20 per poll) and the result is written as one batched **`v: 2` update message** per poll (`{v:2,kind:"update",at,posts:[{id,sub,age,stage,removed,deleted,edited,spoiler,…,locked,score,comments}]}`) — the first look always, later looks only when the state changed. An **edited body** is re-sent as a `v: 1` record with `revision` ≥ 2 (readers keep the newest message per id). New Redis keys: `sent:z` (sorted set, 7.5 h), `stage:<id>`, `state:<id>`, `bh:<id>`, `rev:<id>`, `attach:fails`/`attach:off`. Poll line gains `; recheck N looked, N update msg, N re-sent`. Uploads as Reddit **`0.0.6`**. |
+| 0.0.8 | 2026-11-02 | **1:1 with the old chain** (round 104). (a) Re-check stages ~**5 min** / 30 min / 2 h / 6 h / **24 h** (the first look is the next poll after delivery; late approvals and late publisher comments are caught by the 24 h look). (b) A post first seen filtered/removed and later live (**approval**) is re-sent complete (`resent: "approved"`, `revision` ≥ 2) so a reader whose 6 h window lost the first record still has the whole post. (c) For **official** posts (author in `officialUsers`, distinguished, or an "official" flair) each re-check also reads the author's own comments under the post (`post.comments.get(50)`, filtered to the author); when they change the record is re-sent with `opCommentCount` inline and `opComments: [{id, body, created, stickied}]` in `record.json` (`resent: "comments"`; reasons join with `+`). (d) Record keeps `v: 1`; `RECHECK_WINDOW` 24 h + 30 min. Uploads as Reddit **`0.0.7`**. |
 
 ## 9. News-Express reader (round 101 — the relay as the primary listing)
 
@@ -261,9 +264,10 @@ RSS / redlib / Arctic sweep is skipped; in every other state the run logs one
 Record of the design: [`docs/history/ROUND_101.md`](history/ROUND_101.md); shared-channel
 paging and freshness rules: [`docs/history/ROUND_102.md`](history/ROUND_102.md).
 
-Since round 103 (relay 0.0.7) the relay is also the **complete** source, so a relay-served
-post needs no redlib / reddit.com / Arctic request at all — those stay as the fallback only
-(the vxreddit / embedez / embeddit video proxies remain for muxed audio):
+Since round 103 (relay 0.0.7) the relay is also the **complete** source, and since round 104
+(relay 0.0.8) a relay-served post costs **no redlib / reddit.com / Arctic request at all** —
+those stay as the fallback only (the vxreddit / embedez / embeddit proxies remain part of the
+relay structure for gallery photos, muxed-audio video and the stats line):
 
 - **Full body, full media, crosspost parent** — read from the message's `record.json`
   (`cdn.discordapp.com`, no token) only when the inline record was cut or names a crosspost
@@ -277,8 +281,19 @@ post needs no redlib / reddit.com / Arctic request at all — those stay as the 
   `relay empty (relay alive (N re-check message(s)) but no new post …)`, not stale.
 - **Edits** — a re-sent record (`revision` ≥ 2) is the newer message and supersedes the first
   for a post that has not been delivered yet; delivered posts are not re-posted.
+- **Round 104 — `relay_complete`.** A record with nothing cut, its crosspost parent named and
+  its comments present (or none announced) is the whole post: `intake_base_data()` marks it
+  `relay_complete`, and for such a post the engine skips the reddit.com post JSON, the archive
+  probes (child, parent, post), both redlib gallery harvests and the archive liveness lookup
+  (a clean relay record is `live` from the listing itself, source `relay-listing`; the relay
+  re-checks it at ~5 min / 30 min / 2 h / 6 h / 24 h). Reddit's own counts ride on the card's
+  stats line when no proxy served one; the publisher's stickied/first own comment (0.0.8
+  `opComments`) is the card's `💬 OP comment` line (`REDDIT_OP_COMMENT`, on by default). The
+  retraction seatbelt skips the `/new` listing snapshot and the mirror probe for posts the relay
+  has re-checked. A record the CDN could not complete keeps the full round-101 fill-in.
 
-Record: [`docs/history/ROUND_103.md`](history/ROUND_103.md).
+Record: [`docs/history/ROUND_103.md`](history/ROUND_103.md),
+[`docs/history/ROUND_104.md`](history/ROUND_104.md).
 
 ### One-time setup (owner; nothing changes until both the secret and the Variable exist)
 
@@ -338,9 +353,10 @@ Record: [`docs/history/ROUND_103.md`](history/ROUND_103.md).
    that account (records carry the real subreddit in `sub`), subreddit listings per `sub`;
    the same two settings activate it in `uesu/8mqzv4k2n7c`.
 4. ~~Post edits/removals as update records, long bodies, crosspost parent~~ — done in
-   round 103 (relay 0.0.7, both readers, Game-Express patch refreshed). Still open and only if
-   ever needed: author follow-up comments (Game-Express merges the publisher's own comment —
-   it still reads those from the post page / mirrors), muxed-audio video (the proxies stay).
+   round 103 (relay 0.0.7, both readers, Game-Express patch refreshed). ~~Author follow-up
+   comments, late approvals, per-post archive/redlib/reddit.com calls~~ — done in round 104
+   (relay 0.0.8, both readers): a relay-served post needs nothing but the relay and the
+   vxreddit / embedez / embeddit proxies. Nothing open; the old chain stays as the fallback.
 
 Dates that drive this: 2026-11-13 Reddit RSS retired (kills the engine's reddit.com feed
 hosts and Game-Express's `REDDIT_FEED_TOKEN` path); 2027-01-12 unregistered access removed

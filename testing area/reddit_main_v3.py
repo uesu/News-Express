@@ -2751,13 +2751,63 @@ def apply_intake_full_record(rec: dict, full) -> bool:
         changed = True
     if isinstance(full.get("video"), dict) and not rec.get("video"):
         rec["video"] = full["video"]
+    # Round 104 (relay 0.0.8): the author's own comments of an official post.
+    op_comments = parse_intake_op_comments(full.get("opComments"))
+    if op_comments:
+        rec["opComments"] = op_comments
+        rec["opCommentCount"] = len(op_comments)
+        changed = True
     rec["_completed"] = changed
     return changed
 
 
 def _intake_needs_full_record(rec: dict) -> bool:
+    """Whether the inline record is missing something only `record.json`
+    carries: a cut body or media list, an unnamed crosspost parent, or
+    (round 104, relay 0.0.8) the author's own comments of an official post
+    (`opCommentCount` > 0 inline, the comments themselves in the file)."""
     return bool(rec.get("bodyTruncated") or rec.get("mediaTruncated")
-                or (rec.get("xpost") and not rec.get("xpostPermalink")))
+                or (rec.get("xpost") and not rec.get("xpostPermalink"))
+                or (_intake_int(rec.get("opCommentCount")) > 0 and not rec.get("opComments")))
+
+
+def _intake_int(value) -> int:
+    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+
+def parse_intake_op_comments(value) -> list[dict]:
+    """Round 104: the author's own comments from `record.json`
+    (`opComments: [{id, body, created, stickied}]`, oldest first). Anything
+    malformed is dropped; the list is never raised on."""
+    out = []
+    for c in value or []:
+        if not isinstance(c, dict):
+            continue
+        body = str(c.get("body") or "").strip()
+        cid = str(c.get("id") or "").strip().lower()
+        if not body or not re.fullmatch(r"[a-z0-9]{4,12}", cid):
+            continue
+        out.append({"id": cid, "body": body,
+                    "created": _intake_int(c.get("created")),
+                    "stickied": bool(c.get("stickied"))})
+    return out
+
+
+def relay_op_comment(rec: dict) -> dict | None:
+    """Round 104: the card's "OP comment" line from the relayed comments —
+    the stickied one first, else the earliest — in the shape
+    extract_op_comment() returns for FULL MODE (text, permalink, stickied).
+    Needs no redlib / reddit.com / Arctic request."""
+    comments = rec.get("opComments") or []
+    if not comments:
+        return None
+    pick = next((c for c in comments if c.get("stickied")), comments[0])
+    text = strip_html(pick.get("body"))
+    if not text:
+        return None
+    permalink = (f"https://www.reddit.com{str(rec.get('permalink') or '').rstrip('/')}"
+                 f"/comment/{pick.get('id', '')}/")
+    return {"text": text, "permalink": permalink, "stickied": bool(pick.get("stickied"))}
 
 
 def intake_content_html(rec: dict) -> str:
@@ -2830,6 +2880,18 @@ class _IntakeEntry:
         return self._d.get(k, d)
 
 
+def relay_record_stats(rec: dict) -> dict | None:
+    """Round 104: Reddit's own counts for the stats line — the newest the
+    relay saw (a `v: 2` re-check item when there is one, else the record)."""
+    upd = rec.get("_update") if isinstance(rec.get("_update"), dict) else {}
+    for src in (upd, rec):
+        score, comments = src.get("score"), src.get("comments")
+        if (isinstance(score, int) and isinstance(comments, int)
+                and not isinstance(score, bool) and not isinstance(comments, bool)):
+            return {"ups": score, "comments": comments}
+    return None
+
+
 def intake_base_data(entry) -> dict:
     """Native-mode base from a relay record (the entry_to_base_data twin).
 
@@ -2866,6 +2928,15 @@ def intake_base_data(entry) -> dict:
         "vred_id": extract_vreddit_id(" ".join([url, media_blob, rec.get("body") or ""])),
         "redgifs_url": extract_redgifs_url(" ".join([url, rec.get("body") or ""])),
         "youtube_url": select_youtube_url(outbound, rec.get("body") or ""),
+        # Round 104: a COMPLETE relay record (nothing cut, parent named,
+        # comments present) is the whole post as Reddit shows it — the
+        # media resolver then asks no redlib instance, no reddit.com
+        # instance and no archive for it; only the vxreddit/embedez/
+        # embeddit proxies (part of the relay structure) and the native
+        # URLs the record carries.
+        "relay_complete": not _intake_needs_full_record(rec),
+        "relay_stats": relay_record_stats(rec),
+        "relay_op_comment": relay_op_comment(rec),
     }
 
 
@@ -4450,6 +4521,13 @@ async def candidate_liveness_verdict(session, *, key: str, path: str,
         relay_reason = _queue_or_removal_reason(relay_record.get("removed"))
         if relay_reason:
             return "removed", f"relay record: {relay_reason}", "relay-record"
+        # Round 104: a relay record IS Reddit's own /new listing — a clean
+        # `removed` is positive evidence the post was live when Reddit
+        # listed it, and the relay re-checks it again ~5 min / 30 min /
+        # 2 h / 6 h / 24 h later (v: 2 updates, retraction path). The
+        # archive is not consulted for relay candidates any more.
+        return ("live", "listed on Reddit's /new by the relay (not removed); "
+                        "relay re-check pending", "relay-listing")
     # 3. One archive lookup by id.
     if _liveness_probe_budget_used >= LIVENESS_PROBE_BUDGET:
         return "unverified", "probe budget exhausted", "budget"
@@ -4461,16 +4539,6 @@ async def candidate_liveness_verdict(session, *, key: str, path: str,
     state, why = archived_removal_verdict(record)
     if state == "unknown":
         return "unverified", why, "arctic-lookup"
-    # Round 101: an archive `removed` row is a SNAPSHOT (`retrieved_on`, ~10 s
-    # after creation). When Reddit's own /new listed the post LATER than that
-    # snapshot (the relay message time), the post was visible after the
-    # archive looked — the queue state was lifted. Stateless replacement for
-    # the round-98 feed streak, which a replayed relay record cannot build.
-    if state == "removed" and isinstance(entry, _IntakeEntry):
-        fresher = relay_listing_is_fresher(entry, record)
-        if fresher is not None:
-            return ("live", f"listed on Reddit's /new {fresher} s after the archive "
-                            f"snapshot that said '{why}'", "relay-listing")
     return state, why, "arctic-lookup"
 
 
@@ -4503,19 +4571,11 @@ def relay_removal_reason_for(post_id: str | None) -> str | None:
     return None
 
 
-def relay_listing_is_fresher(entry, record: dict | None,
-                             margin_seconds: int = 20) -> int | None:
-    """Round 101: seconds by which the relay sighting post-dates the archive
-    row's `retrieved_on`, or None when it does not (or cannot be known)."""
-    try:
-        listed_at = _epoch_from_snowflake(getattr(entry, "message_id", None))
-        retrieved = (record or {}).get("retrieved_on")
-        if listed_at is None or not isinstance(retrieved, (int, float)) or isinstance(retrieved, bool):
-            return None
-        delta = int(listed_at - float(retrieved))
-        return delta if delta > margin_seconds else None
-    except Exception:
-        return None
+def relay_update_for(post_id: str | None) -> dict | None:
+    """Round 104: the relay's newest re-check item for a post this run, or
+    None when the relay has not looked at it (yet)."""
+    upd = _INTAKE_UPDATES.get(str(post_id or "").lower())
+    return upd if isinstance(upd, dict) else None
 
 
 def liveness_hold_decision(state: str, strict: bool) -> bool:
@@ -6697,10 +6757,12 @@ async def discover_original_for_media(session, *, path: str | None, base: dict,
                                       post_json: dict | None, label: str = ""):
     """Resolve at most one original for media. Child identity stays on the card."""
     # A validated parent already present in RSS/JSON needs no child archive probe.
+    # Round 104: neither does a complete relay record (the relay names the
+    # parent itself; no parent = not a crosspost) — no archive request.
     source = resolve_crosspost_source(own_path=path, base=base, post_json=post_json)
     child_arctic = None
     child_lookup_done = False
-    if not source and not post_json and path:
+    if not source and not post_json and path and not base.get("relay_complete"):
         child_id = extract_post_id(path) or ""
         if child_id:
             child_lookup_done = True
@@ -6810,6 +6872,15 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
     fallback_url: str | None = None
     video_poster: str | None = None
     orig_json_record: dict | None = None
+    # Round 104: a complete relay record (see intake_base_data) is served
+    # without redlib instances, reddit.com instances or the archive —
+    # proxies (vxreddit/embedez/embeddit) + the record's own URLs only.
+    relay_complete = bool(base.get("relay_complete"))
+    if relay_complete:
+        logging.info(f"[{label or 'relay'}] relay record is complete — no archive, "
+                     f"redlib or reddit.com request for this post (proxies only).")
+    if op_comment is None and INCLUDE_OP_COMMENT and base.get("relay_op_comment"):
+        op_comment = base["relay_op_comment"]
 
     if post_json:
         # ---- FULL MODE ----
@@ -6959,7 +7030,8 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
         orig_path = source.get("path")
         orig_id_only = source.get("id")
         child_id_now = extract_post_id(path or "") or ""
-        if not orig_path and orig_id_only and str(orig_id_only).lower() != child_id_now.lower():
+        if (not orig_path and orig_id_only and not relay_complete
+                and str(orig_id_only).lower() != child_id_now.lower()):
             parent_lookup = await fetch_arctic_post(session, str(orig_id_only), label)
             if isinstance(parent_lookup, dict):
                 source["record"] = parent_lookup
@@ -6994,6 +7066,8 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
                    or parent_record.get("subreddit"))):
             # Reuse the already validated one-hop parent embedded in the archive.
             arctic = parent_record
+        elif relay_complete:
+            arctic = None  # round 104: the relay record is the complete post
         else:
             arctic = await fetch_arctic_post(session, fetch_id, label)
     arctic_items = arctic_media_items(arctic)
@@ -7034,7 +7108,8 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
         tasks = [fetch_proxy_post_memo(session, fetch_path,
                                        label=label, health=_proxy_health,
                                        need_video=bool(has_video))]
-        if not (has_video or arctic_is_video or base.get("vred_id") or base.get("redgifs_url")):
+        if not (has_video or arctic_is_video or base.get("vred_id") or base.get("redgifs_url")
+                or relay_complete):
             tasks.append(enrich_gallery_redlib(session, fetch_path, label or "gallery"))
         results = await asyncio.gather(*tasks, return_exceptions=True)
         redlib_done = len(tasks) > 1
@@ -7197,6 +7272,11 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
             except Exception as e:
                 logging.info(f"[{label or 'stats'}] embeddit stats fetch failed: {e}")
 
+    # Round 104: the relay record's own counts (Reddit's numbers at listing
+    # / re-check time) when no proxy served the stats line.
+    if stats is None and isinstance(base.get("relay_stats"), dict) and not crosspost:
+        stats = dict(base["relay_stats"])
+
     # Round 83c: Do not stamp stale Arctic archived counts — clean card when
     # stats unavailable (gate behind ALLOW_ARCHIVED_COUNTS=1 to re-enable).
     # Previously rendered "1⬆️ · 0💬 · archived counts" from 13s-old snapshots
@@ -7276,7 +7356,7 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
                         media.append(p)
                     if media and not media_provider:
                         media_provider = "native"
-            if not media and not redlib_done and fetch_path:
+            if not media and not redlib_done and fetch_path and not relay_complete:
                 # (legacy, e.g. video posts where the harvest was skipped):
                 # best-effort redlib harvest of the post page (parallel,
                 # ~10s worst case, no retry).
@@ -7874,13 +7954,17 @@ async def retract_dead_posts(session, posted_messages: dict, now: float) -> None
         subreddit = record.get("subreddit") or unique_key.rsplit("_", 1)[0]
         path = record.get("path") or ""
         post_id = extract_post_id(path) or unique_key.rsplit("_", 1)[-1]
-        listing = await _fetch_new_listing(session, subreddit)
-        listing_ids, listing_oldest_age = listing if listing else (None, None)
         # Round 103: the relay's own re-check first (no request); the
         # mirror/proxy probe only when the relay has not looked yet.
+        # Round 104: the same for the /new listing snapshot (a redlib /
+        # reddit.com request) — a post the relay has re-checked needs none.
         reason = relay_removal_reason_for(post_id)
-        if reason is None:
+        if reason is None and relay_update_for(post_id) is None:
+            listing = await _fetch_new_listing(session, subreddit)
             reason = await live_removal_reason(session, path, label=f"retract {unique_key}")
+        else:
+            listing = None
+        listing_ids, listing_oldest_age = listing if listing else (None, None)
         decision = reddit_signals.retraction_decision(
             enabled=RETRACT_DEAD_POSTS,
             mode=RETRACT_MODE,
@@ -8718,8 +8802,12 @@ async def main():
                     # Round 101: a relay record carries markdown, not RSS HTML.
                     base = (intake_base_data(entry) if isinstance(entry, _IntakeEntry)
                             else entry_to_base_data(entry))
-                    post_json = await fetch_post_json(session, extract_post_id(path) or "",
-                                                      use_oauth=use_oauth)
+                    # Round 104: a complete relay record needs no reddit.com
+                    # post JSON (body, media, parent, comments, counts are
+                    # all in the record).
+                    post_json = (None if base.get("relay_complete")
+                                 else await fetch_post_json(session, extract_post_id(path) or "",
+                                                            use_oauth=use_oauth))
                 else:
                     # TEST POST mode: no RSS entry (feed bypassed on purpose).
                     # Try the post JSON (FULL MODE); when JSON is unavailable

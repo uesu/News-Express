@@ -12090,20 +12090,18 @@ check("r101 liveness: the relay record's own removal state holds without a reque
       _r101_v[0][0] == "removed" and _r101_v[0][2] == "relay-record"
       and "removed by moderators/filters" in _r101_v[0][1]
       and _r101_v[1][0] == "removed" and "pending approval" in _r101_v[1][1])
-check("r101 liveness: an archive 'removed' snapshot older than the relay sighting is stale "
-      "-> live (relay-listing); a newer archive snapshot still holds; clean/none unchanged",
-      _r101_v[2] [0] == "live" and _r101_v[2][2] == "relay-listing"
-      and _r101_v[3] == ("removed", "removed by moderators/filters", "arctic-lookup")
-      and _r101_v[4] == ("live", "archived record is clean", "arctic-lookup")
-      and _r101_v[5] == ("unverified", "no archived record", "arctic-lookup")
+check("r101/r104 liveness: a relay record that is not removed is live from the relay listing "
+      "alone (no archive lookup, whatever the archive would say); a plain RSS candidate "
+      "still takes the archive lookup",
+      all(v == ("live", "listed on Reddit's /new by the relay (not removed); "
+                        "relay re-check pending", "relay-listing")
+          for v in _r101_v[2:6])
       and _r101_v[6] == ("removed", "removed by moderators/filters", "arctic-lookup"))
 check("r101: relay entries never build the round-98 feed streak (provenance 'relay', not "
       "'reddit-native'), so a replayed record cannot unlock the stale-snapshot override",
       'collect(entries, None, provenance="relay")' in inspect.getsource(v3.main)
       and 'collect(_relay_only, None, provenance="relay")' in inspect.getsource(v3.main)
-      and "relay" not in v3._SNAPSHOT_SOURCES
-      and v3.relay_listing_is_fresher(_r101_entry, {"retrieved_on": _r101_now - 360}) is None
-      and v3.relay_listing_is_fresher(_r101_entry, {"retrieved_on": _r101_now - 500}) == 130)
+      and "relay" not in v3._SNAPSHOT_SOURCES)
 check("r101: a replayed relay record of a never-re-check hold is skipped like an archive "
       "resurface (it is not a restore)",
       v3._pending_throttle_skip({"k": {"reason": "removal notice", "last_checked": _r101_now}},
@@ -12392,6 +12390,170 @@ check("r103 summary: the intake line reports re-checks and completions without i
       and "2 completed" in v3._intake_line(v3._intake_summary(_r103_c))
       and "1xl" not in v3._intake_line(v3._intake_summary(_r103_c))
       and "re-checked" not in v3._intake_line(v3._intake_summary(_r101_ok)))
+
+# ---- Round 104 (relay 0.0.8): a complete relay record is served 1:1 without the old chain ----
+_r104_oc_full = [{"id": "c1aaaa", "body": "Maintenance ends 11:00 (UTC+8)", "created": 1762050100, "stickied": False},
+                 {"id": "c2bbbb", "body": "Compensation: 300 Stellar Jade", "created": 1762050400, "stickied": True},
+                 {"id": "bad id", "body": "x", "created": 1}, {"id": "c3cccc", "body": "   "}, "junk"]
+_r104_oc = v3.parse_intake_op_comments(_r104_oc_full)
+check("r104 op comments: record.json `opComments` parse (ids normalised, blank/malformed dropped); "
+      "the card line prefers the stickied one and carries its permalink",
+      [c["id"] for c in _r104_oc] == ["c1aaaa", "c2bbbb"] and _r104_oc[1]["stickied"] is True
+      and v3.parse_intake_op_comments(None) == [] and v3.parse_intake_op_comments("nope") == []
+      and v3.relay_op_comment(dict(_r101_parsed, opComments=_r104_oc))
+          == {"text": "Compensation: 300 Stellar Jade", "stickied": True,
+              "permalink": "https://www.reddit.com" + _r101_parsed["permalink"].rstrip("/") + "/comment/c2bbbb/"}
+      and v3.relay_op_comment(dict(_r101_parsed, opComments=_r104_oc[:1]))["text"] == "Maintenance ends 11:00 (UTC+8)"
+      and v3.relay_op_comment(dict(_r101_parsed)) is None
+      and v3.op_comment_text(v3.relay_op_comment(dict(_r101_parsed, opComments=_r104_oc))).startswith(
+          "**💬 OP comment (stickied):** Compensation: 300 Stellar Jade — [full comment](https://www.reddit.com/"))
+
+_r104_inline = dict(_r103_plain, id="1xlofcl", permalink="/r/HonkaiStarRail_leaks/comments/1xlofcl/o/",
+                    author="HonkaiStarRail", opCommentCount=2, resent="comments", revision=2)
+_r104_cdn_full = dict(_r104_inline, parent=None, opComments=_r104_oc_full)
+_r104_c, _r104_cs = asyncio.run(_r103_reader(
+    [_r103_msg(_r104_inline, 100), _r103_msg(_r103_plain, 200)],
+    files={_cdn.format("1xlofcl"): _r104_cdn_full}))
+_r104_by = {r["id"]: r for r in _r104_c["records"]}
+check("r104 record.json: an inline `opCommentCount` > 0 is a reason to fetch the attachment; the "
+      "comments are merged (count re-derived), a plain record still costs no CDN request",
+      v3._intake_needs_full_record(_r104_inline) is True
+      and v3._intake_needs_full_record(dict(_r104_inline, opCommentCount=0)) is False
+      and v3._intake_needs_full_record(_r103_plain) is False
+      and _r104_c["completed"] == 1 and _r104_cs.cdn_calls == [_cdn.format("1xlofcl")]
+      and [c["id"] for c in _r104_by["1xlofcl"]["opComments"]] == ["c1aaaa", "c2bbbb"]
+      and _r104_by["1xlofcl"]["opCommentCount"] == 2
+      and v3._intake_needs_full_record(_r104_by["1xlofcl"]) is False)
+
+_r104_base = v3.intake_base_data(v3._IntakeEntry(_r104_by["1xlofcl"]))
+_r104_cut_base = v3.intake_base_data(v3._IntakeEntry(_r103_by["1xlcut3"]))
+check("r104 base: a complete record (nothing cut, parent named, comments present) is "
+      "`relay_complete`; a record the CDN could not complete is not; Reddit's counts and the OP "
+      "comment ride on the base (the newest re-check wins over the record)",
+      _r104_base["relay_complete"] is True and _r104_cut_base["relay_complete"] is False
+      and v3.intake_base_data(v3._IntakeEntry(_r103_by["1xlplain"]))["relay_complete"] is True
+      and v3.intake_base_data(v3._IntakeEntry(_r103_by["1xlxpst"]))["relay_complete"] is True
+      and v3.intake_base_data(v3._IntakeEntry(dict(_r103_xp)))["relay_complete"] is False
+      and _r104_base["relay_op_comment"]["stickied"] is True
+      and _r104_base["relay_stats"] == {"ups": _r101_rec["score"], "comments": _r101_rec["comments"]}
+      and v3.relay_record_stats(dict(_r101_parsed, _update=_r103_item("x", score=41, comments=7)))
+          == {"ups": 41, "comments": 7}
+      and v3.relay_record_stats(dict(_r101_parsed, score="3")) is None
+      and v3.relay_record_stats(dict(_r101_parsed, score=True)) is None)
+
+async def _r104_resolve(base):
+    calls = {"arctic": 0, "redlib": 0, "row": 0, "proxy": 0, "embeddit": 0}
+    async def _arctic(*a, **k):
+        calls["arctic"] += 1
+        return None
+    async def _redlib(*a, **k):
+        calls["redlib"] += 1
+        return []
+    async def _proxy(*a, **k):
+        calls["proxy"] += 1
+        return None
+    async def _embeddit(*a, **k):
+        calls["embeddit"] += 1
+        return None
+    fake_proxy = SimpleNamespace(fetch_proxy_post=_proxy, fetch_embeddit_stats=_embeddit)
+    saved = (v3.INCLUDE_OP_COMMENT, v3.PROXY_MEDIA)
+    try:
+        v3.INCLUDE_OP_COMMENT, v3.PROXY_MEDIA = True, True
+        with patch.object(v3, "reddit_proxy", fake_proxy), \
+             patch.object(v3, "fetch_arctic_post", _arctic), \
+             patch.object(v3, "fetch_proxy_post_memo", _proxy), \
+             patch.object(v3, "enrich_gallery_redlib", _redlib), \
+             patch.object(v3, "media_url_ok", AsyncMock(return_value=(True, 123))):
+            data = await v3.resolve_post_media(None, base, None,
+                                               path=v3.normalize_reddit_path("https://www.reddit.com" + base["_permalink"]),
+                                               label="r104")
+    finally:
+        v3.INCLUDE_OP_COMMENT, v3.PROXY_MEDIA = saved
+    return data, calls
+
+_r104_gal = dict(_r104_by["1xlofcl"], url="https://www.reddit.com/gallery/1xlofcl", body="Two photos.",
+                 media=["https://i.redd.it/r104a.png", "https://i.redd.it/r104b.jpg"])
+_r104_d, _r104_calls = asyncio.run(_r104_resolve(
+    dict(v3.intake_base_data(v3._IntakeEntry(_r104_gal)), _permalink=_r104_gal["permalink"])))
+_r104_d2, _r104_calls2 = asyncio.run(_r104_resolve(
+    dict(_r104_cut_base, _permalink=_r103_by["1xlcut3"]["permalink"])))
+check("r104 pipeline: a complete relay gallery with every proxy down is still served from the record "
+      "— both photos native, Reddit's counts, the publisher's stickied comment — with NO archive, "
+      "redlib or reddit.com request (proxies were asked, as part of the relay structure)",
+      [m["url"] for m in _r104_d["media"]] == ["https://i.redd.it/r104a.png", "https://i.redd.it/r104b.jpg"]
+      and _r104_d["stats"] == {"ups": _r101_rec["score"], "comments": _r101_rec["comments"]}
+      and _r104_d["op_comment"]["text"] == "Compensation: 300 Stellar Jade"
+      and _r104_d["title"] == "Boothill & co"
+      and _r104_calls["arctic"] == 0 and _r104_calls["redlib"] == 0 and _r104_calls["proxy"] >= 1,
+      f"{_r104_calls} {_r104_d['media']} {_r104_d['stats']}")
+check("r104 pipeline: a relay record the CDN could NOT complete keeps the round-101 fill-in "
+      "(archive + redlib harvest still asked) — the fallback chain is untouched",
+      _r104_calls2["arctic"] >= 1 and _r104_calls2["redlib"] >= 1 and _r104_d2["op_comment"] is None,
+      f"{_r104_calls2}")
+
+async def _r104_retract():
+    saved = (v3.RETRACT_DEAD_POSTS, v3.RETRACT_MODE, dict(v3._INTAKE_UPDATES))
+    calls = {"listing": 0, "live": 0}
+    async def _listing(session, sub):
+        calls["listing"] += 1
+        return None
+    async def _live(session, path, label=""):
+        calls["live"] += 1
+        return None
+    try:
+        v3.RETRACT_DEAD_POSTS, v3.RETRACT_MODE = True, "edit"
+        v3._INTAKE_UPDATES.clear()
+        v3._INTAKE_UPDATES["1xlrchk"] = _r103_item("1xlrchk")
+        posted = {k: {"delivered_at": _r101_now - 300, "published_ts": _r101_now - 400,
+                      "path": f"/r/HonkaiStarRail_leaks/comments/{k.rsplit('_', 1)[-1]}/t/",
+                      "subreddit": "HonkaiStarRail_leaks", "message_id": "1"}
+                  for k in ("HonkaiStarRail_leaks_1xlrchk", "HonkaiStarRail_leaks_1xlnone")}
+        with patch.object(v3, "_fetch_new_listing", _listing), \
+             patch.object(v3, "live_removal_reason", _live), \
+             patch.object(v3, "get_webhook_for_subreddit", lambda s: None):
+            await v3.retract_dead_posts(None, posted, _r101_now)
+    finally:
+        v3.RETRACT_DEAD_POSTS, v3.RETRACT_MODE = saved[0], saved[1]
+        v3._INTAKE_UPDATES.clear()
+        v3._INTAKE_UPDATES.update(saved[2])
+    return calls
+
+_r104_rc = asyncio.run(_r104_retract())
+check("r104 retraction: a post the relay has re-checked costs no /new listing snapshot and no "
+      "mirror/proxy probe; a post the relay has not looked at keeps both (one each)",
+      _r104_rc == {"listing": 1, "live": 1}, f"{_r104_rc}")
+
+_r104_src_rpm = inspect.getsource(v3.resolve_post_media)
+_r104_src_main = inspect.getsource(v3.main)
+check("r104 wiring: relay_complete gates every old-chain call site — post JSON (main), child archive "
+      "probe, parent archive lookup, post archive fetch, both redlib harvests; the liveness verdict "
+      "for a relay record never reaches the archive lookup",
+      'post_json = (None if base.get("relay_complete")' in _r104_src_main
+      and 'and not base.get("relay_complete"):' in inspect.getsource(v3.discover_original_for_media)
+      and "if (not orig_path and orig_id_only and not relay_complete" in _r104_src_rpm
+      and "elif relay_complete:\n            arctic = None" in _r104_src_rpm
+      and _r104_src_rpm.count("or relay_complete):\n            tasks.append(enrich_gallery_redlib(") == 1
+      and "and fetch_path and not relay_complete:" in _r104_src_rpm
+      and _r104_src_rpm.count("enrich_gallery_redlib(") == 2
+      and 'if stats is None and isinstance(base.get("relay_stats"), dict) and not crosspost:' in _r104_src_rpm
+      and _r103_liveness_src.index('"relay-listing")') < _r103_liveness_src.index("_fetch_arctic_post_row(")
+      and "relay_update_for(post_id) is None" in inspect.getsource(v3.retract_dead_posts)
+      and inspect.getsource(v3.retract_dead_posts).index("relay_update_for(post_id) is None")
+      < inspect.getsource(v3.retract_dead_posts).index("await _fetch_new_listing("))
+# Dev-only folder (never synced to production), so the reads are guarded.
+_r104_relay_ts = os.path.join(ROOT, "devvit", "gaming-express", "src", "server", "relay.ts")
+if os.path.isfile(_r104_relay_ts):
+    _r104_ts = open(_r104_relay_ts, encoding="utf-8").read()
+    _r104_srv = open(os.path.join(ROOT, "devvit", "gaming-express", "src", "server", "server.ts"),
+                     encoding="utf-8").read()
+    check("r104 devvit 0.0.8: five re-check stages (5 min … 24 h), approval + comment re-sends, the "
+          "inline record carries only `opCommentCount`, record.json the comments",
+          "300, 1800, 7200, 21600, 86400" in _r104_ts
+          and "opCommentCount?: number" in _r104_ts and "opComments?: OpComment[]" in _r104_ts
+          and "export function becameLive(" in _r104_ts and "export function isOfficialRecord(" in _r104_ts
+          and "RECHECK_WINDOW_SECONDS = 86400 + 1800" in _r104_srv
+          and "reasons.push('approved')" in _r104_srv and "reasons.push('comments')" in _r104_srv
+          and "post.comments.get(OP_COMMENTS_LIMIT)" in _r104_srv)
 _r101_main = inspect.getsource(v3.main)
 check("r101 main: the relay is read BEFORE the combined feed; `ok` in primary mode makes it the "
       "listing (combined request, per-sub fallback and archive sweep skipped, status 'relay'); "

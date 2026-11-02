@@ -43,6 +43,19 @@ export type RelayRecord = {
   xpostPermalink?: string | null
   /** Reddit-hosted video renditions, when the post is a v.redd.it video. */
   video?: {fallback?: string; hls?: string; gif?: boolean} | null
+  /** 0.0.8: number of the author's own comments carried in record.json
+   *  (`opComments`); collected on re-checks of official posts only. */
+  opCommentCount?: number
+  /** 0.0.8: why a record was re-sent — `edited` | `approved` | `comments`. */
+  resent?: string
+}
+
+/** One of the post author's own comments (0.0.8, official posts only). */
+export type OpComment = {
+  id: string
+  body: string
+  created: number
+  stickied: boolean
 }
 
 /** The complete record: the same shape as RelayRecord but never trimmed, plus
@@ -50,6 +63,8 @@ export type RelayRecord = {
  *  attachment of the same Discord message. */
 export type FullRecord = RelayRecord & {
   parent?: RelayRecord | null
+  /** 0.0.8: the author's own comments under the post (oldest first). */
+  opComments?: OpComment[]
 }
 
 /** One post's live state as re-checked by the relay after delivery (0.0.7). */
@@ -58,7 +73,7 @@ export type UpdateItem = {
   sub: string
   /** seconds since creation at check time */
   age: number
-  /** re-check stage that produced this item (1 = first look, ~10 min) */
+  /** re-check stage that produced this item (1 = first look, ~5 min) */
   stage: number
   removed: string | null // removedByCategory, null when live
   deleted: boolean // author account or post deleted
@@ -80,9 +95,10 @@ export type UpdateMessage = {
 }
 
 /** Re-check schedule after delivery: the stage a post of `ageSeconds` is due
- *  for (0 = not yet). Four looks per post: ~10 min (modqueue / AutoMod
- *  removals surface here), 30 min, 2 h, 6 h. */
-export const RECHECK_STAGES_SECONDS = [600, 1800, 7200, 21600] as const
+ *  for (0 = not yet). Five looks per post: the next poll after delivery
+ *  (~5 min — modqueue / AutoMod removals surface here), 30 min, 2 h, 6 h and
+ *  24 h (late approvals, late publisher comments). */
+export const RECHECK_STAGES_SECONDS = [300, 1800, 7200, 21600, 86400] as const
 
 export function dueStage(ageSeconds: number): number {
   let stage = 0
@@ -153,6 +169,34 @@ export function stateKey(id: string): string {
 }
 export function bodyHashKey(id: string): string {
   return `bh:${bareId(id)}`
+}
+
+/** Whether a post counts as "official" for the comment follow-up: posted by
+ *  a configured publisher account, distinguished, or flaired official. */
+export function isOfficialRecord(
+  rec: Pick<RelayRecord, 'author' | 'distinguished' | 'flair'>,
+  officialUsers: string[],
+): boolean {
+  const author = rec.author.toLowerCase()
+  if (officialUsers.some(u => u.toLowerCase() === author)) return true
+  if (rec.distinguished) return true
+  return /\bofficial\b/i.test(rec.flair ?? '')
+}
+
+/** Stable fingerprint of the author's comments — re-send when it changes. */
+export function opCommentsHash(comments: OpComment[]): string {
+  return bodyHash(comments.map(c => `${c.id}:${c.body}`).join('\u0000'))
+}
+
+/** A state flip from removed/filtered/deleted back to live = an approval
+ *  (or an undelete); the readers get the complete record again. */
+export function becameLive(
+  previousState: string | null,
+  item: UpdateItem,
+): boolean {
+  if (!previousState) return false
+  if (item.removed || item.deleted) return false
+  return /removed=(?!null)|deleted=true/.test(previousState)
 }
 
 /** Cheap stable hash (FNV-1a, 32 bit) of a body — enough to notice an edit. */

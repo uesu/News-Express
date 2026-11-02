@@ -6,6 +6,7 @@ import type {
   UiResponse,
 } from '@devvit/web/shared'
 import {
+  becameLive,
   bodyHash,
   bodyHashKey,
   bootKey,
@@ -14,7 +15,10 @@ import {
   type FullRecord,
   failKey,
   isDiscordWebhook,
+  isOfficialRecord,
   legacySeenKey,
+  type OpComment,
+  opCommentsHash,
   parseEnabled,
   parseSubreddits,
   parseUsers,
@@ -57,7 +61,9 @@ const DISCORD_TIMEOUT_MS = 8_000
 const MAX_RECHECKS_PER_POLL = 20
 const POLL_SOFT_DEADLINE_MS = 20_000
 /** How long a delivered post stays on the re-check list (last stage + slack). */
-const RECHECK_WINDOW_SECONDS = 21600 + 1800
+const RECHECK_WINDOW_SECONDS = 86400 + 1800
+/** 0.0.8: comments read per official post per re-check (author's own kept). */
+const OP_COMMENTS_LIMIT = 50
 /** After this many consecutive multipart failures the attachment is skipped
  *  for a while (plain JSON content only) so a Discord/Devvit quirk cannot
  *  double every send. */
@@ -291,9 +297,10 @@ async function runPoll(): Promise<PollResult> {
     }
   }
 
-  // 4. 0.0.7: look again at what was delivered (removals, deletions, edits).
+  // 4. 0.0.7: look again at what was delivered (removals, deletions, edits;
+  //    0.0.8: approvals and the publisher's own comments).
   try {
-    await recheckDelivered(webhook, enabled, startedAt, result)
+    await recheckDelivered(webhook, enabled, startedAt, result, users)
   } catch (err) {
     result.errors.push(describe('recheck', err))
   }
@@ -335,6 +342,35 @@ async function completeRecord(
   return full
 }
 
+/** The post author's own comments under the post (0.0.8), oldest first.
+ *  One request; failures are reported as "none" so a comment outage can
+ *  never block the liveness update. */
+async function authorComments(
+  post: Awaited<ReturnType<typeof reddit.getPostById>>,
+): Promise<OpComment[]> {
+  try {
+    const all = await post.comments.get(OP_COMMENTS_LIMIT)
+    const author = post.authorName.toLowerCase()
+    return all
+      .filter(
+        c =>
+          c.authorName.toLowerCase() === author && (c.body ?? '').trim() !== '',
+      )
+      .map(c => ({
+        id: c.id.replace(/^t1_/, ''),
+        body: c.body ?? '',
+        created: Math.floor(c.createdAt.getTime() / 1000),
+        stickied: c.stickied,
+      }))
+      .sort((a, b) => a.created - b.created)
+  } catch (err) {
+    console.error(
+      `[${post.id}] comments unavailable: ${err instanceof Error ? err.message : err}`,
+    )
+    return []
+  }
+}
+
 /** Put a delivered post on the re-check list and remember its state. */
 async function rememberSent(rec: RelayRecord): Promise<void> {
   const id = rec.id
@@ -356,17 +392,21 @@ async function rememberSent(rec: RelayRecord): Promise<void> {
 }
 
 /**
- * Look again at recently delivered posts (~10 min, 30 min, 2 h, 6 h after
- * creation) and tell the readers what Reddit shows now: one batched `v: 2`
- * update message per poll (first look always, later looks on change), and a
- * re-sent `v: 1` record (`revision` ≥ 2) when the body was edited. Readers
- * keep the newest message per id, so a re-sent record simply supersedes.
+ * Look again at recently delivered posts (~5 min, 30 min, 2 h, 6 h and 24 h
+ * after creation) and tell the readers what Reddit shows now: one batched
+ * `v: 2` update message per poll (first look always, later looks on change),
+ * and a re-sent `v: 1` record (`revision` ≥ 2, `resent` = why) when the body
+ * was edited, when a removed/filtered post became live again (approval), or
+ * when an official post's author commented (0.0.8: `opComments` in
+ * record.json). Readers keep the newest message per id, so a re-sent record
+ * simply supersedes.
  */
 async function recheckDelivered(
   webhook: string,
   enabled: boolean,
   startedAt: number,
   result: PollResult,
+  officialUsers: string[],
 ): Promise<void> {
   const now = Math.floor(Date.now() / 1000)
   await redis.zRemRangeByScore(SENT_ZSET, 0, now - RECHECK_WINDOW_SECONDS - 1)
@@ -440,18 +480,41 @@ async function recheckDelivered(
     await redis.set(stateKey(d.id), stateKeyOf(item), {expiration: ttl()})
     await redis.set(stageKey(d.id), `${d.stage}`, {expiration: ttl()})
 
-    // Edited body → re-send the complete record once per change.
-    if (item.edited && !item.deleted && !item.removed && enabled) {
+    // Re-send the complete record when the readers need it again:
+    //  • edited body (hash changed),
+    //  • approved — removed/filtered/deleted before, live now (the readers'
+    //    6 h window may have lost the original record by then),
+    //  • the publisher's own comments changed (official posts only; the
+    //    readers merge them into the post text / card).
+    if (!item.deleted && !item.removed && enabled) {
+      const reasons: string[] = []
       const hash = bodyHash(post.body ?? '')
-      const known = await redis.get(bodyHashKey(d.id))
-      if (known !== hash) {
-        const rec = toRecord(post, post.subredditName)
+      if (item.edited && (await redis.get(bodyHashKey(d.id))) !== hash)
+        reasons.push('edited')
+      if (becameLive(previous, item)) reasons.push('approved')
+      let opComments: OpComment[] | null = null
+      let ocHash = ''
+      const rec = toRecord(post, post.subredditName)
+      if (isOfficialRecord(rec, officialUsers)) {
+        opComments = await authorComments(post)
+        ocHash = opCommentsHash(opComments)
+        if (opComments.length > 0 && (await redis.get(`oc:${d.id}`)) !== ocHash)
+          reasons.push('comments')
+      }
+      if (reasons.length > 0) {
         rec.revision =
           (Number((await redis.get(`rev:${d.id}`)) ?? '1') || 1) + 1
+        rec.resent = reasons.join('+')
+        if (opComments && opComments.length > 0)
+          rec.opCommentCount = opComments.length
         const full = await completeRecord(rec, result)
+        if (opComments && opComments.length > 0) full.opComments = opComments
         if ((await deliver(webhook, rec, full)) === 'ok') {
           await redis.set(bodyHashKey(d.id), hash, {expiration: ttl()})
-          await redis.set(`rev:${d.id}`, `${rec.revision}`, {expiration: ttl()})
+          if (ocHash) await redis.set(`oc:${d.id}`, ocHash, {expiration: ttl()})
+          await redis.set(`rev:${d.id}`, `${rec.revision}`, {
+            expiration: ttl(),
+          })
           result.resent++
         }
       }
