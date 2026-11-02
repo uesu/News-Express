@@ -7,12 +7,13 @@ app's Directory page; everything an operator needs is here instead.
 
 The relay is **not part of the engine**. `sync_prod.yml` copies `testing area/**` and
 `tests/**` only, so nothing in `devvit/` reaches the production repositories, and the
-engine does not read the intake channel yet (see "Roadmap" at the end).
+engine reads the intake channel through its own code in `testing area/reddit_main_v3.py`
+(§9), which *is* synced.
 
 ## 1. What it does
 
 ```
-Reddit scheduler (cron */2 * * * *)
+Reddit scheduler (cron */5 * * * *; */2 before 0.0.6)
    │  POST /internal/scheduler/poll
    ▼
 gaming-express (runs on Reddit's servers)
@@ -21,9 +22,9 @@ gaming-express (runs on Reddit's servers)
    │     reddit.getPostsByUser({username, sort:'new'}) for each official account
    │  3. first poll per target = bootstrap: remember the newest 25 ids, send nothing
    │  4. skip ids already in Redis (seen:<id>, 7-day TTL)
-   │  5. oldest-first, once per id, max 10 per poll: POST to the Discord webhook
+   │  5. oldest-first, once per id, max 15 per poll: POST to the Discord webhook
    ▼
-#reddit-intake (private Discord channel): one ```json block per post
+intake channel (private Discord channel of your choice): one ```json block per post
 ```
 
 | Outcome | What the app does |
@@ -83,8 +84,10 @@ Messages are sent with `allowed_mentions: {parse: []}`, so a title can never pin
 | `officialUsers` | `genshinimpact,HonkaiStarRail,HonkaiNexusAnima` — the verified accounts that actually post (audit below). Optional: every one of them posts only into its own subreddit, which is already in `subreddits`, so this is a second path, not the only one. May be left empty. |
 | `relayEnabled` | `true` |
 
-12 subreddit calls + 3 account calls every 2 minutes ≈ 7.5 requests/min, far inside the
-platform's 100 requests/min budget.
+12 subreddit calls + 3 account calls every 5 minutes = 3 requests/min, far inside the
+platform's 100 requests/min budget (0.0.6; the 2-minute cadence of 0.0.1–0.0.5 was ≈ 7.5/min
+and ran for a day with `0 failed` — 5 minutes matches the engines' own cron and leaves even
+more headroom). Up to 15 Discord sends per poll; anything beyond waits for the next tick.
 
 ### Publisher-account audit (Arctic Shift archive + live profiles, 2026-11-02)
 
@@ -113,8 +116,12 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
   `node -v` and `npm -v`.
 - A Reddit account that owns a **private subreddit** used only as the install target
   (`r/GamingExpressRelay`). Nothing is ever posted there.
-- A private Discord channel (`#reddit-intake`) with one webhook. Copy the URL; never paste
-  it into a file or a public channel.
+- A private Discord channel for the records (the **intake channel** — any name; the owner
+  started with `#reddit-intake` and moved to `#modlogs`) with one webhook. Copy the URL;
+  never paste it into a file or a public channel. Other bots may write to the same channel
+  (the readers skip every message that is not a relay record), but keep it reasonably quiet:
+  the readers page newest-first through at most 800 messages per run, so a very busy
+  channel only shortens the 6-hour look-back, it never hides fresh records.
 - `npx devvit login` once (opens the browser, links the CLI to the Reddit account).
 
 ## 3. Fresh deploy or update (same procedure every time)
@@ -174,7 +181,7 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
    npx devvit logs GamingExpressRelay
    ```
 
-   Expected line every 2 minutes:
+   Expected line every 5 minutes (every 2 minutes before 0.0.6):
 
    ```
    poll: 12 subs, 3 users, N fetched, 0 sent, N seen, 0 failed, N bootstrapped
@@ -210,7 +217,7 @@ Subreddit menu on `r/GamingExpressRelay` (`…` → **[Gaming Express] Poll now*
 | `upload` → `settings.global.<key> is not exactly one from …` | `devvit.json` schema violation (for example `isSecret: true` together with `defaultValue`). The unit test guards the known case; validate against `node_modules/@devvit/shared-types/schemas/config-file.v1.json`. |
 | `install` → `Something went wrong…` | Transient on Reddit's side on a brand-new subreddit; retry once. |
 | logs: `intakeWebhook is empty or not a discord.com webhook URL — polling only` | Secret not set (or not a `discord.com/api/webhooks` URL). Set it; no posts are lost — they are remembered, not sent. |
-| the same post arrives every 2 minutes | Was the v0.0.1 defect (Redis key spelling). Fixed in 0.0.2; upgrade. |
+| the same post arrives on every poll | Was the v0.0.1 defect (Redis key spelling). Fixed in 0.0.2; upgrade. |
 | `relayEnabled` set to `false` but posts keep arriving | Was the v0.0.2 defect (string `"false"`). Fixed in 0.0.3; upgrade. |
 | `poll:` shows `issue(s): r/<sub>: …` | That target failed this poll (private/banned subreddit, typo, API hiccup); the others continue. Check the name with `settings list`. |
 
@@ -239,15 +246,17 @@ Node.js › Uninstall → delete `%USERPROFILE%\.devvit`, `%APPDATA%\npm`,
 | 0.0.3 | 2026-11-01 | `relayEnabled` accepts the CLI's text `"false"`; `officialUsers` setting (`getPostsByUser`); Game-Express subreddits and accounts in the defaults; in-poll de-dup across targets; `dev.subreddit` pinned; generic Directory readme; this document. Reached Reddit as **`0.0.2`** on 2026-11-01 20:20Z after a ~10 h server-side upload fault (0.0.2 itself never uploaded, so Reddit's counter is one behind this table). |
 | 0.0.4 | 2026-11-02 | intake record gains `distinguished` (`"moderator"`/`"admin"`/`null`); documented how official Wuthering Waves content reaches the relay (`Official News` flair on `r/WutheringWaves`, no publisher account, `officialUsers` unchanged); Biome schema 2.6.4; troubleshooting entries for the upload fault. Uploads as Reddit **`0.0.3`**. |
 | 0.0.5 | 2026-11-02 | `officialUsers` default trimmed to the verified, active accounts (`genshinimpact,HonkaiStarRail,HonkaiNexusAnima`); dormant `u/ZZZ_Official` / `u/AnantaOfficial` dropped (publisher-account audit above); setting documented as optional. Settings persist, so existing installs must re-pin `officialUsers` (§3 step 5). Uploads as Reddit **`0.0.4`**. |
+| 0.0.6 | 2026-11-02 | poll cadence 2 → **5 minutes** (owner's choice, matching the 5-minute engine crons; 3 requests/min); per-poll send cap 10 → 15 so the per-minute ceiling is unchanged. No record-format change. Uploads as Reddit **`0.0.5`**. |
 
 ## 9. News-Express reader (round 101 — the relay as the primary listing)
 
-Since round 101 the Reddit engine (`testing area/reddit_main_v3.py`) reads `#reddit-intake`
+Since round 101 the Reddit engine (`testing area/reddit_main_v3.py`) reads the intake channel
 back **before** the combined feed. While the relay is healthy (HTTP 200 and the newest
 message younger than `INTAKE_STALE_SECONDS`, default 1800 s) the relay is the listing and the
 RSS / redlib / Arctic sweep is skipped; in every other state the run logs one
 `INTAKE-FALLBACK: relay <status> (<why>)` line and the old chain runs exactly as before.
-Record of the design: [`docs/history/ROUND_101.md`](history/ROUND_101.md).
+Record of the design: [`docs/history/ROUND_101.md`](history/ROUND_101.md); shared-channel
+paging and freshness rules: [`docs/history/ROUND_102.md`](history/ROUND_102.md).
 
 ### One-time setup (owner; nothing changes until both the secret and the Variable exist)
 
@@ -257,10 +266,10 @@ Record of the design: [`docs/history/ROUND_101.md`](history/ROUND_101.md).
    without it the API returns webhook-authored messages with an empty `content`.
 2. **Invite.** *OAuth2* → *URL Generator* → scope `bot` → bot permissions **View Channels** and
    **Read Message History** → open the generated URL → pick the Citlali News server → Authorize.
-3. **Channel permission.** `#reddit-intake` is private: channel → *Edit Channel* →
+3. **Channel permission.** The intake channel is private: channel → *Edit Channel* →
    *Permissions* → add the bot (or its role) → allow *View Channel* and *Read Message History*.
 4. **Channel id.** Discord → *User Settings* → *Advanced* → *Developer Mode* on → right-click
-   `#reddit-intake` → *Copy Channel ID* (a 17–20-digit number).
+   the intake channel → *Copy Channel ID* (a 17–20-digit number).
 5. **Prod repo `uesu/7jkxmy9nvbc`.** *Settings → Secrets and variables → Actions*:
    - Secret `DISCORD_BOT_TOKEN` = the token from step 1.
    - Variable `INTAKE_CHANNEL_ID` = the id from step 4.
@@ -289,6 +298,7 @@ Record of the design: [`docs/history/ROUND_101.md`](history/ROUND_101.md).
 | `relay ok` but `0 record(s) for this engine` every run | records arrive with empty `content` ⇒ Message Content Intent off (step 1), or the `sub` names do not match `SUBREDDITS` |
 | `relay stale (newest relay message is N s old)` | the relay is paused (`relayEnabled=false`), uninstalled, or Reddit is quiet; `npx devvit logs GamingExpressRelay` — harmless either way, the old chain ran |
 | `relay empty` | no message in the lookback window at all — same causes as stale |
+| `relay empty (N message(s) in the last 360 min but none is a relay record …)` | the bot sees the channel but no relay record: Message Content Intent off (step 1), wrong channel id, or the relay webhook (`intakeWebhook`) still points at the old channel — `npx devvit settings set intakeWebhook` |
 
 ## 10. Roadmap (each step its own PR, none started without an explicit go)
 
@@ -297,10 +307,11 @@ Record of the design: [`docs/history/ROUND_101.md`](history/ROUND_101.md).
 2. ~~**News-Express intake reader**~~ — done in round 101 (§9). Relay 0.0.6 candidates if the
    reader needs them: a heartbeat record (exact staleness), a long-body attachment
    (bodies above the message budget arrive truncated today).
-3. **Game-Express** — `RedditClient.user()` / `subreddit()` read the same channel before
-   the redlib fleet; records with `sub: u_<account>` / the game subreddits map onto the
-   existing `allowed_subs` / `allowed_authors` filters. Delivered as a PR handoff with the
-   full diff once step 2 has proven itself.
+3. ~~**Game-Express**~~ — delivered in round 102 as a `git am`-able patch plus
+   description: `docs/handoffs/GAME_EXPRESS_INTAKE_READER.md`. `RedditClient._gather_listing()`
+   asks the reader first; `u/<account>` listings are served from records whose `author` is
+   that account (records carry the real subreddit in `sub`), subreddit listings per `sub`;
+   the same two settings activate it in `uesu/8mqzv4k2n7c`.
 4. Optional relay additions if the readers need them: author follow-up comments
    (Game-Express merges the publisher's own comment), post edits/removals as update
    records.

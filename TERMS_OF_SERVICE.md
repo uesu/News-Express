@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Effective date:** October 24, 2026
+**Effective date:** November 2, 2026
 **Applies to:** the *News Express* / *Citlali News* X (Twitter) + Reddit → Discord monitor
 ("the Service"), an open-source, self-hosted automation tool.
 
@@ -16,7 +16,11 @@ not use the Service.
 A set of open-source Python scripts that fetch **public** X/Twitter and Reddit content via RSS/API
 mirrors and repost links, text excerpts, and media into Discord channels **you control**, using
 Discord webhooks triggered from your own GitHub repository. There is no hosted bot and no service
-operated by the author on your behalf — you run your own instance.
+operated by the author on your behalf — you run your own instance. Optionally (round 101) you may
+also install the included *Gaming Express* relay app on Reddit's Developer Platform under your own
+Reddit account; it writes public post records into a private Discord channel of yours, which the
+Reddit monitor reads back with a bot token you create. Both halves run under your accounts and
+Reddit's and Discord's developer terms apply to you as the operator.
 
 The Reddit V3 monitor's dead-post retraction feature is **disabled by default**. If you enable
 `RETRACT_DEAD_POSTS`, the monitor requests Discord message IDs (`wait=true`), stores the public card
@@ -49,7 +53,9 @@ You agree NOT to use the Service to:
 
 ## 4. Third-Party Dependencies
 
-The Service depends on free/community-run third parties — Nitter mirrors, Redlib (public Reddit
+The Service depends on free/community-run third parties — Reddit's Developer Platform (Devvit),
+which hosts the optional *Gaming Express* relay under your own Reddit account and whose developer
+terms govern that app; Discord's bot API for the optional intake reader; Nitter mirrors, Redlib (public Reddit
 RSS, post pages, and — when the optional retraction seatbelt is enabled — the public `/new`
 listings it reads to confirm a delivered post is still visible, including reddit.com's
 token-authenticated per-subreddit RSS listing (round 38e); the former pristine listing

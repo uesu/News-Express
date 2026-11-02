@@ -27,11 +27,12 @@ import {
 // Tunables
 // ---------------------------------------------------------------------------
 
-/** Newest posts fetched per subreddit per poll. 2-min polls on leak subs
- *  never see more than a handful; 25 covers a burst with margin. */
+/** Newest posts fetched per subreddit per poll. 5-min polls (0.0.6; 2-min
+ *  before) on leak subs never see more than a handful; 25 covers a burst. */
 const LISTING_LIMIT = 25
-/** Hard cap on Discord sends per poll — the rest is picked up next tick. */
-const MAX_SENDS_PER_POLL = 10
+/** Hard cap on Discord sends per poll — the rest is picked up next tick.
+ *  15 at 5-minute polls (was 10 at 2-minute polls): same ceiling per minute. */
+const MAX_SENDS_PER_POLL = 15
 /** De-dup markers outlive the 48 h News-Express window by a wide margin. */
 const SEEN_TTL_SECONDS = 7 * 24 * 3600
 /** Give up on a post after this many delivery failures. */
@@ -169,7 +170,7 @@ async function runPoll(): Promise<PollResult> {
 
   // 1. Fetch all listings concurrently: one call per subreddit (`/new`) and one
   //    per official account (`u/<name>` submitted, newest first). 12 + 3 calls
-  //    every 2 minutes is well inside the 100 QPM budget.
+  //    every 5 minutes (3/min) is far inside the 100 QPM budget.
   type Listing = {
     target: string
     sub: string | null

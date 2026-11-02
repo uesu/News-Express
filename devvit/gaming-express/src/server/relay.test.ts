@@ -218,7 +218,7 @@ test('devvit.json: secret settings carry no defaultValue (upload schema rule)', 
 test('redis keys: listing id (t3_x) and record id (x) map to the same marker', () => {
   // v0.0.1 defect: bootstrap/lookup keyed on `t3_1xkvvda`, the post-send
   // marker on `1xkvvda` — the marker never matched and the same post was
-  // relayed on every 2-minute poll (observed 2026-11-01 14:21→14:27 PHT).
+  // relayed on every poll (observed 2026-11-01 14:21→14:27 PHT on 2-minute polls).
   assert.equal(bareId('t3_1xkvvda'), '1xkvvda')
   assert.equal(bareId('1xkvvda'), '1xkvvda')
   assert.equal(seenKey('t3_1xkvvda'), seenKey('1xkvvda'))

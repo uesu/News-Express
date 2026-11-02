@@ -2572,9 +2572,9 @@ class _ArcticEntry:
 # ■ ROUND 101 (2026-11-02): DEVVIT RELAY INTAKE — PRIMARY DISCOVERY PATH
 # Reddit retires RSS on 2026-11-13 and anonymous JSON already answers 403
 # (since 2026-10-20). The Devvit app "Gaming Express" (devvit/gaming-express)
-# runs INSIDE Reddit, polls every configured subreddit's /new each minute and
-# relays one fenced-JSON record per post to the private Discord channel
-# #reddit-intake. This block reads that channel back and turns each record
+# runs INSIDE Reddit, polls every configured subreddit's /new every 5 minutes
+# and relays one fenced-JSON record per post to a private Discord intake
+# channel. This block reads that channel back and turns each record
 # into a feed-like entry, so the rest of the engine (dedup, holds, liveness,
 # media resolution, Components v2 card) runs UNCHANGED.
 #
@@ -2601,7 +2601,7 @@ class _ArcticEntry:
 #     window — the same "listed again, re-probed again" behaviour the 100-entry
 #     RSS window gave. Older holds are reclaimed by the round-98 archive path.
 #   * The reader is credentials-light: ONE bot token (DISCORD_BOT_TOKEN, repo
-#     secret) with View Channel + Read Message History on #reddit-intake and
+#     secret) with View Channel + Read Message History on the intake channel and
 #     the Message Content intent enabled. The token travels only in the
 #     Authorization header; it is never logged or written anywhere.
 # ---------------------------------------------------------------------------
@@ -2766,7 +2766,7 @@ def intake_base_data(entry) -> dict:
 
 
 async def fetch_intake_records(session: aiohttp.ClientSession, now: float) -> dict:
-    """Read #reddit-intake back. Never raises.
+    """Read the intake channel back. Never raises.
 
     Returns {"status": ok|stale|empty|unconfigured|http_<n>|error,
              "records": [rec…] (newest first, this engine's subreddits only),
@@ -2789,11 +2789,17 @@ async def fetch_intake_records(session: aiohttp.ClientSession, now: float) -> di
     url = f"https://discord.com/api/v10/channels/{INTAKE_CHANNEL_ID}/messages"
     headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}",
                "User-Agent": "News-Express intake reader (+https://github.com)"}
-    after = _snowflake_from_epoch(now - INTAKE_LOOKBACK_SECONDS)
+    # Round 102: newest-first paging (`before`), so a shared channel (the
+    # owner moved the relay into #modlogs next to other bots) can only ever
+    # truncate the OLD end of the window, never the fresh records.
+    cutoff = _snowflake_from_epoch(now - INTAKE_LOOKBACK_SECONDS)
+    before = None
     messages = []
     try:
         for _page in range(INTAKE_MAX_PAGES):
-            params = {"limit": "100", "after": str(after)}
+            params = {"limit": "100"}
+            if before is not None:
+                params["before"] = str(before)
             async with session.get(url, params=params, headers=headers,
                                    timeout=aiohttp.ClientTimeout(total=12)) as resp:
                 out["pages"] += 1
@@ -2812,10 +2818,11 @@ async def fetch_intake_records(session: aiohttp.ClientSession, now: float) -> di
                 out["detail"] = "non-list response"
                 return out
             page = [m for m in page if isinstance(m, dict) and str(m.get("id") or "").isdigit()]
-            messages.extend(page)
-            if len(page) < 100:
+            in_window = [m for m in page if int(m["id"]) >= cutoff]
+            messages.extend(in_window)
+            if len(page) < 100 or len(in_window) < len(page):
                 break
-            after = max(int(m["id"]) for m in page)
+            before = min(int(m["id"]) for m in page)
     except asyncio.CancelledError:
         raise
     except Exception as e:  # network/timeout/json — fall back, never fail the run
@@ -2824,16 +2831,20 @@ async def fetch_intake_records(session: aiohttp.ClientSession, now: float) -> di
         return out
 
     messages.sort(key=lambda m: int(m["id"]), reverse=True)
-    if messages:
-        newest = _epoch_from_snowflake(messages[0]["id"])
-        if newest is not None:
-            out["newest_age"] = max(0, int(now - newest))
     records, by_id = [], {}
     for m in messages:
         rec = parse_intake_record(m.get("content"))
         if not rec:
             continue
         out["seen"] += 1
+        # Freshness is measured on RELAY RECORDS only: in a shared channel a
+        # fresh message from another bot must not vouch for a silent relay,
+        # and webhook messages returned with an empty `content` (Message
+        # Content Intent missing) must not count as a healthy relay either.
+        if out["newest_age"] is None:
+            newest = _epoch_from_snowflake(m["id"])
+            if newest is not None:
+                out["newest_age"] = max(0, int(now - newest))
         sub = _subreddit_by_name(rec["sub"])
         if not sub or rec["id"] in by_id:
             continue
@@ -2845,6 +2856,12 @@ async def fetch_intake_records(session: aiohttp.ClientSession, now: float) -> di
     if not messages:
         out["status"] = "empty"
         out["detail"] = f"no messages in the last {INTAKE_LOOKBACK_SECONDS // 60} min"
+    elif not out["seen"]:
+        out["status"] = "empty"
+        out["detail"] = (f"{len(messages)} message(s) in the last "
+                         f"{INTAKE_LOOKBACK_SECONDS // 60} min but none is a relay record "
+                         f"(Message Content Intent off, wrong channel id, or the relay "
+                         f"webhook points elsewhere)")
     elif out["newest_age"] is not None and out["newest_age"] > INTAKE_STALE_SECONDS:
         out["status"] = "stale"
         out["detail"] = (f"newest relay message is {out['newest_age']} s old "

@@ -11999,7 +11999,7 @@ check("r100: heal_unresolved_media returns the still-unresolved tuples and main(
 
 # ---- Round 101 (2026-11-02): the Devvit relay is the primary Reddit listing ----
 # Reddit retires RSS on 2026-11-13. The relay app (devvit/gaming-express) writes
-# one fenced-JSON record per new post into #reddit-intake; the engine reads the
+# one fenced-JSON record per new post into the intake channel; the engine reads the
 # channel back with a bot token and skips the RSS/redlib/archive chain while the
 # relay is healthy. Every proof below runs offline against a fake Discord API.
 _r101_src = open(os.path.join(ROOT, "testing area", "reddit_main_v3.py"), encoding="utf-8").read()
@@ -12134,9 +12134,9 @@ class _R101Session:
         self.calls.append((url, dict(kw.get("params") or {}), dict(kw.get("headers") or {})))
         if self.status != 200:
             return _R101Resp(self.status, {"message": "Missing Access"})
-        after = int(kw["params"]["after"])
-        page = [m for m in self.messages if int(m["id"]) > after]
-        page.sort(key=lambda m: int(m["id"]))
+        before = kw["params"].get("before")
+        page = [m for m in self.messages if before is None or int(m["id"]) < int(before)]
+        page.sort(key=lambda m: int(m["id"]), reverse=True)   # Discord: newest first
         return _R101Resp(200, page[:100])
 
 
@@ -12166,9 +12166,10 @@ async def _r101_reader(messages=None, status=200, **env):
             setattr(v3, k, val)
 
 _r101_ok, _r101_s = asyncio.run(_r101_reader(_r101_msgs(3, 40) + [{"id": str(v3._snowflake_from_epoch(_r101_now - 10)), "content": "note"}]))
-check("r101 reader: healthy channel -> status ok, newest age from the snowflake, only this "
-      "engine's subreddits kept, bot token only in the Authorization header",
-      _r101_ok["status"] == "ok" and _r101_ok["newest_age"] == 10
+check("r101 reader: healthy channel -> status ok, newest age from the newest RECORD's snowflake "
+      "(a plain note is ignored), only this engine's subreddits kept, bot token only in the "
+      "Authorization header",
+      _r101_ok["status"] == "ok" and _r101_ok["newest_age"] == 40
       and len(_r101_ok["records"]) == 3 and _r101_ok["seen"] == 3
       and _r101_s.calls[0][0] == "https://discord.com/api/v10/channels/1430000000000000000/messages"
       and _r101_s.calls[0][2].get("Authorization") == "Bot tok"
@@ -12184,10 +12185,31 @@ check("r101 reader: stale (newest older than INTAKE_STALE_SECONDS), empty, HTTP 
       and asyncio.run(_r101_reader(_r101_msgs(3, 40), DISCORD_BOT_TOKEN=""))[0]["status"] == "unconfigured"
       and asyncio.run(_r101_reader(_r101_msgs(3, 40), INTAKE_READER="off"))[0]["status"] == "off")
 _r101_many, _r101_s2 = asyncio.run(_r101_reader(_r101_msgs(230, 40)))
-check("r101 reader: pages with `after` (100 per page, bounded by INTAKE_MAX_PAGES) and dedups by id",
+check("r101 reader: pages newest-first with `before` (100 per page, bounded by INTAKE_MAX_PAGES), "
+      "stops at the lookback cutoff and dedups by id",
       _r101_many["status"] == "ok" and len(_r101_many["records"]) == 230
       and len(_r101_s2.calls) == 3 and v3.INTAKE_MAX_PAGES == 8
-      and int(_r101_s2.calls[1][1]["after"]) > int(_r101_s2.calls[0][1]["after"]))
+      and "before" not in _r101_s2.calls[0][1]
+      and int(_r101_s2.calls[2][1]["before"]) < int(_r101_s2.calls[1][1]["before"]))
+# r102 — the relay moved into the owner's shared #modlogs (other bots write there too);
+# the reader pages newest-first and measures freshness on relay records only.
+_r102_noise = [{"id": str(v3._snowflake_from_epoch(_r101_now - 5 - i)), "content": f"wick: join log {i}"}
+                for i in range(150)]
+_r102_shared = asyncio.run(_r101_reader(_r102_noise + _r101_msgs(3, 40)))[0]
+check("r102 reader: in a shared channel the newest relay RECORD sets the age (a fresh message "
+      "from another bot does not vouch for the relay) and noise is skipped",
+      _r102_shared["status"] == "ok" and _r102_shared["newest_age"] == 40
+      and len(_r102_shared["records"]) == 3 and _r102_shared["seen"] == 3)
+check("r102 reader: other bots chatting while the relay is silent -> stale -> old chain",
+      asyncio.run(_r101_reader(_r102_noise + _r101_msgs(3, 5000)))[0]["status"] == "stale")
+_r102_blank = asyncio.run(_r101_reader([{"id": m["id"], "content": ""} for m in _r101_msgs(5, 40)]))[0]
+check("r102 reader: messages whose content comes back empty (Message Content Intent off) are "
+      "'empty' with the hint, never a healthy relay with zero posts",
+      _r102_blank["status"] == "empty" and "Message Content Intent" in _r102_blank["detail"]
+      and _r102_blank["newest_age"] is None)
+_r102_old = asyncio.run(_r101_reader(_r101_msgs(3, 40) + _r101_msgs(2, v3.INTAKE_LOOKBACK_SECONDS + 600)))
+check("r102 reader: messages older than INTAKE_LOOKBACK_SECONDS are dropped and end the paging",
+      len(_r102_old[0]["records"]) == 3 and len(_r102_old[1].calls) == 1)
 _r101_main = inspect.getsource(v3.main)
 check("r101 main: the relay is read BEFORE the combined feed; `ok` in primary mode makes it the "
       "listing (combined request, per-sub fallback and archive sweep skipped, status 'relay'); "
@@ -12222,13 +12244,13 @@ check("r101: the summary learns the outcome through the existing settings line (
                                                  "pages", "detail"}
       and "_intake_line(intake)" in inspect.getsource(v3._settings_line))
 # r101b — first live records (owner screenshots, 2026-11-02 06:27–07:15 PHT).
-_r101b_inline = dict(_r101_rec, id="1xlh3fw", media=[], url="https://www.reddit.com/r/Genshin_Impact/comments/1xlh3fw/x/",
+_r102_inline = dict(_r101_rec, id="1xlh3fw", media=[], url="https://www.reddit.com/r/Genshin_Impact/comments/1xlh3fw/x/",
                      body="https://preview.redd.it/fg9aonrlz2zh1.png?width=1805&format=png&auto=webp&s=3f05\n\n"
                           "https://preview.redd.it/d6jmman303zh1.png?width=1809&format=png&auto=webp&s=7efc\n\nhot take")
 check("r101b: inline rich-text images in a text post's markdown body (live 1xlh3fw, 1xlgs9j) reach "
       "the native extractor like RSS anchors did; gallery records keep their media[] order",
       [m["url"] for m in v3.extract_native_media(
-          v3.intake_base_data(v3._IntakeEntry(_r101b_inline, "1"))["content_html"])]
+          v3.intake_base_data(v3._IntakeEntry(_r102_inline, "1"))["content_html"])]
       == ["https://preview.redd.it/fg9aonrlz2zh1.png?width=1805&format=png&auto=webp&s=3f05",
           "https://preview.redd.it/d6jmman303zh1.png?width=1809&format=png&auto=webp&s=7efc"]
       and [m["url"] for m in v3.extract_native_media(v3.intake_content_html(

@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased — Round 102: shared intake channel, 5-minute relay, Game-Express hand-off (2026-11-02)
+
+`testing area/reddit_main_v3.py` (`fetch_intake_records()` only), `tests/test_smoke.py`,
+`devvit/gaming-express` 0.0.6, docs/policies, `docs/handoffs/`. No card, cache or Twitter change.
+Full record: [`docs/history/ROUND_102.md`](history/ROUND_102.md).
+
+- **Reader in a shared channel:** the owner moved the relay webhook into `#modlogs`. The reader
+  now pages newest-first (`before=`), stops at the lookback cutoff, and measures freshness on
+  relay records only — a busy channel can shorten the 6-hour window but never hide fresh records,
+  and another bot's message (or a webhook message whose `content` arrives empty because the
+  Message Content Intent is off) can no longer vouch for a silent relay. Messages without a
+  single record → `empty` with the hint "Message Content Intent off, wrong channel id, or the
+  relay webhook points elsewhere".
+- **Devvit relay 0.0.6:** poll `*/2` → `*/5` (owner's choice; 3 requests/min), per-poll send cap
+  10 → 15 (per-minute ceiling unchanged), no record change. Uploads as Reddit **0.0.5**.
+- **Game-Express hand-off:** [`docs/handoffs/GAME_EXPRESS_INTAKE_READER.md`](handoffs/GAME_EXPRESS_INTAKE_READER.md)
+  + `git am`-able patch — same reader rules, same two settings, `RedditClient._gather_listing()`
+  relay-first with per-target fallback; verified against Game-Express `main` @ `1d133c3`
+  (smoke 626/626, new suite 5/5, ruff, production-shape checkout).
+- **Docs audit:** every `#reddit-intake` / "every 2 minutes" / "Game-Express does not read it
+  yet" statement replaced across README, AGENTS, privacy (effective 2026-11-02), terms,
+  `.env.example`, `docs/DEVVIT_SETUP.md` (§9 troubleshooting rows, §10 step 3 closed),
+  `devvit/README.md`, workflow/engine comments.
+- Tests: four `r102 reader:` guards; three suites ALL PASS (also in a `sync_tree()` production checkout).
+
 ## Unreleased — Round 101: the Devvit relay is the primary Reddit listing (2026-11-02)
 
 `testing area/reddit_main_v3.py`, `.github/workflows/reddit_monitor.yml` (env only),

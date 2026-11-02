@@ -68,7 +68,7 @@ cache policy, or media requests, and missing data is reported as
 explicitly labelled).
 
 Since round 101 (2026-11-02) the listing itself comes from the **Devvit relay**: the
-engine reads `#reddit-intake` back (secret `DISCORD_BOT_TOKEN`, Variables
+engine reads the intake channel back (secret `DISCORD_BOT_TOKEN`, Variables
 `INTAKE_CHANNEL_ID`, `INTAKE_READER=primary|shadow|off`, `INTAKE_STALE_SECONDS=1800`,
 `INTAKE_LOOKBACK_SECONDS=21600`). The run result carries an `intake` object
 (`status`, `mode`, `records_in_window`, `records_for_this_engine`, `newest_age_seconds`,

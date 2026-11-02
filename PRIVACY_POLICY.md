@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective date:** October 25, 2026
+**Effective date:** November 2, 2026
 **Applies to:** the *News Express* / *Citlali News* X (Twitter) + Reddit → Discord monitor
 ("the Service"), an open-source, self-hosted automation tool.
 
@@ -11,7 +11,12 @@
 The Service is a set of Python scripts that run on **your own GitHub repository** (GitHub Actions)
 and post new public X/Twitter and Reddit items into **your own Discord channels** via Discord
 webhooks. There is no hosted bot account, no gateway connection, no dashboard, and no central server
-operated by the author.
+operated by the author. Since round 101 (November 2026) the Reddit monitor can additionally read
+**one private Discord channel you designate** (the *intake channel*) with a bot token you create,
+over the REST API only, to collect the JSON post records written there by the optional
+*Gaming Express* Devvit relay (`devvit/gaming-express`, an app you install on Reddit's Developer
+Platform under your own Reddit account). Messages in that channel that are not relay records are
+skipped and never stored.
 
 **Short version:** the Service does not collect Discord member data, operator analytics, or account credentials. It necessarily processes **public post content** (which a public poster may choose to include personal information in), stores small delivery-state records, and sends rendered public content to the Discord webhooks you configure.
 
@@ -23,7 +28,7 @@ operated by the author.
 |---|---|---|---|
 | Delivery-state records: post/tweet IDs (e.g. `TYPEII_EN_2098063866303504597`), pending reasons, and proxy health | `posted_tweets.json`, `posted_reddit.json`, `pending_reddit.json`, and `proxy_health.json` **inside your own repository**, committed by `github-actions[bot]` | Deduplication, safe re-checks, and proxy fallback health | GitHub and anyone who can access your repository; a public repository makes these records public. They do not contain Discord member data or webhook URLs. |
 | Retraction and long-body delivery records: Reddit post path, Discord message IDs, timestamps, rendered payloads, continuation progress, retry times and reconciliation holds | `posted_messages.json` **inside your own repository**, used for long-body continuations even when retraction is disabled, and committed by `github-actions[bot]` | Resumes confirmed-unsent text pages and supports optional retraction. Completed records use `RETRACT_WINDOW_SECONDS` retention from their final page; unfinished continuation records remain until completed or reconciled. Marked retracted records are removed | GitHub and anyone who can access your repository; a public repository makes these records public. The payload is the same public card sent to Discord and does not contain member data or webhook URLs. |
-| Webhook URLs, API keys & optional feed/RSS tokens | GitHub **encrypted repository secrets** in *your* repository | Authentication to Discord, EmbedEZ, Reddit, or a token-gated mirror | GitHub stores the secrets. A value is sent only to its intended service when needed (for example, a webhook to Discord, a Reddit feed token to Reddit, or the Nitter token to miningtcup); the Service must not intentionally publish it. Output redaction and GitHub masking are safeguards, not guarantees; review logs before sharing them. |
+| Webhook URLs, API keys, the optional intake-reader bot token (`DISCORD_BOT_TOKEN`) & optional feed/RSS tokens | GitHub **encrypted repository secrets** in *your* repository | Authentication to Discord, EmbedEZ, Reddit, or a token-gated mirror | GitHub stores the secrets. A value is sent only to its intended service when needed (for example, a webhook to Discord, a Reddit feed token to Reddit, or the Nitter token to miningtcup); the Service must not intentionally publish it. Output redaction and GitHub masking are safeguards, not guarantees; review logs before sharing them. |
 | Public post content (titles, text, author names/handles, media URLs, stats) | Processed **in memory** during a run; rendered content is retained by the Discord channel under your control | Rendering the Discord message | Discord receives the rendered public content through the webhook(s) you configure. Relevant source services receive the public URL/account/subreddit requested. |
 
 No analytics, no tracking, no cookies, no separate database, no telemetry, and no advertising are added by this project.
@@ -32,8 +37,11 @@ No analytics, no tracking, no cookies, no separate database, no telemetry, and n
 
 ## 3. Data the Service Does NOT Collect
 
-* Discord user information (usernames, IDs, messages of server members) — the Service cannot read
-  any of it; webhook access is limited to the bot’s own generated cards (create/read/edit/delete), not Discord members’ messages.
+* Discord user information (usernames, IDs, messages of server members) — webhook access is limited
+  to the bot’s own generated cards (create/read/edit/delete). The optional intake reader (round 101)
+  reads only the one channel whose id you configure, keeps only the relay's JSON post records from
+  it (public Reddit post data) in memory for the run, and discards everything else; the bot you
+  create for it needs no permission beyond *View Channel* and *Read Message History* on that channel.
 * X/Twitter or Reddit account credentials — only **public** posts are fetched via public RSS/API
   endpoints; no login is used or stored. (The optional Reddit *feed token* is a public-read
   credential for RSS only — it grants no access to your account, DMs, or profile, and can be
@@ -53,6 +61,8 @@ public URL being looked up):
 |---|---|---|
 | **GitHub Actions** | Hosts and runs the scripts | https://docs.github.com/en/site-policy/privacy-policies |
 | **Discord (webhooks)** | Delivers generated messages and returns their IDs. Recovery reads/edits only these generated cards; long-body progress records confirmed page IDs. Optional dead-post retraction may edit/delete its card after two removal signals | https://discord.com/privacy |
+| **Discord (bot REST API, optional, round 101)** | Reads the operator-designated intake channel (`GET /channels/<id>/messages`, up to 800 messages per run) to collect the Devvit relay's post records; nothing is written through the bot | https://discord.com/privacy |
+| **Reddit Developer Platform (Devvit), optional** | Hosts the *Gaming Express* relay app under the operator's own Reddit account: it polls the public `/new` listings of the configured subreddits and accounts with Reddit's own API and stores only post ids (7-day de-duplication markers) and poll counters in the app's Redis | https://www.reddit.com/policies/privacy-policy |
 | **Nitter mirrors** | Public RSS feeds for X/Twitter | per-instance |
 | **Redlib** | Reddit RSS fallback mirrors and (Reddit V3) best-effort **post-page** fetches for multi-photo galleries, liveness checks, and on-demand test posts. This includes the current 25-member fleet — `www.reddit.com` + `old.reddit.com` + token-gated `redlib.miningtcup.me` plus community instances `redlib.catsarch.com`, `redlib.privacyredirect.com`, `snoo.habedieeh.re`, `redlib.tiekoetter.com`, `redlib.nohost.network`, `redlib-1/2.privadency.com`, `reddit.idevicehacked.com`, `red.artemislena.eu`, `rl.awy.one`, `redlib.kylrth.com`, `redlib.freedit.eu`, `redlib.utilibre.org`, with tail restores `redlib.privadency.com`, `safereddit.com`, `redlib.nadeko.net` (kept per live #9283 partial success) plus 6 appended tail mirrors `redlib.mint.lgbt`, `reddit.jeremyh.xyz`, `redlib.jeikobu.net`, `redlib.vanillax.me`, `redlib.reallyaweso.me`, `redlib.ducks.party`; availability and operator policies vary. The optional dead-post retraction seatbelt (round 44, off by default) may read public `/new` listings — including the HTML `/r/<subreddit>/new?limit=100` fallback — to determine whether a previously delivered post remains visible; the former pristine listing confirmation (round 64) also used listings with a cache-busting timestamp and `no-cache` headers until its removal on 2026-10-21. When listings are read, the URL carries only the public subreddit name and, for the token-gated miningtcup mirror, that mirror's own access token. The same instances are probed in parallel where applicable; anti-bot challenges can make a request fail fast. | per-instance |
 | **FxTwitter / FxEmbed API** (incl. sister host **api.fixupx.com**) | **Primary** tweet metadata, media, translation; if the primary host can't answer, the same-engine fixupx host is tried (round 11) | https://fxtwitter.com |
