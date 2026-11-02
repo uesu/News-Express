@@ -42,7 +42,9 @@ clickable buttons, and automatic **English translation** for non-English tweets.
 flowchart LR
     CRON["⏰ cron-job.org<br/>every 10 min"] -->|"workflow_dispatch"| GHA["⚙️ GitHub Actions<br/>twitter_monitor.yml / reddit_monitor.yml"]
     GHA --> ENG["🧠 Engine<br/>twitter_v3.py / reddit_main_v3.py"]
-    ENG -->|"RSS · APIs · archives"| NET["🌐 nitter fleet · Reddit RSS<br/>FxTwitter · Redlib · Arctic Shift"]
+    DEVVIT["🤖 Devvit relay<br/>gaming-express on Reddit"] -->|"one JSON record per post"| INTAKE["🔒 #reddit-intake<br/>private Discord channel"]
+    INTAKE -->|"bot token · read back"| ENG
+    ENG -->|"fallback: RSS · APIs · archives"| NET["🌐 nitter fleet · Reddit RSS<br/>FxTwitter · Redlib · Arctic Shift"]
     ENG -->|"Components V2 cards"| DC["💬 Discord webhooks<br/>one per account / subreddit"]
     ENG -->|"auto-commit"| CACHE["💾 posted_*.json<br/>dedup caches"]
 ```
@@ -86,7 +88,8 @@ flowchart LR
 | **Body text** | clean markdown body (links stay clickable, spoilers → Discord spoilers while author-escaped `\>!…!<` stays literal, Reddit `>text` quotes gain Discord's `> ` and consecutive quote paragraphs join into one quote block, empty-blockquote artifacts dropped, entities unescaped exactly once on every path) |
 | **Readable tables** | Valid Markdown pipe tables and rectangular HTML tables with TH headers become grouped row blocks: a bold first-column heading (for example **Patch 3.7**) and `- Column: value` bullets. Headers and wording are generic across subreddits; entities are decoded. HTML cell boundaries are preserved before RSS tag stripping. A one-column table (`\|Heading\|` / `\|:-\|` / rows) renders as a titled list — heading line, then one row per line — and blank lines between boundary-piped rows (Reddit's rich-text export) still read as one table. Merged-cell/malformed HTML tables retain existing cleanup; already-flattened text is not reconstructed. Ordinary pipe prose is not treated as a table |
 | **Proxy-video cold-start heal** | Video cards inspect Discord's returned media metadata; non-native video tiles queue only for a non-positive dimension or a Discord `proxy_url` with incomplete video metadata. Sparse responses without a proxy attempt remain unknown, and every candidate is revalidated before at most one same-message edit. Initially healthy videos receive no repair work; ordinary posts and native media never enter the repair path (see [Round 72](docs/history/ROUND_72.md) and [Round 74](docs/history/ROUND_74.md)) |
-| **Feeds** | one **combined RSS request** for all subreddits (fits Reddit's ~1 req/min datacenter limit) with automatic per-subreddit fallback; the optional `REDDIT_FEED_TOKEN` moves requests to the logged-in tier |
+| **Discovery (round 101)** | the **Devvit relay** ([`devvit/gaming-express`](devvit/README.md)) runs on Reddit, polls `/new` every minute and writes one JSON record per post into the private `#reddit-intake` channel; the engine reads that channel back with a bot token and uses it as the listing while it is healthy (`INTAKE: relay ok`) — Reddit's RSS retirement (2026-11-13) does not touch this path. Setup: [DEVVIT_SETUP.md §9](docs/DEVVIT_SETUP.md#9-news-express-reader-round-101--the-relay-as-the-primary-listing) |
+| **Feeds (fallback)** | one **combined RSS request** for all subreddits (fits Reddit's ~1 req/min datacenter limit) with automatic per-subreddit fallback; the optional `REDDIT_FEED_TOKEN` moves requests to the logged-in tier. Runs automatically whenever the relay is unconfigured, unreachable, empty or stale (`INTAKE-FALLBACK` log line) |
 | **FULL MODE** | with an optional Reddit script app: 💬/👍 stats, the OP's stickied comment, and true crosspost embeds |
 | **Fallback fleet** | proxy services (vxreddit → redditez → Embeddit rewrite — the priority/tie-break order, dispatched as bounded concurrent waves with Embeddit held back), Redlib instances, and the Arctic Shift archive — a dead source never breaks a run |
 | **Delivery checks & state** | dedup, stateless fresh-age hold (default 30 s, `0` off), plus operational pending rechecks for selected liveness/media-readiness holds; optional post-delivery retraction; pristine `/new` confirmation removed 2026-10-21 (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
@@ -308,6 +311,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `SUBREDDITS` | Comma-separated subreddit names |
 | `WEBHOOK_REDDIT_<SUB>` | One per subreddit — `WEBHOOK_REDDIT_` + name **UPPERCASED**, non-alphanumerics → `_` |
 | `REDDIT_FEED_TOKEN` *(optional — **recommended**)* | Your personal Reddit feed token: `old.reddit.com/prefs/feeds` → copy any feed link **exactly as shown** — the full private RSS URL `https://old.reddit.com/.rss?feed=<40-char-key>&user=<username>` works, and so do `https://www.reddit.com/.rss?feed=…`, `https://reddit.com/.rss?feed=…`, `https://old.reddit.com/?feed=…`, `?feed=<key>&user=<username>`, `<key>&user=<username>`, or bare `<key>` (query-only, host/path-agnostic). Moves RSS requests to the logged-in rate tier (429s essentially stop) |
+| `DISCORD_BOT_TOKEN` *(round 101)* | Bot token of a Discord application that is in your server with **View Channels** + **Read Message History** on `#reddit-intake` and the **Message Content Intent** enabled. Lets the engine read the Devvit relay channel; without it (or `INTAKE_CHANNEL_ID`) the engine runs the RSS/redlib/archive chain as before |
 | `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` *(optional — V3)* | Reddit **script app** (reddit.com/prefs/apps → type "script" → redirect `http://localhost`). Enables V3 **FULL MODE** (stats, OP comment, crosspost embeds) via OAuth. V3 works without it; drop both secrets in whenever the app exists and FULL MODE turns on with no code change |
 | `EMBEDEZ_API_KEY` | **V2 only** — from your embedez.com dashboard |
 | `DISCORD_WEBHOOK_URL` *(optional)* | Catch-all fallback |
@@ -346,6 +350,10 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `REDDIT_LIVENESS_STRICT` | `0` | `0` (lenient) holds a post only on positive removal/queue evidence — an unverifiable post posts as before; `1` also holds when no independent source could confirm the post |
 | `LIVENESS_PROBE_BUDGET` | `10` | max archive lookups per run (bounds the added latency of a flood run) |
 | `LIVENESS_PROBE_TIMEOUT` | `8` | per-lookup timeout in seconds |
+| `INTAKE_CHANNEL_ID` | *(unset)* | round 101: id of the `#reddit-intake` channel the Devvit relay writes to. Together with the `DISCORD_BOT_TOKEN` secret this turns the relay into the primary listing |
+| `INTAKE_READER` | `primary` | `primary` = a healthy relay is the listing (combined feed / per-sub fallback / archive sweep skipped); `shadow` = read and compare only, the old chain decides; `off` = never read the channel |
+| `INTAKE_STALE_SECONDS` | `1800` | newest relay message older than this ⇒ this run uses the old chain (`INTAKE-FALLBACK: relay stale`) |
+| `INTAKE_LOOKBACK_SECONDS` | `21600` | how far back the channel is read each run (held posts re-enter while inside this window) |
 
 **Caches & caps**
 

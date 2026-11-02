@@ -240,14 +240,63 @@ Node.js › Uninstall → delete `%USERPROFILE%\.devvit`, `%APPDATA%\npm`,
 | 0.0.4 | 2026-11-02 | intake record gains `distinguished` (`"moderator"`/`"admin"`/`null`); documented how official Wuthering Waves content reaches the relay (`Official News` flair on `r/WutheringWaves`, no publisher account, `officialUsers` unchanged); Biome schema 2.6.4; troubleshooting entries for the upload fault. Uploads as Reddit **`0.0.3`**. |
 | 0.0.5 | 2026-11-02 | `officialUsers` default trimmed to the verified, active accounts (`genshinimpact,HonkaiStarRail,HonkaiNexusAnima`); dormant `u/ZZZ_Official` / `u/AnantaOfficial` dropped (publisher-account audit above); setting documented as optional. Settings persist, so existing installs must re-pin `officialUsers` (§3 step 5). Uploads as Reddit **`0.0.4`**. |
 
-## 9. Roadmap (each step its own PR, none started without an explicit go)
+## 9. News-Express reader (round 101 — the relay as the primary listing)
 
-1. Let the relay run clean for a few days; compare `#reddit-intake` against the engine's
-   deliveries (`LATENCY` lines in the run logs).
-2. **News-Express intake reader** — stage 1 (discovery) reads `#reddit-intake` first and
-   falls back to the existing combined feed / redlib / eddrit / Arctic chain. Rendering
-   (`build_v3_payload`, Components v2 cards), liveness, retraction and MEDIA-HEAL stay as
-   they are. The current chain remains the backup, so the two paths cover each other.
+Since round 101 the Reddit engine (`testing area/reddit_main_v3.py`) reads `#reddit-intake`
+back **before** the combined feed. While the relay is healthy (HTTP 200 and the newest
+message younger than `INTAKE_STALE_SECONDS`, default 1800 s) the relay is the listing and the
+RSS / redlib / Arctic sweep is skipped; in every other state the run logs one
+`INTAKE-FALLBACK: relay <status> (<why>)` line and the old chain runs exactly as before.
+Record of the design: [`docs/history/ROUND_101.md`](history/ROUND_101.md).
+
+### One-time setup (owner; nothing changes until both the secret and the Variable exist)
+
+1. **Bot.** `discord.com/developers/applications` → *New Application* (any name, e.g.
+   `News-Express reader`) → *Bot* → **Reset Token** → copy it once (it is shown once).
+   On the same page, under *Privileged Gateway Intents*, enable **Message Content Intent** —
+   without it the API returns webhook-authored messages with an empty `content`.
+2. **Invite.** *OAuth2* → *URL Generator* → scope `bot` → bot permissions **View Channels** and
+   **Read Message History** → open the generated URL → pick the Citlali News server → Authorize.
+3. **Channel permission.** `#reddit-intake` is private: channel → *Edit Channel* →
+   *Permissions* → add the bot (or its role) → allow *View Channel* and *Read Message History*.
+4. **Channel id.** Discord → *User Settings* → *Advanced* → *Developer Mode* on → right-click
+   `#reddit-intake` → *Copy Channel ID* (a 17–20-digit number).
+5. **Prod repo `uesu/7jkxmy9nvbc`.** *Settings → Secrets and variables → Actions*:
+   - Secret `DISCORD_BOT_TOKEN` = the token from step 1.
+   - Variable `INTAKE_CHANNEL_ID` = the id from step 4.
+   (News-Express the dev repo needs neither; the workflow syncs through `sync_prod.yml`.)
+6. **Verify on the next run.** The step summary's settings line ends with
+   `intake primary (relay ok; N record(s), newest S s)` and *Combined fetch status* reads
+   `relay`; `monitor.log` has `INTAKE: relay ok — …`. Before step 5 each run logs
+   `INTAKE-FALLBACK: relay unconfigured …` and behaves exactly as before.
+
+### Switches (repo Variables, all optional)
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `INTAKE_READER` | `primary` | `primary` = relay is the listing when healthy; `shadow` = read + compare, old chain decides (`INTAKE-SHADOW` log line); `off` = never read the channel |
+| `INTAKE_STALE_SECONDS` | `1800` | newest relay message older than this ⇒ old chain this run |
+| `INTAKE_LOOKBACK_SECONDS` | `21600` | how far back the channel is read each run (held posts re-enter while inside this window; ≤ 8 pages of 100) |
+
+### Reader-side troubleshooting
+
+| Log / summary | Meaning / action |
+| --- | --- |
+| `INTAKE-FALLBACK: relay unconfigured` | secret or Variable missing in the prod repo (step 5) |
+| `relay http_401 (bot token rejected)` | token wrong or reset — paste the current one |
+| `relay http_403 (bot lacks View Channel / Read Message History…)` | step 3 |
+| `relay http_404 (channel id unknown to this bot…)` | wrong id, or the bot was never invited (step 2) |
+| `relay ok` but `0 record(s) for this engine` every run | records arrive with empty `content` ⇒ Message Content Intent off (step 1), or the `sub` names do not match `SUBREDDITS` |
+| `relay stale (newest relay message is N s old)` | the relay is paused (`relayEnabled=false`), uninstalled, or Reddit is quiet; `npx devvit logs GamingExpressRelay` — harmless either way, the old chain ran |
+| `relay empty` | no message in the lookback window at all — same causes as stale |
+
+## 10. Roadmap (each step its own PR, none started without an explicit go)
+
+1. ~~Let the relay run clean for a few days~~ — waived by the owner on 2026-11-02; round 101
+   shipped the reader with the old chain as the automatic fallback.
+2. ~~**News-Express intake reader**~~ — done in round 101 (§9). Relay 0.0.6 candidates if the
+   reader needs them: a heartbeat record (exact staleness), a long-body attachment
+   (bodies above the message budget arrive truncated today).
 3. **Game-Express** — `RedditClient.user()` / `subreddit()` read the same channel before
    the redlib fleet; records with `sub: u_<account>` / the game subreddits map onto the
    existing `allowed_subs` / `allowed_authors` filters. Delivered as a PR handoff with the

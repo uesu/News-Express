@@ -109,6 +109,16 @@ leftovers. Never advise deleting the "other" platform's files.
 ## File map
 
 - `testing area/reddit_main_v3.py` — LIVE Reddit engine (gates, cards, caches).
+  Since round 101 its PRIMARY listing is the Devvit relay channel
+  (`fetch_intake_records` / `_IntakeEntry` / `intake_base_data`); the combined
+  RSS → per-subreddit → Arctic chain is the automatic fallback (`INTAKE-FALLBACK`
+  log line). Read `docs/history/ROUND_101.md` before touching discovery or
+  liveness.
+- `devvit/gaming-express/` — the Devvit relay app that runs on Reddit and
+  writes one fenced-JSON record per new post into `#reddit-intake`
+  (`docs/DEVVIT_SETUP.md`: deploy, settings, owner steps, uninstall). Its
+  record shape (`RelayRecord` v1 in `src/server/relay.ts`) is a contract with
+  the engine's `parse_intake_record`; bump `v` on any breaking change.
 - `testing area/twitter_v3.py` — LIVE Twitter engine (cards, media heal).
 - `testing area/reddit_signals.py` — pure decision logic (gates, tombstones).
 - `testing area/reddit_proxy.py`, `twitter_proxy.py` — proxy-service parsers.
@@ -242,6 +252,17 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 
 ## Key defaults (all overridable via repo Variables, no code change)
 
+- `INTAKE_READER=primary` — round 101: `primary` makes a healthy relay
+  (`#reddit-intake` answers, newest message younger than
+  `INTAKE_STALE_SECONDS=1800`) the listing and skips the RSS/redlib/Arctic
+  sweep; `shadow` reads and compares only; `off` never reads. Needs the
+  `DISCORD_BOT_TOKEN` secret + `INTAKE_CHANNEL_ID` Variable in the prod repo;
+  unset ⇒ old chain, unchanged. `INTAKE_LOOKBACK_SECONDS=21600` bounds the
+  channel window (held posts re-enter while inside it). Relay entries carry
+  provenance `relay`, NEVER `reddit-native`: a replayed record must not build
+  the round-98 feed streak. Liveness for them is stateless — the record's own
+  `removed`, and "archive `removed` row older than the relay sighting ⇒
+  stale ⇒ live" (`relay-listing`).
 - `FRESH_HOLD_SECONDS=30` — flat minimum post age before a candidate is
   considered (round 64; stateless; the companion pristine-listing gate was
   removed 2026-10-21, do not restore it). `0` disables the floor.

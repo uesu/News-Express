@@ -67,6 +67,18 @@ cache policy, or media requests, and missing data is reported as
 `unavailable`/`not-reached` (zero deliveries is not a failure; dry-run is
 explicitly labelled).
 
+Since round 101 (2026-11-02) the listing itself comes from the **Devvit relay**: the
+engine reads `#reddit-intake` back (secret `DISCORD_BOT_TOKEN`, Variables
+`INTAKE_CHANNEL_ID`, `INTAKE_READER=primary|shadow|off`, `INTAKE_STALE_SECONDS=1800`,
+`INTAKE_LOOKBACK_SECONDS=21600`). The run result carries an `intake` object
+(`status`, `mode`, `records_in_window`, `records_for_this_engine`, `newest_age_seconds`,
+`pages`, `detail`; never ids or the token) and the summary's settings line ends with
+`intake primary (relay ok; N record(s), newest S s)` or `intake primary (relay STALE →
+old chain; …)`. `Combined fetch status: relay` means the combined feed, the per-subreddit
+fallback and the archive sweep were skipped this run; any non-`ok` relay state logs
+`INTAKE-FALLBACK` and the pre-round-101 chain runs unchanged (`shadow` logs
+`INTAKE-SHADOW` and changes nothing).
+
 The operational `pending_reddit.json` cache remains active. It records selected
 liveness/removal/approval and media-readiness holds. Retryable holds use the
 `PENDING_RECHECK_SECONDS` throttle (default 300 seconds, one 5-minute cron tick; 1800 restores the round-30 30-minute wait); confirmed
