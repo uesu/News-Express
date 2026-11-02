@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — Round 107: a held post Reddit lists again through the relay is a restore (2026-11-02)
+
+`testing area/reddit_main_v3.py` (`relay_listed_after_hold`, `_pending_throttle_skip`, main-loop
+audit + `relay_restores` counters), `.github/workflows/reddit_monitor.yml` (summary step
+15,106 → 15,557 chars), `tests/test_smoke.py` (`r107`, `r107b`).
+Record: [`docs/history/ROUND_107.md`](history/ROUND_107.md).
+
+- **Why:** `Zenlesszonezeroleaks__1xlrj90` was held as `removal_notice` by the old chain's archive
+  sweep at 07:40Z (mod queue), approved by the mods ~12:35Z, listed by the relay at 12:36Z with
+  `removed: null` — and suppressed as "known-pending" on every run after that, because round 101
+  treated every relay record as a replay (never a restore). Relay mode has no RSS to "re-enter via".
+- **Now:** a relay message newer than the hold's last look, whose record (and latest `v: 2`
+  re-check) says not removed, reopens the hold and the post runs the full pipeline; the replay of
+  the message that produced a hold is still skipped. One INFO line + summary lines
+  (`Held posts Reddit listed again (relay restore)`, `Known-rejected candidates (held earlier; no
+  newer listing)` in relay mode). Removed posts stay removed; no archive/mirror text can unlock a
+  hold; Arctic is not consulted. Game-Express needs no engine change (no hold memory there); its hand-off patch was
+  regenerated on GE `main` `71202ee4` (no conflicts) with a cross-check test for the same case.
+
 ## Unreleased — Round 106: SyntaxWarning in the production log (2026-11-02)
 
 `testing area/reddit_main_v3.py` (one docstring), `tests/test_smoke.py` (`r106`).
