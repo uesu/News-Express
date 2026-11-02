@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased — Round 105: the run summary speaks relay (2026-11-02)
+
+`.github/workflows/reddit_monitor.yml` (summary step only, 14,720 → 15,106 chars),
+`tests/test_smoke.py` (`r105`). Record: [`docs/history/ROUND_105.md`](history/ROUND_105.md).
+
+- **Why:** the first live relay-primary run (`7jkxmy9nvbc` #12256 — `INTAKE: relay ok`, 3 s,
+  zero Reddit/redlib/Arctic requests) still printed old-chain wording: "Combined-feed entries",
+  "Subreddits missing from the combined feed … (archive attempt below)", "fallback: not
+  attempted (combined succeeded)".
+- **Now, when `combined_fetch_status == "relay"`:** `Relay records for this engine (6 h
+  window)`, `Subreddits with no new post in the relay window: … (quiet, not missing; no archive
+  attempt)`, `Feed fallback: not attempted (relay is the listing)`. RSS runs unchanged (guarded).
+- No engine, card, cache or Twitter change; no heartbeat added (reasoning in the round record).
+
+## Docs — Devvit upload path that works (2026-11-02, after PR #109)
+
+`docs/DEVVIT_SETUP.md` only (§2, §3 step 4–5, §5, §7, §8), `docs/history/ROUND_104.md`. No code.
+
+- Relay code 0.0.8 is live as **Reddit 0.0.5** on `r/GamingExpressRelay` (merge of #109;
+  installed via CLI, the portal's **Update** button then reports "already installed").
+- The default `npx devvit login` token was refused by the Dev Portal on `AppVersion/Create`
+  (`HTTP 401` → "You must be logged in to upload a new app version") while every other call
+  passed; **`npx devvit login --copy-paste` + `npx devvit upload --copy-paste`** uploaded on the
+  first try. The setup doc now uses that flow everywhere and the troubleshooting row explains
+  the diagnosis (`set NODE_DEBUG=fetch`).
+- `settings list` shows keys/labels only, never values (documented); the §8 table explains
+  code numbering vs Reddit's upload numbering; `npm test` expectation updated to 25 tests.
+
 ## Unreleased — Round 104: the relay is 1:1 with the old chain — relay 0.0.8 (2026-11-02)
 
 `devvit/gaming-express` 0.0.8, `testing area/reddit_main_v3.py` (intake block, media resolver,
@@ -11,7 +39,7 @@ refreshed (Game-Express base `ccfe564`). No card, cache or Twitter change. Full 
   instance, no reddit.com instance and no Arctic request in either engine; the vxreddit /
   embedez / embeddit proxies are part of the relay structure and stay; the old chain stays as
   the fallback.
-- **Relay 0.0.8 (uploads as Reddit 0.0.7):** re-check stages ~5 min / 30 min / 2 h / 6 h /
+- **Relay 0.0.8 (uploaded as Reddit 0.0.5 on 2026-11-02):** re-check stages ~5 min / 30 min / 2 h / 6 h /
   **24 h**; a post that flips removed/filtered → live is re-sent complete (`resent:
   "approved"`).
 - **Reader:** `relay_complete` (nothing cut, parent named, comments present) on the base →
@@ -21,7 +49,7 @@ refreshed (Game-Express base `ccfe564`). No card, cache or Twitter change. Full 
   lookup); the retraction seatbelt skips the `/new` snapshot and mirror probe for re-checked
   posts. Records the CDN could not complete keep the full round-101/103 fill-in.
 - **Game-Express:** `relay_complete` entries never go through `resolve_post()` in `items()` /
-  `program_post()` (hand-off base `4973dc6`).
+  `program_post()` (hand-off base `71202ee4`, refreshed after Game-Express PRs #138–#140).
 - **Removed (owner's request):** the News-Express `💬 OP comment` card line and its
   `REDDIT_OP_COMMENT` Variable — FULL-MODE only, never seen on a live card. `extract_op_comment`,
   `op_comment_text`, the `_top_comments` collection in `fetch_post_json`, the workflow `env:`
@@ -30,7 +58,7 @@ refreshed (Game-Express base `ccfe564`). No card, cache or Twitter change. Full 
   merge) was dropped the same day, before any upload — the relay reads no comments.
 - Tests: 9 `r104` smoke guards (r101 liveness guard updated, OP-comment section removed), 25 Devvit unit tests; three
   suites ALL PASS here and in a `sync_tree()` production checkout; Game-Express intake 7/7 +
-  smoke 628/628 on a fresh `4973dc6` clone and its production checkout.
+  smoke 610/610 on a fresh `71202ee4` clone and its production checkout.
 
 ## Unreleased — Round 103: the relay is the complete Reddit source — relay 0.0.7 (2026-11-02)
 

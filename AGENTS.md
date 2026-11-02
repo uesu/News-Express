@@ -115,7 +115,9 @@ leftovers. Never advise deleting the "other" platform's files.
   log line). Read `docs/history/ROUND_101.md`, `ROUND_102.md` (shared-channel
   paging/freshness rules), `ROUND_103.md` (record.json, re-checks) and `ROUND_104.md`
   (`relay_complete`: a complete relay record is served without archive / redlib /
-  reddit.com calls) before touching discovery, liveness or `resolve_post_media`.
+  reddit.com calls) before touching discovery, liveness or `resolve_post_media`;
+  `ROUND_105.md` has the first live relay-primary run and the relay wording of the
+  summary step.
 - `devvit/gaming-express/` — the Devvit relay app that runs on Reddit and
   writes one fenced-JSON record per new post into the private Discord intake channel
   (`docs/DEVVIT_SETUP.md`: deploy, settings, owner steps, uninstall). Its
