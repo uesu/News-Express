@@ -19,13 +19,18 @@ refreshed (Game-Express base `ccfe564`). No card, cache or Twitter change. Full 
 - **Reader:** `relay_complete` (nothing cut, parent named, comments present) on the base →
   `resolve_post_media` skips the archive (post, parent, child probe) and both redlib harvests,
   `main()` skips the reddit.com post JSON; counts from the record / newest re-check when no
-  proxy served them; the publisher's stickied/first comment becomes the existing `💬 OP comment`
-  line. A clean relay record is live from the listing itself (`relay-listing`, no archive
+  proxy served them. A clean relay record is live from the listing itself (`relay-listing`, no archive
   lookup); the retraction seatbelt skips the `/new` snapshot and mirror probe for re-checked
   posts. Records the CDN could not complete keep the full round-101/103 fill-in.
 - **Game-Express:** comments merged like the post-page parser (text/links/images/`comments`),
   `relay_complete` entries never go through `resolve_post()` in `items()` / `program_post()`.
-- Tests: 8 `r104` smoke guards (r101 liveness guard updated), 27 Devvit unit tests; three
+- **Removed (owner's request):** the News-Express `💬 OP comment` card line and its
+  `REDDIT_OP_COMMENT` Variable — FULL-MODE only, never seen on a live card. `extract_op_comment`,
+  `op_comment_text`, the `_top_comments` collection in `fetch_post_json`, the workflow `env:`
+  line, `.env.example` and README rows are gone; `resolve_post_media` no longer returns
+  `op_comment`. The relay's 0.0.8 `opComments` stay for Game-Express's own comment merge; this
+  engine ignores them (no extra CDN read for them).
+- Tests: 9 `r104` smoke guards (r101 liveness guard updated, OP-comment section removed), 27 Devvit unit tests; three
   suites ALL PASS here and in a `sync_tree()` production checkout; Game-Express intake 7/7 +
   smoke 628/628 on a fresh `ccfe564` clone and its production checkout.
 

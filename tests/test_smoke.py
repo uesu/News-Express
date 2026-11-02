@@ -5,7 +5,7 @@ Purpose (also used by CI as the safety gate for Dependabot PRs):
   1. every monitor script imports cleanly (catches import-time breakage
      from dependency bumps),
   2. the Reddit V3 card pipeline still behaves (body cleaning, media
-     extraction/dedup, OP comment, components-v2 layout, button set,
+     extraction/dedup, components-v2 layout, button set,
      Arctic Shift search backup — round 17),
   3. the X V3 tweet-data path still behaves (GIF converter chain,
      vxtwitter normalization, twitterez og-page parsing, fallback-chain
@@ -332,18 +332,7 @@ check("tp-12e: body cleaned from post content",
 v3.fetch_combined_feed = orig_combined
 v3._fetch_post_rss = orig_post_rss
 
-# ---- 5. OP comment selection + card line ----------------------------------
-pj = {"author": "OP", "permalink": "/r/Sub/comments/abc/title/"}
-pj["_top_comments"] = [
-    {"data": {"author": "other", "body": "nope"}},
-    {"data": {"author": "OP", "body": "first"}},
-    {"data": {"author": "OP", "body": "stickied!", "stickied": True, "id": "p9"}},
-]
-oc = v3.extract_op_comment(pj)
-check("op: stickied wins", oc and oc["stickied"] and oc["text"] == "stickied!", str(oc))
-check("op: permalink", oc and oc["permalink"] == "https://www.reddit.com/r/Sub/comments/abc/title/comment/p9/", str(oc))
-check("op: none when absent", v3.extract_op_comment({"author": "A", "permalink": "/r/S/comments/x/",
-                                                     "_top_comments": []}) is None)
+# ---- 5. (OP comment selection removed in round 104 — see the r104 guard) ----
 
 # ---- 6. card layout ---------------------------------------------------------
 data = {"title": "T", "author": "A", "body": "b" * 50,
@@ -364,7 +353,8 @@ yt = row["components"][1]
 check("buttons: youtube uses starwardspark3",
       yt["emoji"] == {"id": "1483083423290490891", "name": "starwardspark3", "animated": True}, str(yt))
 texts = [c["content"] for ct in p["components"] for c in ct["components"] if c.get("type") == 10]
-check("op line in card", any("OP comment" in t for t in texts), str(texts))
+check("r104: no OP-comment line in the card even when a stale data dict still carries one",
+      not any("OP comment" in t for t in texts), str(texts))
 total = sum(len(t) for t in texts)
 check("char budget under 4000", total < 4000, str(total))
 
@@ -4369,7 +4359,7 @@ _r49b_names = (
     "MAX_CACHE_SIZE_PER_SUB", "MAX_POSTS_PER_RUN",
     "PENDING_RECHECK_SECONDS",
     "FEEDTOKEN_JSON_STAGGER", "PROXY_MEDIA", "YOUTUBE_LINK_MESSAGE",
-    "DISCOHOOK_PREVIEW", "REDDIT_OP_COMMENT", "REDDIT_VIDEO_QUALITY",
+    "DISCOHOOK_PREVIEW", "REDDIT_VIDEO_QUALITY",
 )
 check("r49b: no direct numeric os.getenv conversion remains",
       not any(re.search(r"(?:int|float)\(os\.getenv", open(os.path.join(ROOT, p)).read())
@@ -4405,9 +4395,8 @@ try:
     check("r52: empty true-by-default Variables keep their defaults",
           (_r49b_reddit.PROXY_MEDIA,
            _r49b_reddit.YOUTUBE_LINK_MESSAGE,
-           _r49b_reddit.DISCOHOOK_PREVIEW,
-           _r49b_reddit.INCLUDE_OP_COMMENT)
-          == (True, True, True, True))
+           _r49b_reddit.DISCOHOOK_PREVIEW)
+          == (True, True, True))
     check("r67: an empty REDDIT_VIDEO_QUALITY uses the documented default",
           _r49b_reddit.VIDEO_QUALITY_MODE == "balanced")
     check("r67: an unknown REDDIT_VIDEO_QUALITY value also falls back to the "
@@ -12393,21 +12382,7 @@ check("r103 summary: the intake line reports re-checks and completions without i
 
 # ---- Round 104 (relay 0.0.8): a complete relay record is served 1:1 without the old chain ----
 _r104_oc_full = [{"id": "c1aaaa", "body": "Maintenance ends 11:00 (UTC+8)", "created": 1762050100, "stickied": False},
-                 {"id": "c2bbbb", "body": "Compensation: 300 Stellar Jade", "created": 1762050400, "stickied": True},
-                 {"id": "bad id", "body": "x", "created": 1}, {"id": "c3cccc", "body": "   "}, "junk"]
-_r104_oc = v3.parse_intake_op_comments(_r104_oc_full)
-check("r104 op comments: record.json `opComments` parse (ids normalised, blank/malformed dropped); "
-      "the card line prefers the stickied one and carries its permalink",
-      [c["id"] for c in _r104_oc] == ["c1aaaa", "c2bbbb"] and _r104_oc[1]["stickied"] is True
-      and v3.parse_intake_op_comments(None) == [] and v3.parse_intake_op_comments("nope") == []
-      and v3.relay_op_comment(dict(_r101_parsed, opComments=_r104_oc))
-          == {"text": "Compensation: 300 Stellar Jade", "stickied": True,
-              "permalink": "https://www.reddit.com" + _r101_parsed["permalink"].rstrip("/") + "/comment/c2bbbb/"}
-      and v3.relay_op_comment(dict(_r101_parsed, opComments=_r104_oc[:1]))["text"] == "Maintenance ends 11:00 (UTC+8)"
-      and v3.relay_op_comment(dict(_r101_parsed)) is None
-      and v3.op_comment_text(v3.relay_op_comment(dict(_r101_parsed, opComments=_r104_oc))).startswith(
-          "**💬 OP comment (stickied):** Compensation: 300 Stellar Jade — [full comment](https://www.reddit.com/"))
-
+                 {"id": "c2bbbb", "body": "Compensation: 300 Stellar Jade", "created": 1762050400, "stickied": True}]
 _r104_inline = dict(_r103_plain, id="1xlofcl", permalink="/r/HonkaiStarRail_leaks/comments/1xlofcl/o/",
                     author="HonkaiStarRail", opCommentCount=2, resent="comments", revision=2)
 _r104_cdn_full = dict(_r104_inline, parent=None, opComments=_r104_oc_full)
@@ -12415,26 +12390,24 @@ _r104_c, _r104_cs = asyncio.run(_r103_reader(
     [_r103_msg(_r104_inline, 100), _r103_msg(_r103_plain, 200)],
     files={_cdn.format("1xlofcl"): _r104_cdn_full}))
 _r104_by = {r["id"]: r for r in _r104_c["records"]}
-check("r104 record.json: an inline `opCommentCount` > 0 is a reason to fetch the attachment; the "
-      "comments are merged (count re-derived), a plain record still costs no CDN request",
-      v3._intake_needs_full_record(_r104_inline) is True
-      and v3._intake_needs_full_record(dict(_r104_inline, opCommentCount=0)) is False
+check("r104 record.json: a 0.0.8 record announcing the author's comments (`opCommentCount`, for "
+      "Game-Express) is complete for THIS engine — no CDN request, no comments merged, nothing else changed",
+      v3._intake_needs_full_record(_r104_inline) is False
       and v3._intake_needs_full_record(_r103_plain) is False
-      and _r104_c["completed"] == 1 and _r104_cs.cdn_calls == [_cdn.format("1xlofcl")]
-      and [c["id"] for c in _r104_by["1xlofcl"]["opComments"]] == ["c1aaaa", "c2bbbb"]
-      and _r104_by["1xlofcl"]["opCommentCount"] == 2
-      and v3._intake_needs_full_record(_r104_by["1xlofcl"]) is False)
+      and _r104_c["completed"] == 0 and _r104_cs.cdn_calls == []
+      and "opComments" not in _r104_by["1xlofcl"] and _r104_by["1xlofcl"]["revision"] == 2
+      and len(_r104_c["records"]) == 2)
 
 _r104_base = v3.intake_base_data(v3._IntakeEntry(_r104_by["1xlofcl"]))
 _r104_cut_base = v3.intake_base_data(v3._IntakeEntry(_r103_by["1xlcut3"]))
-check("r104 base: a complete record (nothing cut, parent named, comments present) is "
-      "`relay_complete`; a record the CDN could not complete is not; Reddit's counts and the OP "
-      "comment ride on the base (the newest re-check wins over the record)",
+check("r104 base: a complete record (nothing cut, parent named) is `relay_complete`; a record the CDN "
+      "could not complete is not; Reddit's counts ride on the base (the newest re-check wins over "
+      "the record); no OP-comment key anywhere",
       _r104_base["relay_complete"] is True and _r104_cut_base["relay_complete"] is False
       and v3.intake_base_data(v3._IntakeEntry(_r103_by["1xlplain"]))["relay_complete"] is True
       and v3.intake_base_data(v3._IntakeEntry(_r103_by["1xlxpst"]))["relay_complete"] is True
       and v3.intake_base_data(v3._IntakeEntry(dict(_r103_xp)))["relay_complete"] is False
-      and _r104_base["relay_op_comment"]["stickied"] is True
+      and not any("op_comment" in k for k in _r104_base)
       and _r104_base["relay_stats"] == {"ups": _r101_rec["score"], "comments": _r101_rec["comments"]}
       and v3.relay_record_stats(dict(_r101_parsed, _update=_r103_item("x", score=41, comments=7)))
           == {"ups": 41, "comments": 7}
@@ -12456,9 +12429,9 @@ async def _r104_resolve(base):
         calls["embeddit"] += 1
         return None
     fake_proxy = SimpleNamespace(fetch_proxy_post=_proxy, fetch_embeddit_stats=_embeddit)
-    saved = (v3.INCLUDE_OP_COMMENT, v3.PROXY_MEDIA)
+    saved = v3.PROXY_MEDIA
     try:
-        v3.INCLUDE_OP_COMMENT, v3.PROXY_MEDIA = True, True
+        v3.PROXY_MEDIA = True
         with patch.object(v3, "reddit_proxy", fake_proxy), \
              patch.object(v3, "fetch_arctic_post", _arctic), \
              patch.object(v3, "fetch_proxy_post_memo", _proxy), \
@@ -12468,7 +12441,7 @@ async def _r104_resolve(base):
                                                path=v3.normalize_reddit_path("https://www.reddit.com" + base["_permalink"]),
                                                label="r104")
     finally:
-        v3.INCLUDE_OP_COMMENT, v3.PROXY_MEDIA = saved
+        v3.PROXY_MEDIA = saved
     return data, calls
 
 _r104_gal = dict(_r104_by["1xlofcl"], url="https://www.reddit.com/gallery/1xlofcl", body="Two photos.",
@@ -12478,17 +12451,17 @@ _r104_d, _r104_calls = asyncio.run(_r104_resolve(
 _r104_d2, _r104_calls2 = asyncio.run(_r104_resolve(
     dict(_r104_cut_base, _permalink=_r103_by["1xlcut3"]["permalink"])))
 check("r104 pipeline: a complete relay gallery with every proxy down is still served from the record "
-      "— both photos native, Reddit's counts, the publisher's stickied comment — with NO archive, "
-      "redlib or reddit.com request (proxies were asked, as part of the relay structure)",
+      "— both photos native, Reddit's counts — with NO archive, redlib or reddit.com request "
+      "(proxies were asked, as part of the relay structure); no op_comment in the result",
       [m["url"] for m in _r104_d["media"]] == ["https://i.redd.it/r104a.png", "https://i.redd.it/r104b.jpg"]
       and _r104_d["stats"] == {"ups": _r101_rec["score"], "comments": _r101_rec["comments"]}
-      and _r104_d["op_comment"]["text"] == "Compensation: 300 Stellar Jade"
+      and "op_comment" not in _r104_d
       and _r104_d["title"] == "Boothill & co"
       and _r104_calls["arctic"] == 0 and _r104_calls["redlib"] == 0 and _r104_calls["proxy"] >= 1,
       f"{_r104_calls} {_r104_d['media']} {_r104_d['stats']}")
 check("r104 pipeline: a relay record the CDN could NOT complete keeps the round-101 fill-in "
       "(archive + redlib harvest still asked) — the fallback chain is untouched",
-      _r104_calls2["arctic"] >= 1 and _r104_calls2["redlib"] >= 1 and _r104_d2["op_comment"] is None,
+      _r104_calls2["arctic"] >= 1 and _r104_calls2["redlib"] >= 1,
       f"{_r104_calls2}")
 
 async def _r104_retract():
@@ -12540,6 +12513,13 @@ check("r104 wiring: relay_complete gates every old-chain call site — post JSON
       and "relay_update_for(post_id) is None" in inspect.getsource(v3.retract_dead_posts)
       and inspect.getsource(v3.retract_dead_posts).index("relay_update_for(post_id) is None")
       < inspect.getsource(v3.retract_dead_posts).index("await _fetch_new_listing("))
+check("r104 removed: the OP-comment feature is gone from the engine, the workflow env block and the "
+      "card (no symbol, no Variable, no `_top_comments` collection, no `op_comment` result key)",
+      not any(hasattr(v3, n) for n in ("INCLUDE_OP_COMMENT", "OP_COMMENT_MAX_CHARS", "extract_op_comment",
+                                        "op_comment_text", "relay_op_comment", "parse_intake_op_comments"))
+      and "REDDIT_OP_COMMENT" not in _r101_wf
+      and "_top_comments" not in _r101_src and not re.search(r"\bop_line\b", _r101_src)
+      and '"op_comment"' not in _r104_src_rpm and "opComments" not in inspect.getsource(v3.apply_intake_full_record))
 # Dev-only folder (never synced to production), so the reads are guarded.
 _r104_relay_ts = os.path.join(ROOT, "devvit", "gaming-express", "src", "server", "relay.ts")
 if os.path.isfile(_r104_relay_ts):

@@ -15,7 +15,7 @@ The three edges, plus two more found while reading the per-post pipeline:
 |---|---|---|
 | 1 | Liveness in the first ~10 min: `candidate_liveness_verdict` did an Arctic lookup for a relay record without an update yet | A relay record that is not `removed` is **live from the listing itself** (`relay-listing`), no archive lookup; the relay's first re-check now comes at ~5 min |
 | 2 | Approvals after 6 h relied on the round-98 Arctic reclaim | Relay stage **24 h** added (300 / 1800 / 7200 / 21600 / 86400 s); a post that flips removed/filtered → live is **re-sent complete** (`resent: "approved"`) |
-| 3 | Game-Express publisher follow-up comments came from post pages / mirrors; News-Express's `💬 OP comment` line existed in FULL MODE only | Relay reads the author's own comments of **official** posts at every re-check; on change the record is re-sent with `opCommentCount` inline + `opComments` in `record.json`. Both readers consume them |
+| 3 | Game-Express publisher follow-up comments came from post pages / mirrors | Relay reads the author's own comments of **official** posts at every re-check; on change the record is re-sent with `opCommentCount` inline + `opComments` in `record.json`. Game-Express consumes them; News-Express ignores them (see *Removed* below) |
 | 4 | `resolve_post_media`: `fetch_arctic_post` (post + parent), child Arctic probe in `discover_original_for_media`, two `enrich_gallery_redlib` harvests; `main()` asked `fetch_post_json` (reddit.com) first | `relay_complete` on the base gates every one of them off; native media come from the record's own URLs, counts from the record / newest re-check |
 | 5 | Game-Express `items()` resolved empty-text entries and `program_post()` resolved candidates through `resolve_post()` (redlib / reddit.com) | `relay_complete` entries are never passed to `resolve_post()` — an empty `text` is a title-only post |
 | 6 | `retract_dead_posts` always took a `/new` listing snapshot (redlib / reddit.com) | Skipped (with the mirror probe) for any post the relay has re-checked |
@@ -45,20 +45,16 @@ Unit tests (`relay.test.ts`, 27 pass): the five stages, `isOfficialRecord`, `opC
 
 ## News-Express reader (`testing area/reddit_main_v3.py`)
 
-- `_intake_needs_full_record` adds `opCommentCount > 0 and not opComments`;
-  `apply_intake_full_record` merges `opComments` (`parse_intake_op_comments`: ids normalised,
-  blank/malformed dropped). Same `INTAKE_ATTACHMENT_FETCHES = 10` bound.
-- `intake_base_data` adds `relay_complete = not _intake_needs_full_record(rec)`,
-  `relay_stats` (`relay_record_stats`: the newest `v: 2` item's score/comments, else the
-  record's) and `relay_op_comment` (`relay_op_comment`: stickied first, else the earliest, in
-  `extract_op_comment`'s shape — text via `strip_html`, permalink `…/comment/<id>/`).
+- `intake_base_data` adds `relay_complete = not _intake_needs_full_record(rec)` (nothing
+  cut, parent named) and `relay_stats` (`relay_record_stats`: the newest `v: 2` item's
+  score/comments, else the record's). The relay's `opComments` are not read by this engine
+  (no CDN fetch for them).
 - `resolve_post_media`: `relay_complete` → logs *relay record is complete — no archive, redlib
   or reddit.com request*, skips the parent archive lookup, sets `arctic = None` instead of
   `fetch_arctic_post`, drops both `enrich_gallery_redlib` calls; `discover_original_for_media`
   skips the child archive probe. The proxy wave (`fetch_proxy_post_memo`, embeddit stats,
   `resolve_video_url`) runs exactly as before. `stats` falls back to `relay_stats` (not for
-  crossposts — those count the parent). `op_comment` is set from `relay_op_comment` when
-  `REDDIT_OP_COMMENT` is on (default), rendering the existing `💬 OP comment (stickied)` line.
+  crossposts — those count the parent).
 - `main()`: `post_json = None` for `relay_complete` bases (no reddit.com `.json` attempt).
 - `candidate_liveness_verdict`: after the relay-update and record-`removed` checks, a relay
   record returns `("live", "listed on Reddit's /new by the relay (not removed); relay re-check
@@ -67,9 +63,21 @@ Unit tests (`relay.test.ts`, 27 pass): the five stages, `isOfficialRecord`, `opC
 - `retract_dead_posts`: `_fetch_new_listing` + `live_removal_reason` run only when
   `relay_update_for(post_id)` is None (new helper over `_INTAKE_UPDATES`).
 
-A record the CDN could not complete (`bodyTruncated` still true, parent unnamed, comments
-announced but missing) is **not** `relay_complete` and keeps the full round-101/103 fill-in:
+A record the CDN could not complete (`bodyTruncated` still true, parent unnamed) is **not**
+`relay_complete` and keeps the full round-101/103 fill-in:
 archive, redlib harvest, post JSON. Nothing in the fallback chain changed.
+
+### Removed at the owner's request: the `💬 OP comment` card line
+
+The owner's live-card screenshots never showed it (it existed in FULL MODE only, i.e. with a
+Reddit app, which this deployment does not have), so it is gone from both structures:
+`REDDIT_OP_COMMENT` / `INCLUDE_OP_COMMENT`, `OP_COMMENT_MAX_CHARS`, `extract_op_comment`,
+`op_comment_text`, the `_top_comments` collection in `fetch_post_json`, the `op_comment` key
+of `resolve_post_media`'s result, the `op_line` plumbing in `build_v3_payload`, the workflow
+`env:` line, the `.env.example` block and the README row. The relay still ships `opComments`
+(0.0.8) because Game-Express's existing post-page parser merges the publisher's own comments
+into the post text — that is the 1:1 behaviour there; News-Express never had an equivalent in
+use.
 
 ## Game-Express (hand-off patch refreshed, base `main` @ `ccfe564` / PR #135)
 
@@ -90,13 +98,14 @@ archive, redlib harvest, post JSON. Nothing in the fallback chain changed.
 
 ## Tests
 
-- `tests/test_smoke.py`: 8 `r104` guards — comment parsing + card line; attachment fetch for
-  `opCommentCount`; `relay_complete` / `relay_stats` / `relay_op_comment` on the base; the
-  pipeline end-to-end with every proxy down (two native photos, Reddit's counts, the stickied
-  comment, **0** archive / redlib calls) versus a cut record (archive + redlib still asked);
+- `tests/test_smoke.py`: 9 `r104` guards — no CDN read for `opCommentCount`-only records;
+  `relay_complete` / `relay_stats` on the base; the pipeline end-to-end with every proxy down
+  (two native photos, Reddit's counts, **0** archive / redlib calls) versus a cut record (archive + redlib still asked);
   the retraction seatbelt (re-checked post: 0 listing/probe requests, unknown post: 1 each);
-  source wiring of every gate; the Devvit 0.0.8 constants. The round-101 liveness guard now
-  expects `relay-listing` for every clean relay record (it encoded the Arctic path).
+  source wiring of every gate; the Devvit 0.0.8 constants; the OP-comment removal (no symbol,
+  no Variable, no card line). The round-101 liveness guard now expects `relay-listing` for
+  every clean relay record (it encoded the Arctic path); the old section-5 OP-comment checks
+  are gone.
 - All three suites ALL PASS here and in a `sync_tree()` production checkout; Devvit
   `npm test` (tsc, biome, 27 unit tests, esbuild) green.
 

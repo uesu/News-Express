@@ -281,14 +281,15 @@ relay structure for gallery photos, muxed-audio video and the stats line):
   `relay empty (relay alive (N re-check message(s)) but no new post …)`, not stale.
 - **Edits** — a re-sent record (`revision` ≥ 2) is the newer message and supersedes the first
   for a post that has not been delivered yet; delivered posts are not re-posted.
-- **Round 104 — `relay_complete`.** A record with nothing cut, its crosspost parent named and
-  its comments present (or none announced) is the whole post: `intake_base_data()` marks it
+- **Round 104 — `relay_complete`.** A record with nothing cut and its crosspost parent named
+  is the whole post: `intake_base_data()` marks it
   `relay_complete`, and for such a post the engine skips the reddit.com post JSON, the archive
   probes (child, parent, post), both redlib gallery harvests and the archive liveness lookup
   (a clean relay record is `live` from the listing itself, source `relay-listing`; the relay
   re-checks it at ~5 min / 30 min / 2 h / 6 h / 24 h). Reddit's own counts ride on the card's
-  stats line when no proxy served one; the publisher's stickied/first own comment (0.0.8
-  `opComments`) is the card's `💬 OP comment` line (`REDDIT_OP_COMMENT`, on by default). The
+  stats line when no proxy served one (the relay's 0.0.8 `opComments` are for Game-Express's
+  comment merge only — the News-Express `💬 OP comment` card line and `REDDIT_OP_COMMENT` were
+  removed in round 104 at the owner's request; they never showed on live cards). The
   retraction seatbelt skips the `/new` listing snapshot and the mirror probe for posts the relay
   has re-checked. A record the CDN could not complete keeps the full round-101 fill-in.
 

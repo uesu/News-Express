@@ -92,9 +92,8 @@
 #   6. YouTube: default is now thumbnail + the animated starwardspark3
 #      button (deterministic, no third-party transcoder in the hot path).
 #      Set YOUTUBE_MEDIA_EMBED=1 to also try seaof.glass playback.
-#   7. OP comment: FULL MODE fetches the stickied/top OP comment and shows
-#      it in the card ("💬 OP comment:", capped 500 chars + full-comment
-#      link). REDDIT_OP_COMMENT=0 disables.
+#   7. (Removed in round 104 at the owner's request: the "💬 OP comment"
+#      card line / REDDIT_OP_COMMENT — it never appeared on live cards.)
 #   8. Discohook: after each successful post a keyless share-link preview of
 #      the exact card is created (discohook.app public API, /api/v1/share)
 #      and the URL is logged to the workflow run. The share data contains
@@ -1362,8 +1361,6 @@ YOUTUBE_MP4_TEMPLATE = "https://seaof.glass/yt/{video_id}.mp4"
 
 # FULL MODE only: include the OP's (stickied first, else first top-level)
 # comment in the card.
-INCLUDE_OP_COMMENT = _env_flag("REDDIT_OP_COMMENT", "1")
-OP_COMMENT_MAX_CHARS = 500
 
 # Test tools (round 12):
 #   TEST_POST_ID=<sub>/<post_id>  -> process exactly that post (bypasses feed)
@@ -2751,63 +2748,18 @@ def apply_intake_full_record(rec: dict, full) -> bool:
         changed = True
     if isinstance(full.get("video"), dict) and not rec.get("video"):
         rec["video"] = full["video"]
-    # Round 104 (relay 0.0.8): the author's own comments of an official post.
-    op_comments = parse_intake_op_comments(full.get("opComments"))
-    if op_comments:
-        rec["opComments"] = op_comments
-        rec["opCommentCount"] = len(op_comments)
-        changed = True
     rec["_completed"] = changed
     return changed
 
 
 def _intake_needs_full_record(rec: dict) -> bool:
     """Whether the inline record is missing something only `record.json`
-    carries: a cut body or media list, an unnamed crosspost parent, or
-    (round 104, relay 0.0.8) the author's own comments of an official post
-    (`opCommentCount` > 0 inline, the comments themselves in the file)."""
+    carries: a cut body or media list, or an unnamed crosspost parent. The
+    relay's 0.0.8 `opComments` (the author's own comments of an official
+    post) are for Game-Express's comment merge; this engine does not use
+    them (the OP-comment card line was removed in round 104)."""
     return bool(rec.get("bodyTruncated") or rec.get("mediaTruncated")
-                or (rec.get("xpost") and not rec.get("xpostPermalink"))
-                or (_intake_int(rec.get("opCommentCount")) > 0 and not rec.get("opComments")))
-
-
-def _intake_int(value) -> int:
-    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
-
-
-def parse_intake_op_comments(value) -> list[dict]:
-    """Round 104: the author's own comments from `record.json`
-    (`opComments: [{id, body, created, stickied}]`, oldest first). Anything
-    malformed is dropped; the list is never raised on."""
-    out = []
-    for c in value or []:
-        if not isinstance(c, dict):
-            continue
-        body = str(c.get("body") or "").strip()
-        cid = str(c.get("id") or "").strip().lower()
-        if not body or not re.fullmatch(r"[a-z0-9]{4,12}", cid):
-            continue
-        out.append({"id": cid, "body": body,
-                    "created": _intake_int(c.get("created")),
-                    "stickied": bool(c.get("stickied"))})
-    return out
-
-
-def relay_op_comment(rec: dict) -> dict | None:
-    """Round 104: the card's "OP comment" line from the relayed comments —
-    the stickied one first, else the earliest — in the shape
-    extract_op_comment() returns for FULL MODE (text, permalink, stickied).
-    Needs no redlib / reddit.com / Arctic request."""
-    comments = rec.get("opComments") or []
-    if not comments:
-        return None
-    pick = next((c for c in comments if c.get("stickied")), comments[0])
-    text = strip_html(pick.get("body"))
-    if not text:
-        return None
-    permalink = (f"https://www.reddit.com{str(rec.get('permalink') or '').rstrip('/')}"
-                 f"/comment/{pick.get('id', '')}/")
-    return {"text": text, "permalink": permalink, "stickied": bool(pick.get("stickied"))}
+                or (rec.get("xpost") and not rec.get("xpostPermalink")))
 
 
 def intake_content_html(rec: dict) -> str:
@@ -2928,15 +2880,14 @@ def intake_base_data(entry) -> dict:
         "vred_id": extract_vreddit_id(" ".join([url, media_blob, rec.get("body") or ""])),
         "redgifs_url": extract_redgifs_url(" ".join([url, rec.get("body") or ""])),
         "youtube_url": select_youtube_url(outbound, rec.get("body") or ""),
-        # Round 104: a COMPLETE relay record (nothing cut, parent named,
-        # comments present) is the whole post as Reddit shows it — the
+        # Round 104: a COMPLETE relay record (nothing cut, parent named) is
+        # the whole post as Reddit shows it — the
         # media resolver then asks no redlib instance, no reddit.com
         # instance and no archive for it; only the vxreddit/embedez/
         # embeddit proxies (part of the relay structure) and the native
         # URLs the record carries.
         "relay_complete": not _intake_needs_full_record(rec),
         "relay_stats": relay_record_stats(rec),
-        "relay_op_comment": relay_op_comment(rec),
     }
 
 
@@ -3413,7 +3364,7 @@ _HTML_TAG_RE = re.compile(r"(?i)</?[a-z][a-z0-9]*(?:\s[^<>]*)?/?>")
 def _clean_selftext(value: str | None) -> str:
     """Clean Reddit JSON `selftext` while preserving paragraphs and Markdown.
 
-    Unlike `strip_html` (used for single-line OP comment summaries), JSON
+    Unlike `strip_html` (used for single-line summaries), JSON
     `selftext` is raw Markdown with single-escaped HTML entities; collapsing
     all whitespace to single spaces would flatten multi-page paragraphs,
     headings, lists, and tables. Input that actually contains HTML markup (the
@@ -5186,7 +5137,7 @@ async def fetch_post_json(session: aiohttp.ClientSession, post_id: str, use_oaut
     or None (caller falls back to native/RSS-only data).
     """
     global _feedtoken_json_failed
-    # limit=25: we need the TOP-LEVEL comments (data[1]) for the OP comment.
+    # limit=25 kept for URL stability; data[1] (comments) is not used.
     url = f"https://oauth.reddit.com/comments/{post_id}.json?limit=25&raw_json=1"
     headers = {"User-Agent": REDDIT_API_USER_AGENT}
     token = await get_oauth_token(session) if use_oauth else None
@@ -5236,13 +5187,6 @@ async def fetch_post_json(session: aiohttp.ClientSession, post_id: str, use_oaut
                 body = await resp.text()
         data = json.loads(body)
         post = data[0]["data"]["children"][0]["data"]
-        try:
-            post["_top_comments"] = [
-                c for c in (data[1].get("data", {}).get("children") or [])
-                if isinstance(c, dict) and c.get("data", {}).get("body")
-            ]
-        except Exception:
-            post["_top_comments"] = []
         source = "oauth" if token else "feed-token"
         _note_json_probe(f"ok_{source}")
         logging.info(f"[{post_id}] post JSON OK via {source} (FULL MODE).")
@@ -6133,51 +6077,6 @@ def extract_native_media(content_html: str | None) -> list[dict]:
 # ---------------------------------------------------------------------------
 # ■ OP COMMENT (FULL MODE, round 12)
 # ---------------------------------------------------------------------------
-def extract_op_comment(post_json: dict) -> dict | None:
-    """
-    Finds the OP's top-level comment (stickied first, else the first
-    top-level comment by the post author). Returns
-    {"text", "permalink", "stickied"} or None.
-    """
-    top = post_json.get("_top_comments") or []
-    author = post_json.get("author")
-    if not top or not author:
-        return None
-
-    def _finish(d: dict) -> dict | None:
-        # Round 65 audit: the OP comment body unescapes exactly once —
-        # inside strip_html (never again downstream).
-        body = strip_html(d.get("body"))
-        if not body:
-            return None
-        permalink = (f"https://www.reddit.com{post_json.get('permalink', '').rstrip('/')}"
-                     f"/comment/{d.get('id', '')}/")
-        return {"text": body, "permalink": permalink, "stickied": bool(d.get("stickied"))}
-
-    fallback = None
-    for c in top:
-        d = c.get("data") if isinstance(c, dict) else None
-        if not d or d.get("author") != author or not (d.get("body") or "").strip():
-            continue
-        if d.get("stickied"):
-            return _finish(d)
-        if fallback is None:
-            fallback = d
-    return _finish(fallback) if fallback else None
-
-
-def op_comment_text(op: dict) -> str:
-    """Single-line card text: label + capped comment + full-comment link."""
-    t = op["text"].strip()
-    if len(t) > OP_COMMENT_MAX_CHARS:
-        cut = t[:OP_COMMENT_MAX_CHARS]
-        cut = cut.rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
-    else:
-        cut = t
-    label = "💬 OP comment" + (" (stickied)" if op.get("stickied") else "")
-    return f"**{label}:** {cut} — [full comment]({op['permalink']})"
-
-
 # ---------------------------------------------------------------------------
 # ■ REDLIB GALLERY ENRICHMENT (round 12, best-effort, NATIVE MODE)
 # ---------------------------------------------------------------------------
@@ -6863,7 +6762,6 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
     media: list[dict] = []
     stats = None
     crosspost = None
-    op_comment = None
     body = base["body"]  # round 65 audit: RSS/redlib/mirror base bodies are unescaped exactly once at build time (clean_rss_body / reddit_proxy.clean_proxy_body)
     title = base["title"]
     author = base["author"]
@@ -6879,8 +6777,6 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
     if relay_complete:
         logging.info(f"[{label or 'relay'}] relay record is complete — no archive, "
                      f"redlib or reddit.com request for this post (proxies only).")
-    if op_comment is None and INCLUDE_OP_COMMENT and base.get("relay_op_comment"):
-        op_comment = base["relay_op_comment"]
 
     if post_json:
         # ---- FULL MODE ----
@@ -6892,8 +6788,6 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
             body = _clean_selftext(post_json["selftext"]) or body
         stats = {"comments": post_json.get("num_comments", 0),
                  "ups": post_json.get("ups", 0)}
-        if INCLUDE_OP_COMMENT:
-            op_comment = extract_op_comment(post_json)
         # video id / youtube — resolved BEFORE the photo loop (round 12)
         m = post_json.get("media")
         if isinstance(m, dict) and isinstance(m.get("reddit_video"), dict):
@@ -7491,7 +7385,6 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
         "media": media,
         "stats": stats,
         "crosspost": crosspost,
-        "op_comment": op_comment,
         "youtube_url": yt_url,
         "youtube_id": yt_vid,
         "youtube_live": yt_live,
@@ -7595,7 +7488,6 @@ def build_v3_payload(subreddit: str, data: dict, reddit_url: str, posted_ts: int
     row = build_action_row(reddit_url, data["youtube_url"])
 
     # Char budget: Discord caps TOTAL text at 4000 across all components.
-    op_line = op_comment_text(data["op_comment"]) if data.get("op_comment") else ""
     # Round 62: an inline-image link that is ALSO a gallery item never
     # renders twice — the raw-URL body line is scrubbed (live 1wx9c77)
     # Round 66: markdown tables get Discord-safe rendering (Discord renders
@@ -7611,7 +7503,7 @@ def build_v3_payload(subreddit: str, data: dict, reddit_url: str, posted_ts: int
     # format example) — same single call site, same every-source parity.
     body_src = _format_markdown_tables(_format_quote_blocks(
         _drop_gallery_media_lines(data["body"], media)))
-    single_budget = max(300, 3800 - len(header) - len(op_line) - len(base_stats_line))
+    single_budget = max(300, 3800 - len(header) - len(base_stats_line))
     if len(body_src) <= single_budget:
         stats_line = base_stats_line
         body_out, body_rest = body_src, ""
@@ -7621,7 +7513,7 @@ def build_v3_payload(subreddit: str, data: dict, reddit_url: str, posted_ts: int
         body_out, body_rest = "", ""
         for _ in range(3):
             stats_line = f"{base_stats_line} • 📜 Page 1/{total_pages}"
-            body_budget = max(300, 3800 - len(header) - len(op_line) - len(stats_line))
+            body_budget = max(300, 3800 - len(header) - len(stats_line))
             body_out, body_rest = split_card_body(body_src, body_budget)
             if not body_rest:
                 stats_line = base_stats_line
@@ -7645,8 +7537,6 @@ def build_v3_payload(subreddit: str, data: dict, reddit_url: str, posted_ts: int
         ]}
         if body_out:
             container1["components"].append({"type": 10, "content": body_out})
-        if op_line:
-            container1["components"].append({"type": 10, "content": op_line})
         container1["components"].append({"type": 14, "divider": True, "spacing": 1})
         container1["components"].append(gallery(first))
         container2 = {"type": 17, "accent_color": 16729344, "components": [
@@ -7668,8 +7558,6 @@ def build_v3_payload(subreddit: str, data: dict, reddit_url: str, posted_ts: int
     inner = [{"type": 10, "content": header}]
     if body_out:
         inner.append({"type": 10, "content": body_out})
-    if op_line:
-        inner.append({"type": 10, "content": op_line})
     if media:
         # Round 38c hardening: the divider precedes ANY media (a video-only
         # card — the round-13 tile — keeps its legacy divider too).

@@ -332,7 +332,6 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `PROXY_MAX_CONCURRENCY` | `8` | global cap on in-flight proxy requests |
 | `YOUTUBE_MEDIA_EMBED` | `off` | `1` = also try to **play** YouTube links (seaof.glass, +up to ~3 min probes/post) |
 | `YOUTUBE_LINK_MESSAGE` | `1` | `0` = don't post the second bare YouTube link (playable embed) after the card |
-| `REDDIT_OP_COMMENT` | `on` | `0` = hide the 💬 OP comment line (FULL MODE) |
 | `DISCOHOOK_PREVIEW` | `on` | `0` = don't create/log the per-card Discohook share-link preview |
 | `REDDIT_MIRROR` *(V1 only)* | `redditez.com` | embed mirror host: `embeddit.deltandy.me` or `vxreddit.com` |
 
