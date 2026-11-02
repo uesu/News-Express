@@ -67,7 +67,7 @@ missed; when it is, a served target costs nothing.
 
 ### Round 107 cross-check — a post approved from the mod queue hours later
 
-Live 1xlrj90 (2026-11-02): created 07:31Z, held in the mod queue, approved ~12:35Z, listed by
+Live 1xlrj90 (2026-11-02): created 08:11Z, held in the mod queue, approved ~12:35Z, listed by
 the relay at 12:36Z. In News-Express an old-chain archive hold (`removal_notice`) suppressed the
 relay record until the round-107 restore rule. **Game-Express has no equivalent defect and needs
 no port of that rule:** its Reddit source keeps no hold memory (a removed post is simply not an
