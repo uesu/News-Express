@@ -6,8 +6,13 @@ import type {
   UiResponse,
 } from '@devvit/web/shared'
 import {
+  becameLive,
+  bodyHash,
+  bodyHashKey,
   bootKey,
   classifyStatus,
+  dueStage,
+  type FullRecord,
   failKey,
   isDiscordWebhook,
   legacySeenKey,
@@ -15,10 +20,18 @@ import {
   parseSubreddits,
   parseUsers,
   type RelayRecord,
+  SENT_ZSET,
   seenKey,
+  shouldReport,
   sortOldestFirst,
+  stageKey,
+  stateKey,
+  stateKeyOf,
   toContent,
+  toMultipartBody,
+  toUpdateContents,
   toWebhookBody,
+  type UpdateItem,
   uniqueById,
   userTarget,
 } from './relay.ts'
@@ -27,11 +40,12 @@ import {
 // Tunables
 // ---------------------------------------------------------------------------
 
-/** Newest posts fetched per subreddit per poll. 2-min polls on leak subs
- *  never see more than a handful; 25 covers a burst with margin. */
+/** Newest posts fetched per subreddit per poll. 5-min polls (0.0.6; 2-min
+ *  before) on leak subs never see more than a handful; 25 covers a burst. */
 const LISTING_LIMIT = 25
-/** Hard cap on Discord sends per poll — the rest is picked up next tick. */
-const MAX_SENDS_PER_POLL = 10
+/** Hard cap on Discord sends per poll — the rest is picked up next tick.
+ *  15 at 5-minute polls (was 10 at 2-minute polls): same ceiling per minute. */
+const MAX_SENDS_PER_POLL = 15
 /** De-dup markers outlive the 48 h News-Express window by a wide margin. */
 const SEEN_TTL_SECONDS = 7 * 24 * 3600
 /** Give up on a post after this many delivery failures. */
@@ -39,6 +53,17 @@ const MAX_FAILS = 3
 /** Per-request budget; the whole handler must finish well inside Devvit's
  *  30 s HTTP timeout. */
 const DISCORD_TIMEOUT_MS = 8_000
+/** 0.0.7: post-delivery re-checks (`reddit.getPostById`) per poll, and the
+ *  wall-clock point after which a poll stops starting new work. */
+const MAX_RECHECKS_PER_POLL = 20
+const POLL_SOFT_DEADLINE_MS = 20_000
+/** How long a delivered post stays on the re-check list (last stage + slack). */
+const RECHECK_WINDOW_SECONDS = 86400 + 1800
+/** After this many consecutive multipart failures the attachment is skipped
+ *  for a while (plain JSON content only) so a Discord/Devvit quirk cannot
+ *  double every send. */
+const ATTACH_FAILS_BEFORE_PAUSE = 3
+const ATTACH_PAUSE_SECONDS = 3600
 
 type Endpoint =
   | 'internal/scheduler/poll'
@@ -54,6 +79,11 @@ type PollResult = {
   sent: number
   skipped: number
   failed: number
+  /** 0.0.7: posts re-checked after delivery, update messages sent, records
+   *  re-sent because the body was edited. */
+  rechecked: number
+  updates: number
+  resent: number
   errors: string[]
 }
 
@@ -140,6 +170,9 @@ async function runPoll(): Promise<PollResult> {
     sent: 0,
     skipped: 0,
     failed: 0,
+    rechecked: 0,
+    updates: 0,
+    resent: 0,
     errors: [],
   }
   const startedAt = Date.now()
@@ -169,7 +202,7 @@ async function runPoll(): Promise<PollResult> {
 
   // 1. Fetch all listings concurrently: one call per subreddit (`/new`) and one
   //    per official account (`u/<name>` submitted, newest first). 12 + 3 calls
-  //    every 2 minutes is well inside the 100 QPM budget.
+  //    every 5 minutes (3/min) is far inside the 100 QPM budget.
   type Listing = {
     target: string
     sub: string | null
@@ -236,9 +269,11 @@ async function runPoll(): Promise<PollResult> {
       result.skipped++
       continue
     }
-    const outcome = await deliver(webhook, rec)
+    const full = await completeRecord(rec, result)
+    const outcome = await deliver(webhook, rec, full)
     if (outcome === 'ok') {
       await redis.set(seenKey(rec.id), '1', {expiration: ttl()})
+      await rememberSent(rec)
       result.sent++
     } else if (outcome === 'drop') {
       await redis.set(seenKey(rec.id), 'dropped', {expiration: ttl()})
@@ -257,6 +292,14 @@ async function runPoll(): Promise<PollResult> {
     }
   }
 
+  // 4. 0.0.7: look again at what was delivered (removals, deletions, edits;
+  //    0.0.8: approvals).
+  try {
+    await recheckDelivered(webhook, enabled, startedAt, result)
+  } catch (err) {
+    result.errors.push(describe('recheck', err))
+  }
+
   await redis.set(
     'last:poll',
     JSON.stringify({at: startedAt, ms: Date.now() - startedAt, ...result}),
@@ -264,6 +307,180 @@ async function runPoll(): Promise<PollResult> {
   await redis.incrBy('total:sent', result.sent)
   console.log(summarize(result))
   return result
+}
+
+// ---------------------------------------------------------------------------
+// 0.0.7: complete record + post-delivery re-check
+// ---------------------------------------------------------------------------
+
+/** Build the `record.json` payload: the untrimmed record plus the crosspost
+ *  parent (one extra request, only for crossposts). Also fills
+ *  `xpostPermalink` on the inline record. Never throws. */
+async function completeRecord(
+  rec: RelayRecord,
+  result: PollResult,
+): Promise<FullRecord> {
+  const full: FullRecord = {...rec, parent: null}
+  if (rec.xpost) {
+    try {
+      const parent = await reddit.getPostById(
+        `t3_${rec.xpost.replace(/^t3_/, '')}`,
+      )
+      const parentRec = toRecord(parent, parent.subredditName)
+      full.parent = parentRec
+      rec.xpostPermalink = parentRec.permalink
+      full.xpostPermalink = parentRec.permalink
+    } catch (err) {
+      result.errors.push(describe(`${rec.id} parent ${rec.xpost}`, err))
+    }
+  }
+  return full
+}
+
+/** Put a delivered post on the re-check list and remember its state. */
+async function rememberSent(rec: RelayRecord): Promise<void> {
+  const id = rec.id
+  await redis.zAdd(SENT_ZSET, {member: id, score: rec.created})
+  await redis.set(stageKey(id), '0', {expiration: ttl()})
+  await redis.set(
+    stateKey(id),
+    stateKeyOf({
+      removed: rec.removed,
+      deleted: false,
+      edited: !!rec.edited,
+      spoiler: rec.spoiler,
+      nsfw: rec.nsfw,
+      locked: false,
+    }),
+    {expiration: ttl()},
+  )
+  await redis.set(bodyHashKey(id), bodyHash(rec.body), {expiration: ttl()})
+}
+
+/**
+ * Look again at recently delivered posts (~5 min, 30 min, 2 h, 6 h and 24 h
+ * after creation) and tell the readers what Reddit shows now: one batched
+ * `v: 2` update message per poll (first look always, later looks on change),
+ * and a re-sent `v: 1` record (`revision` ≥ 2, `resent` = why) when the body
+ * was edited or when a removed/filtered post became live again (approval,
+ * 0.0.8). Readers keep the newest message per id, so a re-sent record simply
+ * supersedes.
+ */
+async function recheckDelivered(
+  webhook: string,
+  enabled: boolean,
+  startedAt: number,
+  result: PollResult,
+): Promise<void> {
+  const now = Math.floor(Date.now() / 1000)
+  await redis.zRemRangeByScore(SENT_ZSET, 0, now - RECHECK_WINDOW_SECONDS - 1)
+  const rows = await redis.zRange(
+    SENT_ZSET,
+    now - RECHECK_WINDOW_SECONDS,
+    now,
+    {by: 'score'},
+  )
+  type Due = {id: string; created: number; stage: number}
+  const due: Due[] = []
+  for (const {member, score} of rows) {
+    const stage = dueStage(now - score)
+    if (stage === 0) continue
+    const done = Number((await redis.get(stageKey(member))) ?? '0')
+    if (stage > done) due.push({id: member, created: score, stage})
+  }
+  // Oldest first: the last stage of an old post before the first of a new one
+  // would starve nothing — the list is short — but keeps the order stable.
+  due.sort((a, b) => a.created - b.created)
+
+  const items: UpdateItem[] = []
+  for (const d of due.slice(0, MAX_RECHECKS_PER_POLL)) {
+    if (Date.now() - startedAt > POLL_SOFT_DEADLINE_MS) break
+    let post: Awaited<ReturnType<typeof reddit.getPostById>>
+    try {
+      post = await reddit.getPostById(`t3_${d.id}`)
+    } catch (err) {
+      // A deleted post can 404 here; report it as deleted rather than silent.
+      const msg = err instanceof Error ? err.message : String(err)
+      if (/404|not found/i.test(msg)) {
+        items.push({
+          id: d.id,
+          sub: '',
+          age: now - d.created,
+          stage: d.stage,
+          removed: 'deleted',
+          deleted: true,
+          edited: false,
+          spoiler: false,
+          nsfw: false,
+          locked: false,
+          score: 0,
+          comments: 0,
+        })
+        await redis.set(stageKey(d.id), `${d.stage}`, {expiration: ttl()})
+        result.rechecked++
+      } else {
+        result.errors.push(describe(`recheck ${d.id}`, err))
+      }
+      continue
+    }
+    result.rechecked++
+    const item: UpdateItem = {
+      id: d.id,
+      sub: post.subredditName,
+      age: now - d.created,
+      stage: d.stage,
+      removed: post.removedByCategory ?? null,
+      deleted:
+        post.authorName === '[deleted]' || post.removedByCategory === 'deleted',
+      edited: !!post.edited,
+      spoiler: !!post.spoiler,
+      nsfw: !!post.nsfw,
+      locked: !!post.locked,
+      score: post.score ?? 0,
+      comments: post.numberOfComments ?? 0,
+    }
+    const previous = (await redis.get(stateKey(d.id))) ?? null
+    if (shouldReport(item, previous)) items.push(item)
+    await redis.set(stateKey(d.id), stateKeyOf(item), {expiration: ttl()})
+    await redis.set(stageKey(d.id), `${d.stage}`, {expiration: ttl()})
+
+    // Re-send the complete record when the readers need it again:
+    //  • edited body (hash changed),
+    //  • approved — removed/filtered/deleted before, live now (the readers'
+    //    6 h window may have lost the original record by then).
+    if (!item.deleted && !item.removed && enabled) {
+      const reasons: string[] = []
+      const hash = bodyHash(post.body ?? '')
+      if (item.edited && (await redis.get(bodyHashKey(d.id))) !== hash)
+        reasons.push('edited')
+      if (becameLive(previous, item)) reasons.push('approved')
+      if (reasons.length > 0) {
+        const rec = toRecord(post, post.subredditName)
+        rec.revision =
+          (Number((await redis.get(`rev:${d.id}`)) ?? '1') || 1) + 1
+        rec.resent = reasons.join('+')
+        const full = await completeRecord(rec, result)
+        if ((await deliver(webhook, rec, full)) === 'ok') {
+          await redis.set(bodyHashKey(d.id), hash, {expiration: ttl()})
+          await redis.set(`rev:${d.id}`, `${rec.revision}`, {
+            expiration: ttl(),
+          })
+          result.resent++
+        }
+      }
+    }
+  }
+
+  if (items.length === 0 || !enabled) return
+  for (const content of toUpdateContents(items, now)) {
+    const outcome = await deliverContent(
+      webhook,
+      toWebhookBody(content),
+      'update',
+    )
+    if (outcome === 'ok') result.updates++
+    else result.errors.push(`update batch: Discord ${outcome}`)
+  }
 }
 
 function fetchSub(sub: string) {
@@ -322,9 +539,16 @@ function toRecord(
     removedByCategory?: string | undefined
     crosspostParentId?: string | undefined
     body?: string | undefined
+    edited?: boolean | undefined
     gallery: {url: string}[]
     secureMedia?:
-      | {redditVideo?: {fallbackUrl?: string; hlsUrl?: string}}
+      | {
+          redditVideo?: {
+            fallbackUrl?: string
+            hlsUrl?: string
+            isGif?: boolean
+          }
+        }
       | undefined
   },
   sub: string,
@@ -358,6 +582,16 @@ function toRecord(
     media,
     body: p.body ?? '',
     bodyTruncated: false,
+    full: true,
+    edited: !!p.edited,
+    xpostPermalink: null,
+    video: video
+      ? {
+          fallback: video.fallbackUrl,
+          hls: video.hlsUrl,
+          gif: !!video.isGif,
+        }
+      : null,
   }
 }
 
@@ -365,16 +599,53 @@ function toRecord(
 // Discord
 // ---------------------------------------------------------------------------
 
+/**
+ * Send one record. 0.0.7: the message carries the trimmed fenced record as
+ * content (what every reader parses) AND the complete record as the
+ * `record.json` attachment. If the multipart form is refused (4xx), the same
+ * record goes out as plain JSON content exactly as before 0.0.7, so a post
+ * can never be lost to the attachment; three refusals in a row pause the
+ * attachment for an hour.
+ */
 async function deliver(
   webhook: string,
   rec: RelayRecord,
+  full: FullRecord | null = null,
 ): Promise<'ok' | 'retry' | 'drop'> {
-  const body = toWebhookBody(toContent(rec))
+  const content = toContent(rec)
+  if (full && !(await redis.get('attach:off'))) {
+    const {body, contentType} = toMultipartBody(content, full)
+    const outcome = await deliverContent(webhook, body, rec.id, contentType)
+    if (outcome !== 'drop') {
+      if (outcome === 'ok') await redis.del('attach:fails')
+      return outcome
+    }
+    const fails = await redis.incrBy('attach:fails', 1)
+    console.error(
+      `[${rec.id}] attachment refused (${fails}x) — sending content only`,
+    )
+    if (fails >= ATTACH_FAILS_BEFORE_PAUSE) {
+      await redis.set('attach:off', '1', {
+        expiration: new Date(Date.now() + ATTACH_PAUSE_SECONDS * 1000),
+      })
+      await redis.del('attach:fails')
+    }
+  }
+  const plain = toContent({...rec, full: false})
+  return deliverContent(webhook, toWebhookBody(plain), rec.id)
+}
+
+async function deliverContent(
+  webhook: string,
+  body: string,
+  label: string,
+  contentType = 'application/json',
+): Promise<'ok' | 'retry' | 'drop'> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const rsp = await fetch(`${webhook}?wait=true`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': contentType},
         body,
         signal: AbortSignal.timeout(DISCORD_TIMEOUT_MS),
       })
@@ -382,7 +653,7 @@ async function deliver(
       if (outcome === 'ok') return 'ok'
       if (outcome === 'drop') {
         console.error(
-          `[${rec.id}] Discord HTTP ${rsp.status}: ${(await rsp.text()).slice(0, 200)}`,
+          `[${label}] Discord HTTP ${rsp.status}: ${(await rsp.text()).slice(0, 200)}`,
         )
         return 'drop'
       }
@@ -392,12 +663,12 @@ async function deliver(
         continue
       }
       console.error(
-        `[${rec.id}] Discord HTTP ${rsp.status} — will retry next poll`,
+        `[${label}] Discord HTTP ${rsp.status} — will retry next poll`,
       )
       return 'retry'
     } catch (err) {
       console.error(
-        `[${rec.id}] Discord request error: ${err instanceof Error ? err.message : err}`,
+        `[${label}] Discord request error: ${err instanceof Error ? err.message : err}`,
       )
       if (attempt === 0) {
         await sleep(1000)
@@ -418,7 +689,7 @@ function sleep(ms: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function summarize(r: PollResult): string {
-  const base = `poll: ${r.subs} subs, ${r.users} users, ${r.fetched} fetched, ${r.sent} sent, ${r.skipped} seen, ${r.failed} failed, ${r.bootstrapped} bootstrapped`
+  const base = `poll: ${r.subs} subs, ${r.users} users, ${r.fetched} fetched, ${r.sent} sent, ${r.skipped} seen, ${r.failed} failed, ${r.bootstrapped} bootstrapped; recheck ${r.rechecked} looked, ${r.updates} update msg, ${r.resent} re-sent`
   return r.errors.length
     ? `${base}; ${r.errors.length} issue(s): ${r.errors[0]}`
     : base

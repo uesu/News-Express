@@ -1,5 +1,89 @@
 # Changelog
 
+## Unreleased — Round 104: the relay is 1:1 with the old chain — relay 0.0.8 (2026-11-02)
+
+`devvit/gaming-express` 0.0.8, `testing area/reddit_main_v3.py` (intake block, media resolver,
+liveness verdict, retraction seatbelt), `tests/test_smoke.py`, docs/policies, `docs/handoffs/`
+refreshed (Game-Express base `ccfe564`). No card, cache or Twitter change. Full record:
+[`docs/history/ROUND_104.md`](history/ROUND_104.md).
+
+- **Why:** the owner asked for full 1:1 coverage now — a relay-served post must need no redlib
+  instance, no reddit.com instance and no Arctic request in either engine; the vxreddit /
+  embedez / embeddit proxies are part of the relay structure and stay; the old chain stays as
+  the fallback.
+- **Relay 0.0.8 (uploads as Reddit 0.0.7):** re-check stages ~5 min / 30 min / 2 h / 6 h /
+  **24 h**; a post that flips removed/filtered → live is re-sent complete (`resent:
+  "approved"`).
+- **Reader:** `relay_complete` (nothing cut, parent named, comments present) on the base →
+  `resolve_post_media` skips the archive (post, parent, child probe) and both redlib harvests,
+  `main()` skips the reddit.com post JSON; counts from the record / newest re-check when no
+  proxy served them. A clean relay record is live from the listing itself (`relay-listing`, no archive
+  lookup); the retraction seatbelt skips the `/new` snapshot and mirror probe for re-checked
+  posts. Records the CDN could not complete keep the full round-101/103 fill-in.
+- **Game-Express:** `relay_complete` entries never go through `resolve_post()` in `items()` /
+  `program_post()` (hand-off base `4973dc6`).
+- **Removed (owner's request):** the News-Express `💬 OP comment` card line and its
+  `REDDIT_OP_COMMENT` Variable — FULL-MODE only, never seen on a live card. `extract_op_comment`,
+  `op_comment_text`, the `_top_comments` collection in `fetch_post_json`, the workflow `env:`
+  line, `.env.example` and README rows are gone; `resolve_post_media` no longer returns
+  `op_comment`. The publisher-comment follow-up prototyped for relay 0.0.8 (and its Game-Express
+  merge) was dropped the same day, before any upload — the relay reads no comments.
+- Tests: 9 `r104` smoke guards (r101 liveness guard updated, OP-comment section removed), 25 Devvit unit tests; three
+  suites ALL PASS here and in a `sync_tree()` production checkout; Game-Express intake 7/7 +
+  smoke 628/628 on a fresh `4973dc6` clone and its production checkout.
+
+## Unreleased — Round 103: the relay is the complete Reddit source — relay 0.0.7 (2026-11-02)
+
+`devvit/gaming-express` 0.0.7, `testing area/reddit_main_v3.py` (intake block, liveness verdict,
+retraction seatbelt), `tests/test_smoke.py`, docs/policies, `docs/handoffs/` refreshed. No card,
+cache or Twitter change. Full record: [`docs/history/ROUND_103.md`](history/ROUND_103.md).
+
+- **Why:** after rounds 101/102 the relay owned discovery, but long bodies, crosspost parents and
+  liveness still leaned on the archive/mirrors per post. The owner asked for the relay to be the
+  complete feature now, so nothing needs a new PR when the old sources go dark (video-audio
+  proxies excepted, old chain kept as fallback).
+- **Relay 0.0.7 (uploads as Reddit 0.0.6):** every record message carries the untrimmed record as
+  a `record.json` attachment (full body, all media, video renditions, crosspost parent) — inline
+  record still `v: 1` with optional `full`, `mediaTruncated`, `edited`, `revision`,
+  `xpostPermalink`, `video`; plain-content fallback if the multipart form is refused. Delivered
+  posts are re-checked at ~10 min / 30 min / 2 h / 6 h and reported in one batched `v: 2` update
+  message per poll (first look always, then on change); an edited body is re-sent as a record with
+  `revision` ≥ 2.
+- **Reader:** completes cut records / crossposts from `record.json` (≤ 10 CDN reads per run, no
+  token); the latest re-check per post is the liveness verdict before the record's own `removed`
+  and before any archive lookup (`relay-update`), and feeds the retraction seatbelt; re-check
+  messages count as relay liveness (`empty — relay alive …`, not stale); crosspost path and parent
+  media from the relay; summary gains `U re-checked, C completed`.
+- **Game-Express:** same reader rules in the hand-off patch (updates drop removed/deleted, admit
+  approved; `record.json` completion; edits supersede; `edited`/`crosspost_url` on entries).
+- Tests: 10 `r103` smoke guards, 23 Devvit unit tests; three suites ALL PASS here and in a
+  `sync_tree()` production checkout; Game-Express smoke 628/628 + intake suite 6/6 on `3af83ff`.
+
+## Unreleased — Round 102: shared intake channel, 5-minute relay, Game-Express hand-off (2026-11-02)
+
+`testing area/reddit_main_v3.py` (`fetch_intake_records()` only), `tests/test_smoke.py`,
+`devvit/gaming-express` 0.0.6, docs/policies, `docs/handoffs/`. No card, cache or Twitter change.
+Full record: [`docs/history/ROUND_102.md`](history/ROUND_102.md).
+
+- **Reader in a shared channel:** the owner moved the relay webhook into `#modlogs`. The reader
+  now pages newest-first (`before=`), stops at the lookback cutoff, and measures freshness on
+  relay records only — a busy channel can shorten the 6-hour window but never hide fresh records,
+  and another bot's message (or a webhook message whose `content` arrives empty because the
+  Message Content Intent is off) can no longer vouch for a silent relay. Messages without a
+  single record → `empty` with the hint "Message Content Intent off, wrong channel id, or the
+  relay webhook points elsewhere".
+- **Devvit relay 0.0.6:** poll `*/2` → `*/5` (owner's choice; 3 requests/min), per-poll send cap
+  10 → 15 (per-minute ceiling unchanged), no record change. Uploads as Reddit **0.0.5**.
+- **Game-Express hand-off:** [`docs/handoffs/GAME_EXPRESS_INTAKE_READER.md`](handoffs/GAME_EXPRESS_INTAKE_READER.md)
+  + `git am`-able patch — same reader rules, same two settings, `RedditClient._gather_listing()`
+  relay-first with per-target fallback; verified against Game-Express `main` @ `3af83ff`
+  (smoke 626/626, new suite 5/5, ruff, production-shape checkout).
+- **Docs audit:** every `#reddit-intake` / "every 2 minutes" / "Game-Express does not read it
+  yet" statement replaced across README, AGENTS, privacy (effective 2026-11-02), terms,
+  `.env.example`, `docs/DEVVIT_SETUP.md` (§9 troubleshooting rows, §10 step 3 closed),
+  `devvit/README.md`, workflow/engine comments.
+- Tests: four `r102 reader:` guards; three suites ALL PASS (also in a `sync_tree()` production checkout).
+
 ## Unreleased — Round 101: the Devvit relay is the primary Reddit listing (2026-11-02)
 
 `testing area/reddit_main_v3.py`, `.github/workflows/reddit_monitor.yml` (env only),

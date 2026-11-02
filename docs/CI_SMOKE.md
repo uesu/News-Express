@@ -105,7 +105,7 @@ production repositories), and manual review for new minor series such as Python
   bump.
 * **Pipeline checks** — the Reddit V3 card logic is exercised with fixtures
   (body cleaning, media dedup/best-rendition, i.redd.it swap, redlib
-  post-area scoping, test-post native base, OP comment selection,
+  post-area scoping, test-post native base,
   components-v2 layout + button set, 4000-char budget, and — round 13 — the
   proxy-service parsers: Embeddit status-id codec, og-tag parsing, stats
   lines, the redditez/embeddit JSON shapes, fallback-chain skipping, the

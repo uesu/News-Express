@@ -1,0 +1,1332 @@
+From 151d1f8b3771c06bd261a4e1d0b8b9e359cf7dd7 Mon Sep 17 00:00:00 2001
+From: News-Express hand-off <noreply@github.com>
+Date: Mon, 2 Nov 2026 04:12:14 +0000
+Subject: [PATCH] Reddit: the Devvit relay is the primary listing (intake
+ reader)
+
+Hand-off from News-Express rounds 101-104 (docs/handoffs/GAME_EXPRESS_INTAKE_READER.md).
+RedditClient consults gamexpress/sources/reddit_intake.py before the redlib/reddit.com
+fleet; a healthy relay with records for the target is the listing (0 fleet requests),
+every other state falls back unchanged with one step-summary line. Relay 0.0.7: record.json
+completion (full body / media / crosspost parent), v2 re-check messages (removed, deleted,
+approved), re-sent records after edits. Relay 0.0.8: re-sent records after approvals, five
+re-check stages (5 min .. 24 h); complete records (relay_complete) are never passed to
+resolve_post() in items()/program_post(). Activation = secret DISCORD_BOT_TOKEN + Variable
+INTAKE_CHANNEL_ID (same names as News-Express).
+---
+ .env.example                              |  11 +
+ .github/workflows/ci.yml                  |   3 +-
+ .github/workflows/python_version_bump.yml |   1 +
+ AGENTS.md                                 |   4 +-
+ PRIVACY_POLICY.md                         |  10 +-
+ README.md                                 |   1 +
+ TERMS_OF_SERVICE.md                       |   7 +-
+ docs/CONFIGURATION.md                     |   6 +
+ docs/PROD-REPO-SETUP.md                   |   4 +-
+ docs/SOURCES.md                           |  36 ++
+ docs/changelog/CHANGELOG.md               |  48 +++
+ docs/changelog/README.md                  |   4 +-
+ gamexpress/__main__.py                    |   4 +
+ gamexpress/config.py                      |  13 +
+ gamexpress/runner.py                      |   3 +
+ gamexpress/sources/reddit.py              |  20 +-
+ gamexpress/sources/reddit_intake.py       | 402 +++++++++++++++++++
+ tests/test_reddit_intake.py               | 453 ++++++++++++++++++++++
+ tests/test_smoke.py                       |   2 +-
+ 19 files changed, 1019 insertions(+), 13 deletions(-)
+ create mode 100644 gamexpress/sources/reddit_intake.py
+ create mode 100644 tests/test_reddit_intake.py
+
+diff --git a/.env.example b/.env.example
+index 6671e67..390956e 100644
+--- a/.env.example
++++ b/.env.example
+@@ -45,6 +45,17 @@ NITTER_RSS_TOKEN=
+ # or `<40-char-key>&user=<username>` interchangeably; promotes `www.reddit.com` -> `old.reddit.com`):
+ REDDIT_FEED_TOKEN=
+ 
++# Reddit INTAKE READER (2026-11-02): the Gaming Express Devvit relay (News-Express
++# devvit/gaming-express) writes one JSON record per new Reddit post into a private Discord
++# channel; with both values below set, that channel is the Reddit listing (0 redlib /
++# reddit.com requests for served targets) and the old fleet is the automatic fallback.
++# Same names as News-Express — one bot, one channel, both repos. Unset = unchanged behaviour.
++# DISCORD_BOT_TOKEN=            # secret: read-only bot with View Channel + Read Message History (+ Message Content intent)
++# INTAKE_CHANNEL_ID=            # variable: the intake channel id
++# INTAKE_READER=primary         # primary (default) | shadow (read + report, old chain decides) | off
++# INTAKE_STALE_SECONDS=1800
++# INTAKE_LOOKBACK_SECONDS=21600
++
+ # ── VARIABLES (not secret) ─────────────────────────────────────────────────────────
+ # Ping role(s). Empty = NO ping. Comma-separate several roles. 'everyone' / 'here' allowed.
+ # Resolution: PING_<FEATURE>_<GAME>  >  PING_<FEATURE>  >  PING_ROLE_ID     ('none' = explicitly off)
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 3c6ead9..f7792be 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -72,7 +72,7 @@ jobs:
+       # that only pytest ever ran -- and CI does not run pytest, so they guarded nothing until
+       # 2026-10-15. test_ci_and_the_python_bump_gate_run_every_offline_test_file keeps this list
+       # complete.
+-      - name: Schedule regressions (2026-10-08) + gacha-wiki placeholder guard
++      - name: Schedule regressions (2026-10-08) + gacha-wiki placeholder guard + Reddit intake reader
+         run: |
+           python tests/test_schedule_epithet_and_settled.py
+           python tests/test_gachabase_kit.py
+@@ -80,6 +80,7 @@ jobs:
+           python tests/test_feature5_gate_media.py
+           python tests/test_gachabase_kit.py
+           python tests/test_gachawiki_placeholder.py
++          python tests/test_reddit_intake.py
+ 
+       - name: Card preview renders (previews/index.html)
+         run: python -m gamexpress preview --out /tmp/previews > /dev/null
+diff --git a/.github/workflows/python_version_bump.yml b/.github/workflows/python_version_bump.yml
+index 7337ce3..8cb7e17 100644
+--- a/.github/workflows/python_version_bump.yml
++++ b/.github/workflows/python_version_bump.yml
+@@ -118,6 +118,7 @@ jobs:
+           python tests/test_beta_sources.py
+           python tests/test_feature5_gate_media.py
+           python tests/test_gachawiki_placeholder.py
++          python tests/test_reddit_intake.py
+           python -m gamexpress preview --out "$RUNNER_TEMP/previews" > /dev/null
+ 
+       # Values reach the shell through env, never through ${{ }} inlined into `run:` —
+diff --git a/AGENTS.md b/AGENTS.md
+index 52744af..17482e5 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -169,8 +169,8 @@ nothing more. Do not add `discord.py`, a token, a gateway, or any always-on proc
+    the `test` job is a required check.
+ 12. **No new runtime dependencies** without a very good reason. The whole app runs on `aiohttp`,
+    `feedparser`, `python-dotenv`.
+-13. **Never commit secrets.** Webhooks, `NITTER_RSS_TOKEN` and `REDDIT_FEED_TOKEN` are repository
+-   secrets; the state file stores only a 12-char non-reversible webhook fingerprint.
++13. **Never commit secrets.** Webhooks, `NITTER_RSS_TOKEN`, `REDDIT_FEED_TOKEN` and the intake
++   reader's `DISCORD_BOT_TOKEN` are repository secrets (channel ids are Variables, never files); the state file stores only a 12-char non-reversible webhook fingerprint.
+ 14. **No LICENSE file is wanted** — this is a personal-use repository (owner's decision,
+     2026-10-03). Do not add one "for completeness".
+ 15. **A posted Special Program card keeps its announcement.** The first post that gives an air time
+diff --git a/PRIVACY_POLICY.md b/PRIVACY_POLICY.md
+index 2fe7efb..15c68b2 100644
+--- a/PRIVACY_POLICY.md
++++ b/PRIVACY_POLICY.md
+@@ -1,6 +1,6 @@
+ # Privacy Policy
+ 
+-**Effective date:** October 24, 2026
++**Effective date:** November 2, 2026
+ **Applies to:** *Game-Express*, the open-source game version-schedule announcer, redemption-code
+ poster, and optional official-news and pre-load/maintenance-started announcer ("the Service"):
+ - **Automation mode**: GitHub Actions + Discord webhooks.
+@@ -30,7 +30,7 @@ is GitHub Actions.
+ |---|---|---|---|
+ | Public announcement data (titles, text, times, image/video links of official posts) | processed **in memory** during a run | building the cards | Discord receives rendered content; source services receive the public requests. Operational logs/summaries can retain source references. |
+ | Dedup state: version numbers, code strings, public news/milestone IDs, Discord **message IDs** of the Service's own posts, the public post ID a card is locked to, confirmed banner names, timestamps, a short non-reversible webhook fingerprint | `state/state.json` **inside the operator's repository** | deduplication and editing its own cards | GitHub and anyone with repository access; a public repository makes committed state public. An explicitly configured peer instance can read its accessible state file. |
+-| Webhook URLs, optional nitter token (`NITTER_RSS_TOKEN`), optional Reddit private feed link/token (`REDDIT_FEED_TOKEN`), optional Python-bump token (`BUMP_PAT`) | operator's **encrypted GitHub secrets** | authentication | GitHub stores secrets; each credential is sent strictly to its intended service (`NITTER_RSS_TOKEN` only to the allowlisted token-gated mirrors, `REDDIT_FEED_TOKEN` only to official `reddit.com` hosts). Output redaction/masking is a safeguard, not a guarantee; review logs before sharing them. |
++| Webhook URLs, optional nitter token (`NITTER_RSS_TOKEN`), optional Reddit private feed link/token (`REDDIT_FEED_TOKEN`), optional read-only Discord bot token for the Reddit intake reader (`DISCORD_BOT_TOKEN`), optional Python-bump token (`BUMP_PAT`) | operator's **encrypted GitHub secrets** | authentication | GitHub stores secrets; each credential is sent strictly to its intended service (`NITTER_RSS_TOKEN` only to the allowlisted token-gated mirrors, `REDDIT_FEED_TOKEN` only to official `reddit.com` hosts). Output redaction/masking is a safeguard, not a guarantee; review logs before sharing them. |
+ 
+ No analytics, telemetry, cookies, tracking pixels, advertising, or profiling. The monitor reads only
+ public source pages and sends cards to the operator's configured webhooks.
+@@ -46,6 +46,12 @@ URL; configured credentials are sent to the intended service when required:
+ - nitter instances (`nitter.cf` and `xitter.cf` first, for single posts and timelines; a token-gated
+   instance is used only when the operator sets `NITTER_RSS_TOKEN`), `teapawt.org` / `teapaw.org` / `teapawt.net` / `xitter.gq` / `nitter.gq`,
+   FxTwitter, fixupx and vxTwitter (public X posts);
++- Discord's bot REST API (optional, 2026-11-02): with `DISCORD_BOT_TOKEN` + `INTAKE_CHANNEL_ID` set, the monitor reads
++  **one operator-designated private channel** (`GET /channels/<id>/messages`, newest-first, at most 800 messages per
++  run) to collect the public Reddit post records written there by the operator's own *Gaming Express* Devvit relay
++  (Reddit Developer Platform; it stores only post ids and poll counters). Messages that are not relay records are
++  skipped and never stored; nothing is written through the bot. The relay's `record.json` attachments (the same
++  public post record, untrimmed) are read from `cdn.discordapp.com` without the token, at most 10 per run;
+ - Reddit and Redlib instances (`www.reddit.com` and `old.reddit.com` public feeds — carrying `REDDIT_FEED_TOKEN`
+   query parameters only when configured — public Redlib mirrors, rich-embed proxies `vxreddit.com`, `embedez.com`,
+   and `embeddit.deltandy.me`, and the public `arctic-shift.photon-reddit.com` archive as a fallback);
+diff --git a/README.md b/README.md
+index 36e07ef..48f4a42 100644
+--- a/README.md
++++ b/README.md
+@@ -416,6 +416,7 @@ webhooks. They are independent features, even if you choose the same destination
+ | `DISCORD_WEBHOOK_CODES_ANANTA` | ANANTA codes |
+ | `NITTER_RSS_TOKEN` | *optional* — the same token as News-Express; unlocks **both** `nitter.miningtcup.me` (X) and `redlib.miningtcup.me` (Reddit/Redlib) |
+ | `REDDIT_FEED_TOKEN` | *optional* — from `old.reddit.com/prefs/feeds/`: paste `<40-char-key>&user=<your_username>` or any full `.rss?feed=…` / `.json?feed=…` link on `old.reddit.com`, `www.reddit.com`, or `reddit.com` (same as News-Express; drives `[0] www.reddit.com` → `[1] old.reddit.com` fast path + `.json` fallback) |
++| `DISCORD_BOT_TOKEN` | *optional, Reddit intake reader (2026-11-02)* — token of a Discord bot that is in your server with **View Channels** + **Read Message History** on the intake channel and the **Message Content Intent** enabled; read-only (REST `GET /channels/<id>/messages`), nothing is ever written through it. Same secret name as News-Express, so one bot serves both repos. With Variable `INTAKE_CHANNEL_ID` it makes the Devvit relay the primary Reddit listing; unset = the redlib/reddit.com chain exactly as before |
+ | `BUMP_PAT` | *required only where the Python bump workflow is installed* — a repository-scoped PAT with **Contents, Pull requests and Workflows: read and write**, subject to token type and repository policy. See [docs/PYTHON_VERSION.md](docs/PYTHON_VERSION.md#publication-credentials) |
+ 
+ Create only destinations you intend to use; ANANTA is not a verified official-news adapter.
+diff --git a/TERMS_OF_SERVICE.md b/TERMS_OF_SERVICE.md
+index d7993f1..bc8490c 100644
+--- a/TERMS_OF_SERVICE.md
++++ b/TERMS_OF_SERVICE.md
+@@ -1,6 +1,6 @@
+ # Terms of Service
+ 
+-**Effective date:** October 24, 2026
++**Effective date:** November 2, 2026
+ **Applies to:** *Game-Express*, the open-source game version-schedule announcer, redemption-code
+ poster, and optional official-news and pre-load/maintenance-started announcer ("the Service"),
+ running as a GitHub Actions workflow that posts through Discord webhooks.
+@@ -18,6 +18,11 @@ resolution, code witnesses and estimated dates (official banner notices found by
+ banner feed, game wikis, public nitter/Redlib mirrors, rich-embed proxies, public archives, and
+ countdown sites), and **public redemption-code lists**, then post formatted cards to Discord
+ channels that **you** control. There is no hosted service operated by the author on your behalf.
++Optionally (2026-11-02) the Reddit listing can come from the *Gaming Express* relay app you install
++on Reddit's Developer Platform under your own Reddit account (shipped in the News-Express repository);
++it writes public post records into a private Discord channel of yours, which the Service reads back
++with a read-only bot token you create. Reddit's developer terms govern that app; the public mirrors
++remain the automatic fallback.
+ Each operator runs their own instance.
+ 
+ Operational logs and completion summaries are best-effort diagnostics, not
+diff --git a/docs/CONFIGURATION.md b/docs/CONFIGURATION.md
+index 45b7c08..78c9823 100644
+--- a/docs/CONFIGURATION.md
++++ b/docs/CONFIGURATION.md
+@@ -33,6 +33,12 @@ Sensitive — *Settings → Secrets and variables → Actions → **Secrets***.
+ | `NITTER_RSS_TOKEN` | optional — the e-mailed token for the token-gated nitter and redlib mirrors (`https://nitter.miningtcup.me/`, `https://redlib.miningtcup.me` — the same secret News-Express uses). Empty only skips those mirrors |
+ | `REDDIT_FEED_TOKEN` | optional — private RSS / JSON feed link or token from `old.reddit.com/prefs/feeds/`: accepts `https://old.reddit.com/.rss?feed=<40-char-key>&user=<your_username>`, `https://www.reddit.com/.rss?feed=<40-char-key>&user=<your_username>`, `https://old.reddit.com/.json?feed=<40-char-key>&user=<your_username>`, `https://www.reddit.com/.json?feed=<40-char-key>&user=<your_username>`, `https://reddit.com/.rss?feed=…`, `https://old.reddit.com/?feed=…`, or `<40-char-key>&user=<your_username>` interchangeably (same format as News-Express; drives `[0] www.reddit.com` → `[1] old.reddit.com` authenticated RSS failover + circuit-broken `.json` fallback) |
+ 
++| `DISCORD_BOT_TOKEN` | optional — the Reddit **intake reader** bot token (secret). Read-only bot in your server with *View Channel* + *Read Message History* on the intake channel and the *Message Content Intent*. Pair with the Variables below |
++| `INTAKE_CHANNEL_ID` | optional (Variable) — id of the private Discord channel the *Gaming Express* Devvit relay writes its post records to (the same channel News-Express reads). With `DISCORD_BOT_TOKEN` set, a healthy relay is the Reddit listing and the redlib/reddit.com fleet is not contacted for served targets |
++| `INTAKE_READER` | optional (Variable) — `primary` (default) \| `shadow` (read and report, old chain decides) \| `off` (never read). Rollback switch |
++| `INTAKE_STALE_SECONDS` | optional — default `1800`; a newest relay record older than this means *stale* → old chain |
++| `INTAKE_LOOKBACK_SECONDS` | optional — default `21600`; how far back the channel is read each run (newest-first, ≤ 800 messages) |
++
+ **Webhook routing**, most specific first:
+ 
+ ```
+diff --git a/docs/PROD-REPO-SETUP.md b/docs/PROD-REPO-SETUP.md
+index 3a8cda5..7712fe0 100644
+--- a/docs/PROD-REPO-SETUP.md
++++ b/docs/PROD-REPO-SETUP.md
+@@ -218,8 +218,8 @@ cp -r --parents \
+   /tmp/prod/
+ 
+ find /tmp/prod -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null
+-find /tmp/prod -type f | wc -l     # expect 47 (45 runtime + 2 policy files)
+-                                  # 49 if you also copied the two python-bump files
++find /tmp/prod -type f | wc -l     # expect 48 (46 runtime + 2 policy files)
++                                  # 50 if you also copied the two python-bump files
+ ```
+ 
+ **Don't trust that number on its own — verify the package instead.** The count goes stale the
+diff --git a/docs/SOURCES.md b/docs/SOURCES.md
+index cc2be3f..9346ebe 100644
+--- a/docs/SOURCES.md
++++ b/docs/SOURCES.md
+@@ -417,6 +417,42 @@ page fetcher, and so were the ennead calendars. The production reachability of t
+ | genshin.dev | character/game data API, not schedules or codes |
+ | gachabase.net · nanoka.cc · sr.yatta.moe · lunaris.moe · ambr.top | databases, listed in [CREDITS.md](CREDITS.md#community-databases-and-research). No public schedule/banner API was verified, so **banner names come from official notices, `Kitsudock-data` (`hub.json`), the `api.ennead.cc` calendars, the Fandom wikis, or `config/overrides.json`** |
+ 
++## Reddit intake reader — the Devvit relay is the listing (2026-11-02)
++
++`sources/reddit_intake.py` sits in front of the fleet below. The *Gaming Express* Devvit app
++(News-Express `devvit/gaming-express`, installed on Reddit's Developer Platform under the owner's
++account) polls `/new` of the six official subreddits plus the verified publisher accounts with
++Reddit's own API every 5 minutes and writes one fenced-JSON record per new post (`id, sub, title,
++permalink, url, created, author, flair, distinguished, spoiler, nsfw, score, comments, removed,
++xpost, media[], body, bodyTruncated`) into a private Discord channel shared with News-Express.
++
++- **One read per run** (`GET /channels/<INTAKE_CHANNEL_ID>/messages`, bot token in the
++  `Authorization` header only, newest-first `before=` paging, ≤ 8 × 100 messages, 6 h window);
++  messages that are not relay records (other bots) are skipped. `RedditClient._gather_listing()`
++  asks the reader first: a healthy relay (`ok` = at least one record, newest record younger than
++  `INTAKE_STALE_SECONDS`) with records for the target **is** the listing — 0 fleet requests. Any
++  other state, or a target with no record in the window, runs the fleet exactly as before.
++- **Same dict shape** as `parse_reddit_json()` / `parse_redlib_html()` (`images`, `videos` as
++  `v.redd.it/<id>/CMAF_720.mp4` for the muxed proxy chain, `links`, `flair`, `distinguished`), so
++  the official rule, `items()`, `program_post()` and `community_codes()` are untouched; relay
++  entries additionally carry `relay: True`, `body_truncated` (bodies above the relay's message
++  budget arrive cut; `resolve_post()` fills them in as for any empty-text entry) and
++  `relay_complete` (relay 0.0.8: nothing cut, parent named — such an entry IS the post, and
++  `items()` / `program_post()` never call `resolve_post()` for it).
++- **Settings** (shared names with News-Express, passed through `GE_SECRETS_JSON`/`GE_VARS_JSON`):
++  secret `DISCORD_BOT_TOKEN`, Variables `INTAKE_CHANNEL_ID`, `INTAKE_READER=primary|shadow|off`,
++  `INTAKE_STALE_SECONDS=1800`, `INTAKE_LOOKBACK_SECONDS=21600`. The step summary carries one
++  `📡 reddit intake: …` line whenever Reddit was consulted.
++- **Complete source (relay 0.0.7 / 0.0.8):** each record message also carries `record.json` (full
++  body, every media URL, crosspost parent) — fetched from `cdn.discordapp.com` only for cut
++  records and crossposts, ≤ 10 per run, no token — and the relay re-checks delivered posts
++  (~5 min / 30 min / 2 h / 6 h / 24 h) in batched `v: 2` update messages: removed or deleted →
++  not listed, approved → the complete record is re-sent and listed, edited → re-sent record
++  (`revision` ≥ 2, `resent` = why) supersedes. Nothing in the fleet below is needed for a
++  relay-served target.
++- **Why first:** Reddit retires RSS on 2026-11-13, removes unregistered access on 2027-01-12 and
++  is moving to a logged-in-only site; the fleet below stays as the automatic fallback.
++
+ ## Reddit & Redlib fleet (2026-10-22)
+ 
+ `sources/reddit.py` integrates Reddit and Redlib across all six configured games (`r/Genshin_Impact` / verified `u/genshinimpact`, `r/HonkaiStarRail` / verified `u/HonkaiStarRail`, `r/ZZZ_Official` / verified `u/ZZZ_Official`, `r/WutheringWaves` with `official: []` because live `u/WutheringWaves` is an unrelated 2022 squatter account, `r/HonkaiNexusAnima` / verified `u/HonkaiNexusAnima`, and `r/AnantaOfficial` / verified `u/AnantaOfficial`) under strict role separation and zero-waste request discipline:
+diff --git a/docs/changelog/CHANGELOG.md b/docs/changelog/CHANGELOG.md
+index 7468bd7..9a2abe1 100644
+--- a/docs/changelog/CHANGELOG.md
++++ b/docs/changelog/CHANGELOG.md
+@@ -1,5 +1,53 @@
+ # Changelog — current entries
+ 
++## 2026-11-02 — Reddit: the Devvit relay is the primary listing (intake reader)
++
++- **What changed.** `RedditClient` now consults `gamexpress/sources/reddit_intake.py` before the
++  redlib / reddit.com fleet. The *Gaming Express* Devvit app (News-Express `devvit/gaming-express`,
++  live on Reddit under the owner's account) writes one JSON record per new post of the six official
++  subreddits and the verified publisher accounts into a private Discord channel every 5 minutes;
++  the reader fetches that channel once per run (bot token, REST only, newest-first, ≤ 800 messages,
++  6 h window) and serves `r/<sub>` / `u/<account>` listings from it in the exact dict shape the
++  JSON / redlib parsers produce — `items()`, `program_post()` and `community_codes()` are untouched.
++- **Zero-waste rule kept.** Reddit is still consulted only when X or a primary API missed; when it
++  is, a served target costs 0 fleet requests. A target without a record in the window (dormant
++  `u/ZZZ_Official`, `u/AnantaOfficial`) falls back to the old chain exactly as before.
++- **Fail-safe.** Only status `ok` serves a listing. Unset, HTTP 401/403/404/429, stale (newest
++  record older than `INTAKE_STALE_SECONDS=1800`), empty, or messages whose `content` comes back
++  empty (Message Content Intent missing) all mean "old chain", with the reason on one step-summary
++  line (`📡 reddit intake: …`). Freshness is measured on relay records only, so other bots sharing
++  the channel never vouch for a silent relay. `INTAKE_READER=shadow` reads and reports without
++  deciding; `off` never reads.
++- **Activation = the same two settings as News-Express**, passed through `GE_SECRETS_JSON` /
++  `GE_VARS_JSON` (no workflow edit): secret `DISCORD_BOT_TOKEN`, Variable `INTAKE_CHANNEL_ID`.
++  Nothing changes until both exist.
++- **Why.** Reddit retires RSS on 2026-11-13, removes unregistered access on 2027-01-12 and is
++  moving to a logged-in-only site (Q3 2026 shareholder letter); the Developer Platform path is the
++  one that survives. Records carry `flair` and `distinguished`, so the official rule
++  (`_is_official_subreddit_post`) is unchanged.
++- **Relay 0.0.7 (same day): the relay is the complete source.** Every record message also carries
++  `record.json` — the untrimmed record (full body, every media URL, the crosspost parent) — which
++  the reader fetches from Discord's CDN only for cut records and crossposts (≤ 10 per run, no
++  token). The relay looks at each delivered post again (~10 min, 30 min, 2 h, 6 h) and writes
++  batched `v: 2` update messages: a post the re-check shows removed or deleted leaves the
++  listing, one first shown filtered and later approved enters it; an edited body arrives as a
++  re-sent record (`revision` ≥ 2) that supersedes the first. Re-check messages count as relay
++  liveness (a quiet relay is `empty — relay alive`, not stale). With that, the redlib /
++  reddit.com / Arctic fleet is a fallback only; the vxreddit/embedez/embeddit video proxies stay.
++- **Relay 0.0.8 (same day): 1:1 with the old chain.** Re-checks now run at ~5 min, 30 min, 2 h,
++  6 h and 24 h; a post first seen filtered/removed and later approved is re-sent complete (the
++  reader's 6 h window may have lost the first record). Entries whose record is complete
++  (`relay_complete`) are never passed to `resolve_post()` — `items()` and `program_post()` serve
++  them from the record alone, so a relay-served game costs zero redlib / reddit.com requests even
++  for title-only posts; cut records keep the old-chain fill-in. (A publisher-comment follow-up
++  was prototyped and dropped the same day at the owner's request — relay entries keep
++  `comments=[]`.)
++- Covered by `tests/test_reddit_intake.py` (real records from the first live day: gallery, video +
++  poster, inline images, YouTube link, gif, truncated body, `\_` escapes, shared-channel noise,
++  paging, every status, `items()` for a publisher-account game and for Wuthering Waves; 0.0.7
++  updates, `record.json` completion and bounds, edits, approvals; 0.0.8 complete records,
++  no-resolve `items()` / `program_post()`).
++
+ ## 2026-11-01 — Beta: per-item probe when the changelog is blocked
+ 
+ - **The 403 gap is closed in code, pending one live run.** With the gachabase changelog blocked, the
+diff --git a/docs/changelog/README.md b/docs/changelog/README.md
+index 5aad385..eaf483e 100644
+--- a/docs/changelog/README.md
++++ b/docs/changelog/README.md
+@@ -1,6 +1,8 @@
+ # Changelog
+ 
+-Latest: [Beta: per-item probe when the changelog is blocked](CHANGELOG.md#2026-11-01--beta-per-item-probe-when-the-changelog-is-blocked).
++Latest: [Reddit: the Devvit relay is the primary listing (intake reader)](CHANGELOG.md#2026-11-02--reddit-the-devvit-relay-is-the-primary-listing-intake-reader).
++
++Previous: [Beta: per-item probe when the changelog is blocked](CHANGELOG.md#2026-11-01--beta-per-item-probe-when-the-changelog-is-blocked).
+ 
+ Previous: [Beta: ZZZ 3.4.2 card polish (subtext, placeholder names)](CHANGELOG.md#2026-11-01--beta-zzz-342-card-polish-subtext-placeholder-names).
+ 
+diff --git a/gamexpress/__main__.py b/gamexpress/__main__.py
+index 4f77ee1..52bf61a 100644
+--- a/gamexpress/__main__.py
++++ b/gamexpress/__main__.py
+@@ -389,6 +389,10 @@ def cmd_validate(_args) -> int:
+     print(f"Reddit={'on' if settings.reddit_enabled else 'off'} "
+           f"| reddit instances={len(settings.reddit_instances)} | proxies={len(settings.reddit_proxies)} "
+           f"| feed_token={'set' if feed_q else ('invalid' if settings.reddit_token else '—')}")
++    print(f"Reddit intake={settings.intake_reader} "
++          f"| bot_token={'set' if settings.discord_bot_token else '—'} "
++          f"| channel_id={'set' if settings.intake_channel_id else '—'} "
++          f"| stale={settings.intake_stale_seconds}s | lookback={settings.intake_lookback_seconds}s")
+     print(f"news={'on' if 'news' in settings.features else 'off'} | news games={','.join(sorted(settings.news_games))} "
+           f"| article count cap=none "
+           f"| timestamps={'on' if settings.news_timestamps else 'off'} "
+diff --git a/gamexpress/config.py b/gamexpress/config.py
+index d7be933..ec45d89 100644
+--- a/gamexpress/config.py
++++ b/gamexpress/config.py
+@@ -512,6 +512,13 @@ class Settings:
+     reddit_instances: list[str] = field(default_factory=lambda: list(DEFAULT_REDDIT))
+     reddit_proxies: list[str] = field(default_factory=lambda: list(DEFAULT_REDDIT_PROXIES))
+     reddit_token: str = ""
++    # Devvit relay intake reader (2026-11-02): the primary Reddit listing; the redlib /
++    # reddit.com chain above stays as the automatic fallback. Same names as News-Express.
++    intake_reader: str = "primary"      # primary | shadow | off
++    discord_bot_token: str = ""          # secret DISCORD_BOT_TOKEN (read-only bot in the server)
++    intake_channel_id: str = ""          # Variable INTAKE_CHANNEL_ID (the intake channel)
++    intake_stale_seconds: int = 1800
++    intake_lookback_seconds: int = 21600
+ 
+     news_enabled: bool = False
+     news_games: set[str] = field(default_factory=set)
+@@ -754,6 +761,12 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
+         reddit_instances=reddit or list(DEFAULT_REDDIT),
+         reddit_proxies=reddit_proxies or list(DEFAULT_REDDIT_PROXIES),
+         reddit_token=_env(env, "REDDIT_FEED_TOKEN"),
++        intake_reader=(_env(env, "INTAKE_READER").lower() if _env(env, "INTAKE_READER").lower()
++                       in ("primary", "shadow", "off") else "primary"),
++        discord_bot_token=_env(env, "DISCORD_BOT_TOKEN"),
++        intake_channel_id=re.sub(r"\D", "", _env(env, "INTAKE_CHANNEL_ID")),
++        intake_stale_seconds=max(60, _int(env, "INTAKE_STALE_SECONDS", 1800)),
++        intake_lookback_seconds=max(600, _int(env, "INTAKE_LOOKBACK_SECONDS", 21600)),
+         show_legend=_bool(env, "SHOW_LEGEND", True),
+         repost=_env(env, "REPOST").replace(" ", "").lower(),
+         http_timeout=_int(env, "HTTP_TIMEOUT", 20),
+diff --git a/gamexpress/runner.py b/gamexpress/runner.py
+index 910c749..65dfc1b 100644
+--- a/gamexpress/runner.py
++++ b/gamexpress/runner.py
+@@ -367,6 +367,9 @@ async def run_once(settings: Settings, games_all: dict[str, Game] | None = None,
+                         record["paused"] = True
+             if not features:
+                 ctx.report.append("⏸️ no active features this run (ENABLED_FEATURES=none or passive standby)")
++            intake_line = reddit.intake.summary_line()
++            if intake_line:
++                ctx.report.append(intake_line)
+         except Exception as exc:  # noqa: BLE001 — guarantee persistence & step summary on unexpected abort
+             log.exception("unexpected failure during run_once orchestration")
+             ctx.errors.append(f"orchestration failed: {_summary_text(exc)}")
+diff --git a/gamexpress/sources/reddit.py b/gamexpress/sources/reddit.py
+index 31b101c..d446007 100644
+--- a/gamexpress/sources/reddit.py
++++ b/gamexpress/sources/reddit.py
+@@ -1008,6 +1008,10 @@ class RedditClient:
+         self._post_cache: dict[str, dict | None] = {}
+         self._json_feed_blocked: bool = False
+         self.reachable: set[str] = set()
++        from .reddit_intake import IntakeReader  # local import: the reader imports this module's regexes
++
++        # Devvit relay intake (2026-11-02): consulted first by `_gather_listing`; `None` = old chain.
++        self.intake = IntakeReader(fetcher, settings)
+ 
+     async def _get_text(self, url: str, **kwargs) -> str | None:
+         fn = getattr(self.fetcher, "get_text", None)
+@@ -1117,6 +1121,11 @@ class RedditClient:
+         return good
+ 
+     async def _gather_listing(self, kind: str, target: str) -> list[dict] | None:
++        # Devvit relay first: a healthy relay with records for this target IS the listing
++        # (0 redlib / reddit.com requests); anything else falls through unchanged.
++        relay = await self.intake.listing(kind, target)
++        if relay is not None:
++            return relay
+         merged: dict[str, dict] = {}
+         working = 0
+         fleet = self._eligible_instances(for_post_detail=False, kind=kind)
+@@ -1492,7 +1501,11 @@ class RedditClient:
+                 links = list(e.get("links") or [])
+                 combined = f"{e.get('title') or ''}\n{text_body}".strip()
+                 matched = want(combined)
+-                if not matched and not text_body.strip() and resolved_budget > 0 and e.get("subreddit") and e.get("id"):
++                # A complete relay record is the whole post (empty text = a title-only post);
++                # the post-page resolve (redlib / reddit.com) is for the old chain and cut records.
++                resolvable = not e.get("relay_complete")
++                if (not matched and not text_body.strip() and resolvable and resolved_budget > 0
++                        and e.get("subreddit") and e.get("id")):
+                     resolved_budget -= 1
+                     detail = await self.resolve_post(e["subreddit"], e["id"])
+                     if detail:
+@@ -1503,7 +1516,7 @@ class RedditClient:
+                         matched = want(combined)
+                 if not matched:
+                     continue
+-                if not text_body.strip() and resolved_budget > 0 and e.get("subreddit") and e.get("id"):
++                if not text_body.strip() and resolvable and resolved_budget > 0 and e.get("subreddit") and e.get("id"):
+                     resolved_budget -= 1
+                     detail = await self.resolve_post(e["subreddit"], e["id"])
+                     if detail:
+@@ -1568,7 +1581,8 @@ class RedditClient:
+ 
+         if found is None:
+             for e in unresolved[:2]:
+-                detail = await self.resolve_post(e["subreddit"], e["id"])
++                # A complete relay record already carries the body (relay 0.0.8 / round 104).
++                detail = dict(e) if e.get("relay_complete") else await self.resolve_post(e["subreddit"], e["id"])
+                 if not detail:
+                     continue
+                 merged_detail = {
+diff --git a/gamexpress/sources/reddit_intake.py b/gamexpress/sources/reddit_intake.py
+new file mode 100644
+index 0000000..1e9d7f7
+--- /dev/null
++++ b/gamexpress/sources/reddit_intake.py
+@@ -0,0 +1,402 @@
++"""Devvit relay intake reader — the primary Reddit listing (round GX-intake, 2026-11-02).
++
++The *Gaming Express* Devvit app (News-Express `devvit/gaming-express`, installed under the
++operator's own Reddit account) polls the public `/new` listings of the tracked subreddits and
++publisher accounts with Reddit's own API every 5 minutes and writes **one fenced-JSON record per
++new post** into a private Discord channel (the *intake channel*). This module reads that channel
++back with a bot token (REST only, no gateway) and serves the records to `RedditClient` in the
++exact listing shape `parse_reddit_json()` / `parse_redlib_html()` produce, so `items()`,
++`program_post()` and `community_codes()` need no new branch.
++
++Contract (identical to the News-Express reader, round 101):
++
++* `INTAKE_READER=primary|shadow|off` (default `primary`), secret `DISCORD_BOT_TOKEN`, Variable
++  `INTAKE_CHANNEL_ID`, `INTAKE_STALE_SECONDS=1800`, `INTAKE_LOOKBACK_SECONDS=21600`.
++  GitHub Actions passes every secret/variable through `GE_SECRETS_JSON` / `GE_VARS_JSON`, so
++  the workflow needs no edit.
++* `ok` is the ONLY status that serves a listing, and only for a target that has at least one
++  record in the window. Every other state — unset, HTTP error, stale, empty, a target without
++  records — returns `None` and the pre-existing redlib / reddit.com chain runs exactly as before.
++* Freshness is measured on RELAY RECORDS, never on arbitrary messages: the operator shares the
++  channel with other bots, and webhook messages returned with an empty `content` (Message
++  Content Intent missing) must never pass as a healthy relay with zero posts.
++* Paging is newest-first (`before=`), so a busy shared channel can only shorten the look-back
++  window, never hide the fresh records.
++* The bot token travels in the `Authorization` header only; nothing is written through the bot;
++  messages that are not relay records are skipped and never stored.
++"""
++
++from __future__ import annotations
++
++import html
++import json
++import logging
++import re
++import time
++from urllib.parse import urlsplit
++
++from ..config import Settings
++from ..http import Fetcher
++from ..textutil import clean_text, dedupe, find_urls
++from .reddit import (
++    _REDDIT_NAV_LINK_RE,
++    INLINE_REDDIT_VIDEO_RE,
++    POST_LINK_RE,
++    VREDDIT_ID_RE,
++    canonical_post_url,
++)
++
++log = logging.getLogger("gamexpress.reddit.intake")
++
++DISCORD_EPOCH_MS = 1_420_070_400_000
++INTAKE_API = "https://discord.com/api/v10"
++INTAKE_ATTACHMENT_FETCHES = 10  # `record.json` completions per run (relay 0.0.7)
++INTAKE_MAX_PAGES = 8
++INTAKE_TIMEOUT = 12
++_FENCE_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.S)
++_REQUIRED = ("id", "sub", "title", "permalink", "created")
++_REDDIT_IMAGE_RE = re.compile(r"https?://(?:i|preview|external-preview)\.redd\.it/[^\s<>()\"']+", re.I)
++
++
++def snowflake_from_epoch(epoch_s: float) -> int:
++    return (int(epoch_s * 1000) - DISCORD_EPOCH_MS) << 22
++
++
++def epoch_from_snowflake(snowflake: object) -> float | None:
++    try:
++        return ((int(snowflake) >> 22) + DISCORD_EPOCH_MS) / 1000.0
++    except (TypeError, ValueError):
++        return None
++
++
++def parse_intake_record(content: str | None) -> dict | None:
++    """The fenced ```json block the relay writes, v1 only; anything else -> None."""
++    m = _FENCE_RE.search(content or "")
++    if not m:
++        return None
++    try:
++        rec = json.loads(m.group(1))
++    except ValueError:
++        return None
++    if not isinstance(rec, dict) or rec.get("v") != 1:
++        return None
++    if any(not rec.get(k) for k in _REQUIRED):
++        return None
++    if not re.fullmatch(r"[a-z0-9]{4,12}", str(rec["id"]).lower()):
++        return None
++    return rec
++
++
++def parse_intake_update(content: str | None) -> dict | None:
++    """Relay 0.0.7 re-check message — ```json {"v":2,"kind":"update","at":…,"posts":[{id,sub,age,stage,
++    removed,deleted,edited,…},…]}```; `None` for anything else (v1 records included)."""
++    m = _FENCE_RE.search(content or "")
++    if not m:
++        return None
++    try:
++        msg = json.loads(m.group(1))
++    except ValueError:
++        return None
++    if not isinstance(msg, dict) or msg.get("v") != 2 or msg.get("kind") != "update":
++        return None
++    posts = []
++    for item in msg.get("posts") or []:
++        if not isinstance(item, dict):
++            continue
++        pid = str(item.get("id") or "").strip().lower()
++        if not re.fullmatch(r"[a-z0-9]{4,12}", pid):
++            continue
++        posts.append({**item, "id": pid, "removed": str(item["removed"]) if item.get("removed") else None,
++                      "deleted": bool(item.get("deleted"))})
++    return {"at": msg.get("at"), "posts": posts}
++
++
++def attachment_url(message: dict) -> str | None:
++    """The `record.json` attachment of a relay message (0.0.7) — the complete record."""
++    for a in message.get("attachments") or []:
++        if isinstance(a, dict) and str(a.get("filename") or "").lower() == "record.json":
++            url = str(a.get("url") or "")
++            host = urlsplit(url).hostname or ""
++            if host in ("cdn.discordapp.com", "media.discordapp.net"):
++                return url
++    return None
++
++
++def needs_full_record(rec: dict) -> bool:
++    """Only cut records and crossposts without a parent permalink are worth the CDN request."""
++    return bool(rec.get("bodyTruncated") or rec.get("mediaTruncated")
++                or (rec.get("xpost") and not rec.get("xpostPermalink")))
++
++
++def apply_full_record(rec: dict, full: object) -> bool:
++    """Merge the complete record into the inline one (body, media, crosspost parent)."""
++    if not isinstance(full, dict) or str(full.get("id") or "").strip().lower() != str(rec["id"]).lower():
++        return False
++    changed = False
++    if rec.get("bodyTruncated") and isinstance(full.get("body"), str):
++        rec["body"], rec["bodyTruncated"], changed = full["body"], bool(full.get("bodyTruncated")), True
++    media = [str(u) for u in (full.get("media") or []) if isinstance(u, str) and u]
++    if media and len(media) > len(rec.get("media") or []):
++        rec["media"], rec["mediaTruncated"], changed = media, False, True
++    parent = full.get("parent")
++    if isinstance(parent, dict) and str(parent.get("permalink") or "").startswith("/r/"):
++        rec["parent"], changed = parent, True
++        rec["xpostPermalink"] = rec.get("xpostPermalink") or parent.get("permalink")
++    elif isinstance(full.get("xpostPermalink"), str) and not rec.get("xpostPermalink"):
++        rec["xpostPermalink"], changed = full["xpostPermalink"], True
++    return changed
++
++
++def record_to_entry(rec: dict) -> dict:
++    """Relay record -> the listing dict `RedditClient` consumers already understand."""
++    post_id = str(rec["id"]).strip().lower()
++    subreddit = str(rec["sub"]).strip()
++    body_raw = str(rec.get("body") or "")
++    # Reddit's API escapes titles and bodies once (`&amp;`) and the relay forwards them as-is;
++    # the markdown body also carries `\_` style escapes inside bare URLs (live 1xlhem9).
++    body = clean_text(html.unescape(_unescape_markdown_in_urls(body_raw)))
++    images: list[str] = []
++    videos: list[str] = []
++    dest = str(rec.get("url") or "").strip()
++    if _REDDIT_IMAGE_RE.fullmatch(dest):
++        images.append(dest)  # like parse_reddit_json: an i.redd.it / preview destination is the image
++    media = list(rec.get("media") or [])
++    parent = rec.get("parent") if isinstance(rec.get("parent"), dict) else None
++    if not media and parent:
++        media = list(parent.get("media") or [])  # 0.0.7: a crosspost carries its parent's media
++    for u in media + _REDDIT_IMAGE_RE.findall(body_raw.replace("\\_", "_")):
++        u = str(u or "").strip()
++        if not u.startswith(("http://", "https://")):
++            continue
++        vm = VREDDIT_ID_RE.match(u) or INLINE_REDDIT_VIDEO_RE.match(u)
++        if vm:
++            videos.append(f"https://v.redd.it/{vm.group(1)}/CMAF_720.mp4")
++        else:
++            images.append(u)
++    for vm in VREDDIT_ID_RE.finditer(" ".join([dest, body_raw])):
++        videos.append(f"https://v.redd.it/{vm.group(1)}/CMAF_720.mp4")
++    author = str(rec.get("author") or "").strip().lstrip("/").removeprefix("u/").strip()
++    m_link = POST_LINK_RE.search(str(rec.get("permalink") or ""))
++    slug_part = (m_link.group(3) or "") if m_link else ""
++    links = [
++        u for u in ([dest] + find_urls(body))
++        if u
++        and u.startswith(("http://", "https://"))
++        and not POST_LINK_RE.search(u)
++        and not _REDDIT_NAV_LINK_RE.match(u)
++        and not INLINE_REDDIT_VIDEO_RE.match(u)
++        and not VREDDIT_ID_RE.match(u)
++        and u not in images
++        and "reddit.com/gallery/" not in u.lower()
++    ]
++    return {
++        "id": post_id,
++        "subreddit": subreddit,
++        "author": author,
++        "distinguished": str(rec.get("distinguished") or ""),
++        "flair": clean_text(html.unescape(str(rec.get("flair") or ""))),
++        "title": clean_text(html.unescape(str(rec.get("title") or ""))),
++        "text": body,
++        "url": canonical_post_url(subreddit, post_id, slug_part),
++        "ts": int(rec.get("created") or 0),
++        "images": dedupe(images),
++        "videos": dedupe(videos),
++        "links": dedupe(links),
++        "stickied": False,
++        "comments": [],
++        "relay": True,
++        "body_truncated": bool(rec.get("bodyTruncated")),
++        # Relay 0.0.8 / round 104: nothing cut, parent named -> the entry IS the post;
++        # `resolve_post()` (redlib / reddit.com post pages) is not needed for it.
++        "relay_complete": not needs_full_record(rec),
++        "edited": bool(rec.get("edited")),
++        "crosspost_url": (f"https://www.reddit.com{rec['xpostPermalink']}"
++                          if str(rec.get("xpostPermalink") or "").startswith("/r/") else ""),
++    }
++
++
++_BARE_URL_RE = re.compile(r"(?<!\()https?://[^\s<>()]+")
++_MD_ESCAPE_RE = re.compile(r"\\([_*~#\-\[\]])")
++
++
++def _unescape_markdown_in_urls(text: str) -> str:
++    return _BARE_URL_RE.sub(lambda m: _MD_ESCAPE_RE.sub(r"\1", m.group(0)), text or "")
++
++
++class IntakeReader:
++    """One channel read per run (cached), then in-memory lookups per listing target."""
++
++    def __init__(self, fetcher: Fetcher, settings: Settings) -> None:
++        self.fetcher = fetcher
++        self.settings = settings
++        self._result: dict | None = None
++        self.served: list[str] = []
++        self.now: float | None = None  # tests pin the clock; production uses time.time()
++
++    @property
++    def mode(self) -> str:
++        return self.settings.intake_reader
++
++    def configured(self) -> bool:
++        return bool(self.settings.discord_bot_token and self.settings.intake_channel_id.isdigit())
++
++    async def fetch(self, now: float | None = None) -> dict:
++        """{"status", "records", "seen", "newest_age", "pages", "detail"} — never raises."""
++        if self._result is not None:
++            return self._result
++        now = (self.now if self.now is not None else time.time()) if now is None else now
++        out: dict = {"status": "unconfigured", "records": [], "seen": 0, "newest_age": None, "pages": 0,
++                     "detail": ""}
++        if self.mode == "off":
++            out["status"] = "off"
++        elif not self.configured():
++            out["detail"] = "DISCORD_BOT_TOKEN secret and/or INTAKE_CHANNEL_ID variable missing"
++        else:
++            out = await self._read(now)
++        self._result = out
++        return out
++
++    async def _read(self, now: float) -> dict:
++        out: dict = {"status": "error", "records": [], "seen": 0, "newest_age": None, "pages": 0, "detail": "",
++                     "update_msgs": 0, "updates": 0, "completed": 0}
++        url = f"{INTAKE_API}/channels/{self.settings.intake_channel_id}/messages"
++        headers = {"Authorization": f"Bot {self.settings.discord_bot_token}",
++                   "User-Agent": "Game-Express intake reader (+https://github.com)"}
++        cutoff = snowflake_from_epoch(now - self.settings.intake_lookback_seconds)
++        before: int | None = None
++        messages: list[dict] = []
++        for _ in range(INTAKE_MAX_PAGES):
++            params = {"limit": "100"}
++            if before is not None:
++                params["before"] = str(before)
++            out["pages"] += 1
++            page = await self.fetcher.get_json(url, source="intake", headers=headers, params=params,
++                                               retries=0, timeout=INTAKE_TIMEOUT)
++            if page is None:
++                last = (self.fetcher.health.get("intake").last_error or "") if self.fetcher.health.get("intake") else ""
++                out["detail"] = {
++                    "HTTP 401": "bot token rejected",
++                    "HTTP 403": "bot lacks View Channel / Read Message History on the channel",
++                    "HTTP 404": "channel id unknown to this bot (wrong id, or bot not in the server)",
++                    "HTTP 429": "rate limited",
++                }.get(last, last or "request failed")
++                out["status"] = last.lower().replace(" ", "_") if last.startswith("HTTP ") else "error"
++                return out
++            if not isinstance(page, list):
++                out["detail"] = "non-list response"
++                return out
++            page = [m for m in page if isinstance(m, dict) and str(m.get("id") or "").isdigit()]
++            in_window = [m for m in page if int(m["id"]) >= cutoff]
++            messages.extend(in_window)
++            if len(page) < 100 or len(in_window) < len(page):
++                break
++            before = min(int(m["id"]) for m in page)
++        messages.sort(key=lambda m: int(m["id"]), reverse=True)
++        raw: list[tuple[dict, dict]] = []
++        updates: dict[str, dict] = {}
++        by_id: set[str] = set()
++        for m in messages:
++            rec = parse_intake_record(m.get("content"))
++            upd = None if rec else parse_intake_update(m.get("content"))
++            if not rec and not upd:
++                continue
++            # Freshness from relay messages only (records and 0.0.7 re-checks) — never from other bots.
++            if out["newest_age"] is None:
++                created = epoch_from_snowflake(m["id"])
++                if created is not None:
++                    out["newest_age"] = max(0, int(now - created))
++            if upd:
++                out["update_msgs"] += 1
++                for item in upd["posts"]:
++                    updates.setdefault(item["id"], item)  # newest message first -> latest look wins
++                continue
++            out["seen"] += 1
++            pid = str(rec["id"]).lower()
++            if pid in by_id:
++                continue  # a re-sent record after an edit (revision >= 2) is the newer message
++            by_id.add(pid)
++            raw.append((rec, m))
++        out["updates"] = len(updates)
++        # 0.0.7: complete cut records / crossposts from `record.json` (CDN, no token, bounded).
++        fetched = 0
++        for rec, m in raw:
++            if fetched >= INTAKE_ATTACHMENT_FETCHES:
++                break
++            url = attachment_url(m)
++            if not url or not needs_full_record(rec):
++                continue
++            fetched += 1
++            full = await self.fetcher.get_json(url, source="intake-cdn", retries=0, timeout=INTAKE_TIMEOUT,
++                                               headers={"User-Agent": headers["User-Agent"]})
++            if apply_full_record(rec, full):
++                out["completed"] += 1
++        records: list[dict] = []
++        for rec, _m in raw:
++            latest = updates.get(str(rec["id"]).lower())
++            if latest is not None:
++                if latest.get("removed") or latest.get("deleted"):
++                    continue  # the relay looked again: gone
++            elif rec.get("removed"):
++                continue  # the relay saw it removed: alive relay, no listing entry
++            records.append(record_to_entry(rec))
++        out["records"] = records
++        minutes = self.settings.intake_lookback_seconds // 60
++        if not messages:
++            out["status"], out["detail"] = "empty", f"no messages in the last {minutes} min"
++        elif not out["seen"] and out["update_msgs"]:
++            out["status"] = "empty"
++            out["detail"] = (f"relay alive ({out['update_msgs']} re-check message(s)) but no new post "
++                             f"in the last {minutes} min")
++        elif not out["seen"]:
++            out["status"] = "empty"
++            out["detail"] = (f"{len(messages)} message(s) in the last {minutes} min but none is a relay record "
++                             f"(Message Content Intent off, wrong channel id, or the relay webhook points elsewhere)")
++        elif out["newest_age"] is not None and out["newest_age"] > self.settings.intake_stale_seconds:
++            out["status"] = "stale"
++            out["detail"] = (f"newest relay record is {out['newest_age']} s old "
++                             f"(limit {self.settings.intake_stale_seconds} s)")
++        else:
++            out["status"] = "ok"
++        return out
++
++    async def listing(self, kind: str, target: str) -> list[dict] | None:
++        """Relay listing for `r/<target>` (kind `sub`) or `u/<target>` (kind `user`), newest first;
++        `None` whenever the old chain must run (off / shadow / not ok / no record for the target)."""
++        if self.mode == "off":
++            return None
++        res = await self.fetch()
++        if res["status"] != "ok":
++            return None
++        key = target.strip().lower()
++        if kind == "user":
++            hits = [e for e in res["records"] if e["author"].lower() == key]
++        else:
++            hits = [e for e in res["records"] if e["subreddit"].lower() == key]
++        if not hits:
++            return None
++        hits = sorted(hits, key=lambda e: e.get("ts") or 0, reverse=True)
++        label = f"{'u' if kind == 'user' else 'r'}/{target}"
++        if self.mode == "shadow":
++            log.info("[reddit:intake] SHADOW %s: relay has %d record(s); old chain decides", label, len(hits))
++            return None
++        self.served.append(label)
++        log.info("[reddit:intake] %s served from the relay: %d record(s)", label, len(hits))
++        return hits
++
++    def summary_line(self) -> str:
++        """One step-summary line; empty when the reader never ran (reddit never consulted)."""
++        res = self._result
++        if res is None or res["status"] == "off":
++            return ""
++        if res["status"] == "ok":
++            served = ", ".join(dedupe(self.served)) or "no target needed Reddit"
++            shadow = " (shadow — old chain decided)" if self.mode == "shadow" else ""
++            extra = ""
++            if res.get("updates"):
++                extra += f", {res['updates']} re-checked"
++            if res.get("completed"):
++                extra += f", {res['completed']} completed from record.json"
++            return (f"📡 reddit intake: relay ok — {len(res['records'])} record(s) in window, newest "
++                    f"{res['newest_age']} s{extra}; served {served}{shadow}")
++        detail = f" ({res['detail']})" if res.get("detail") else ""
++        return f"📡 reddit intake: relay {res['status']}{detail} — redlib/reddit.com chain used"
+diff --git a/tests/test_reddit_intake.py b/tests/test_reddit_intake.py
+new file mode 100644
+index 0000000..121c3ab
+--- /dev/null
++++ b/tests/test_reddit_intake.py
+@@ -0,0 +1,453 @@
++"""Devvit relay intake reader (2026-11-02) — offline, no network, no secrets.
++
++Run:  python tests/test_reddit_intake.py     (CI runs it next to test_smoke.py)
++
++Records below are the first live relay records (owner screenshots, 2026-11-02 PHT):
++1xlhem9 (gallery, x.com link with `\\_` escapes), 1xli6di (video + poster, truncated body),
++1xlh3fw (text post with inline preview.redd.it images), 1xlkfrm (YouTube link post),
++1xljyzj (.gif) and the leak-sub record 1xliq84 the old chain posted at 08:20 after the relay had
++it at 08:15.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import inspect
++import json
++import sys
++import time
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parent.parent
++sys.path.insert(0, str(ROOT))
++
++from gamexpress.config import Settings, load_games, load_settings  # noqa: E402
++from gamexpress.http import Fetcher, SourceHealth  # noqa: E402
++from gamexpress.sources import reddit_intake as ri  # noqa: E402
++from gamexpress.sources.reddit import RedditClient, _is_official_subreddit_post  # noqa: E402
++
++NOW = 1_793_583_400.0  # 2026-11-02 00:16:40Z, right after the screenshots
++
++
++def _fence(rec: dict) -> str:
++    return "```json\n" + json.dumps(rec, ensure_ascii=False) + "\n```"
++
++
++def _rec(**kw) -> dict:
++    base = {"v": 1, "id": "1xliq84", "sub": "Zenlesszonezeroleaks_",
++            "title": "[3.4.2 Beta] Sunbringers' Form Selection Menu",
++            "permalink": "/r/Zenlesszonezeroleaks_/comments/1xliq84/342_beta_sunbringers_form_selection_menu/",
++            "url": "https://i.redd.it/rd8d9f59d3zh1.png", "created": 1793578392, "author": "adrigamer2950",
++            "flair": "Reliable", "distinguished": None, "spoiler": False, "nsfw": False, "score": 20,
++            "comments": 3, "removed": None, "xpost": None,
++            "media": ["https://preview.redd.it/rd8d9f59d3zh1.png?auto=webp&s=75101ea0f3f82e170c0b2c483a92efd9160720dc"],
++            "body": "yea, we'll be able to switch to any sunbringer in the overworld.", "bodyTruncated": False}
++    base.update(kw)
++    return base
++
++
++def _msgs(records: list[dict], ages: list[int], noise: int = 0) -> list[dict]:
++    out = [{"id": str(ri.snowflake_from_epoch(NOW - age)), "content": _fence(r)} for r, age in zip(records, ages)]
++    out += [{"id": str(ri.snowflake_from_epoch(NOW - 3 - i)), "content": f"wick: member joined #{i}"}
++            for i in range(noise)]
++    return out
++
++
++class _Fetcher:
++    """Stands in for `Fetcher`: serves Discord pages newest-first, honours `before`."""
++
++    def __init__(self, messages: list[dict] | None = None, fail: str | None = None,
++                 files: dict[str, object] | None = None) -> None:
++        self.messages = messages or []
++        self.fail = fail
++        self.files = files or {}          # 0.0.7: record.json attachments by CDN URL
++        self.calls: list[tuple[str, dict, dict]] = []
++        self.cdn_calls: list[str] = []
++        self.health: dict[str, SourceHealth] = {}
++
++    async def get_json(self, url, *, source, headers=None, params=None, retries=2, timeout=None):
++        if source == "intake-cdn":
++            self.cdn_calls.append(url)
++            assert "Authorization" not in (headers or {}), "the bot token never goes to the CDN"
++            return self.files.get(url)
++        self.calls.append((url, dict(params or {}), dict(headers or {})))
++        if self.fail:
++            self.health[source] = SourceHealth(fail=1, last_error=self.fail)
++            return None
++        before = (params or {}).get("before")
++        page = [m for m in self.messages if before is None or int(m["id"]) < int(before)]
++        page.sort(key=lambda m: int(m["id"]), reverse=True)
++        return page[:100]
++
++    async def get_text(self, url, **kw):  # the old chain must never be reached in relay mode
++        self.calls.append((url, {}, {}))
++        return None
++
++
++def _settings(**kw) -> Settings:
++    s = load_settings({"DISCORD_BOT_TOKEN": "tok", "INTAKE_CHANNEL_ID": "1296308518470549606", **kw})
++    return s
++
++
++def _run(coro):
++    return asyncio.run(coro)
++
++
++def test_settings_defaults_and_env_wiring():
++    s = load_settings({})
++    assert (s.intake_reader, s.discord_bot_token, s.intake_channel_id) == ("primary", "", "")
++    assert (s.intake_stale_seconds, s.intake_lookback_seconds) == (1800, 21600)
++    s = load_settings({"INTAKE_READER": "Shadow", "INTAKE_CHANNEL_ID": " 1296308518470549606 ",
++                       "INTAKE_STALE_SECONDS": "600", "INTAKE_LOOKBACK_SECONDS": "7200"})
++    assert (s.intake_reader, s.intake_channel_id, s.intake_stale_seconds, s.intake_lookback_seconds) == \
++        ("shadow", "1296308518470549606", 600, 7200)
++    assert load_settings({"INTAKE_READER": "bogus"}).intake_reader == "primary"
++    # GE_SECRETS_JSON / GE_VARS_JSON carry the two settings without any workflow edit
++    s = load_settings({"GE_SECRETS_JSON": json.dumps({"DISCORD_BOT_TOKEN": "t"}),
++                       "GE_VARS_JSON": json.dumps({"INTAKE_CHANNEL_ID": "1296308518470549606"})})
++    assert s.discord_bot_token == "t" and s.intake_channel_id == "1296308518470549606"
++
++
++def test_record_parsing_and_listing_shape():
++    assert ri.parse_intake_record("hello") is None
++    assert ri.parse_intake_record(_fence({"v": 2, "id": "abc"})) is None
++    assert ri.parse_intake_record(_fence(_rec()))["id"] == "1xliq84"
++    e = ri.record_to_entry(_rec())
++    assert e["subreddit"] == "Zenlesszonezeroleaks_" and e["author"] == "adrigamer2950" and e["ts"] == 1793578392
++    assert e["url"] == "https://www.reddit.com/r/Zenlesszonezeroleaks_/comments/1xliq84/342_beta_sunbringers_form_selection_menu/"
++    assert e["images"] == ["https://i.redd.it/rd8d9f59d3zh1.png",
++                           "https://preview.redd.it/rd8d9f59d3zh1.png?auto=webp&s=75101ea0f3f82e170c0b2c483a92efd9160720dc"]
++    assert e["videos"] == [] and e["links"] == [] and e["comments"] == [] and e["stickied"] is False
++    assert e["flair"] == "Reliable" and e["relay"] is True and e["body_truncated"] is False
++
++    # 1xlhem9: gallery + x.com link with markdown escapes inside the bare URL
++    gal = ri.record_to_entry(_rec(id="1xlhem9", sub="HonkaiStarRail", url="https://www.reddit.com/gallery/1xlhem9",
++                                  permalink="/r/HonkaiStarRail/comments/1xlhem9/mydei_halloween_event_in_china/",
++                                  media=["https://preview.redd.it/6ymlc2ap23zh1.jpeg?width=1706&s=b",
++                                         "https://preview.redd.it/a5jn0lcp23zh1.jpeg?width=1290&s=d",
++                                         "https://preview.redd.it/ks74vkdp23zh1.jpeg?width=2048&s=6"],
++                                  body="https://x.com/minmyouk\\_xx/status/2113590961083429023?a=2RST8IJE8ot\\_RtI82vg&s=19"))
++    assert len(gal["images"]) == 3 and gal["links"] == ["https://x.com/minmyouk_xx/status/2113590961083429023?a=2RST8IJE8ot_RtI82vg&s=19"]
++    assert "minmyouk_xx" in gal["text"] and "\\_" not in gal["text"]
++
++    # 1xli6di: v.redd.it video -> canonical CMAF_720 candidate (the muxed-audio proxy chain takes it
++    # from there, as for every JSON/redlib entry); the external poster stays an image; body truncated
++    vid = ri.record_to_entry(_rec(id="1xli6di", sub="Genshin_Impact", url="https://v.redd.it/awoc4x5w73zh1",
++                                  permalink="/r/Genshin_Impact/comments/1xli6di/i_made_my_very_first_game/",
++                                  media=["https://v.redd.it/awoc4x5w73zh1/CMAF_1080.mp4?source=fallback",
++                                         "https://external-preview.redd.it/NHhv.png?format=pjpg&auto=webp&s=79d1"],
++                                  body="Hi everyone! \\n\\n# How it works\\n\\n\\\\- Pick Pyro", bodyTruncated=True))
++    assert vid["videos"] == ["https://v.redd.it/awoc4x5w73zh1/CMAF_720.mp4"]
++    assert vid["images"] == ["https://external-preview.redd.it/NHhv.png?format=pjpg&auto=webp&s=79d1"]
++    assert vid["links"] == [] and vid["body_truncated"] is True and vid["text"].startswith("Hi everyone!")
++
++    # 1xlh3fw: text post, images pasted inline in the markdown body, media: []
++    inl = ri.record_to_entry(_rec(id="1xlh3fw", sub="Genshin_Impact", media=[],
++                                  url="https://www.reddit.com/r/Genshin_Impact/comments/1xlh3fw/i_wish/",
++                                  permalink="/r/Genshin_Impact/comments/1xlh3fw/i_wish/",
++                                  body="https://preview.redd.it/fg9aonrlz2zh1.png?width=1805&s=3f05\n\n"
++                                       "https://preview.redd.it/d6jmman303zh1.png?width=1809&s=7efc\n\nhot take"))
++    assert inl["images"] == ["https://preview.redd.it/fg9aonrlz2zh1.png?width=1805&s=3f05",
++                             "https://preview.redd.it/d6jmman303zh1.png?width=1809&s=7efc"] and inl["links"] == []
++
++    # 1xlkfrm: YouTube link post -> the destination is a link, the poster an image
++    yt = ri.record_to_entry(_rec(id="1xlkfrm", sub="Genshin_Impact", url="https://youtu.be/6Lwi4vskUR0?is=N5kYk",
++                                 permalink="/r/Genshin_Impact/comments/1xlkfrm/here_is/",
++                                 media=["https://external-preview.redd.it/KTTh.jpeg?auto=webp&s=bde7"], body="fun fight"))
++    assert yt["links"] == ["https://youtu.be/6Lwi4vskUR0?is=N5kYk"] and len(yt["images"]) == 1
++
++    # 1xljyzj: .gif (i.redd.it destination, preview copy in media[])
++    gif = ri.record_to_entry(_rec(id="1xljyzj", sub="ZZZ_Official", url="https://i.redd.it/gf8qf6o1o3zh1.gif",
++                                  permalink="/r/ZZZ_Official/comments/1xljyzj/ohhh/",
++                                  media=["https://preview.redd.it/gf8qf6o1o3zh1.gif?s=f1d9"], body=""))
++    assert gif["images"] == ["https://i.redd.it/gf8qf6o1o3zh1.gif", "https://preview.redd.it/gf8qf6o1o3zh1.gif?s=f1d9"]
++    assert gif["links"] == []
++
++    # official-post rule unchanged: flair / distinguished / verified author
++    hsr = load_games()["starrail"]
++    off = ri.record_to_entry(_rec(id="1xljt2l", sub="HonkaiStarRail", author="Lumpy-Manager8580", flair="Official Media"))
++    assert _is_official_subreddit_post(hsr, off)
++    assert not _is_official_subreddit_post(hsr, ri.record_to_entry(_rec(id="1xlia06", sub="HonkaiStarRail",
++                                                                        author="chunga-bunga69", flair="Meme / Fluff")))
++    assert _is_official_subreddit_post(hsr, ri.record_to_entry(_rec(id="1xlzzzz", sub="HonkaiStarRail",
++                                                                    author="HonkaiStarRail", flair="")))
++
++
++def test_reader_statuses_paging_and_shared_channel():
++    recs = [_rec(id=f"1xl{i:04d}", created=int(NOW) - 40 - i * 60) for i in range(3)]
++    # healthy, with other bots chatting in the same channel: age comes from the newest RECORD
++    f = _Fetcher(_msgs(recs, [40, 100, 160], noise=150))
++    r = _run(ri.IntakeReader(f, _settings()).fetch(NOW))
++    assert r["status"] == "ok" and r["newest_age"] == 40 and r["seen"] == 3 and len(r["records"]) == 3
++    assert f.calls[0][0] == f"{ri.INTAKE_API}/channels/1296308518470549606/messages"
++    assert f.calls[0][2]["Authorization"] == "Bot tok" and "before" not in f.calls[0][1]
++    assert "tok" not in f.calls[0][0] and "tok" not in json.dumps(f.calls[0][1])
++    # newest-first paging with `before`, bounded, stops at the lookback cutoff
++    many = [_rec(id=f"1xm{i:04d}", created=int(NOW) - 40 - i) for i in range(230)]
++    f = _Fetcher(_msgs(many, [40 + i for i in range(230)]))
++    r = _run(ri.IntakeReader(f, _settings()).fetch(NOW))
++    assert r["status"] == "ok" and len(r["records"]) == 230 and len(f.calls) == 3
++    assert int(f.calls[2][1]["before"]) < int(f.calls[1][1]["before"])
++    old = _msgs([_rec(id="1xoldd1")], [21600 + 600])
++    f = _Fetcher(_msgs(recs, [40, 100, 160]) + old)
++    r = _run(ri.IntakeReader(f, _settings()).fetch(NOW))
++    assert len(r["records"]) == 3 and len(f.calls) == 1
++    # relay silent while other bots chat -> stale; empty content (intent off) -> empty with the hint
++    assert _run(ri.IntakeReader(_Fetcher(_msgs(recs, [5000, 5100, 5200], noise=20)), _settings()).fetch(NOW))["status"] == "stale"
++    blank = _run(ri.IntakeReader(_Fetcher([{"id": m["id"], "content": ""} for m in _msgs(recs, [40, 100, 160])]),
++                                 _settings()).fetch(NOW))
++    assert blank["status"] == "empty" and "Message Content Intent" in blank["detail"]
++    assert _run(ri.IntakeReader(_Fetcher([]), _settings()).fetch(NOW))["status"] == "empty"
++    # HTTP errors map to the owner-readable hints; unconfigured / off never touch the network
++    assert _run(ri.IntakeReader(_Fetcher(fail="HTTP 403"), _settings()).fetch(NOW))["status"] == "http_403"
++    assert "Read Message History" in _run(ri.IntakeReader(_Fetcher(fail="HTTP 403"), _settings()).fetch(NOW))["detail"]
++    f = _Fetcher()
++    assert _run(ri.IntakeReader(f, load_settings({})).fetch(NOW))["status"] == "unconfigured" and not f.calls
++    f = _Fetcher()
++    assert _run(ri.IntakeReader(f, _settings(INTAKE_READER="off")).fetch(NOW))["status"] == "off" and not f.calls
++    # a removed record never becomes a listing entry
++    gone = _run(ri.IntakeReader(_Fetcher(_msgs([_rec(id="1xgone1", removed="moderator")], [40])), _settings()).fetch(NOW))
++    assert gone["records"] == [] and gone["status"] == "ok"
++
++
++def test_client_serves_relay_first_and_falls_back_per_target():
++    recs = [
++        _rec(id="1xliq84"),
++        _rec(id="1xljt2l", sub="HonkaiStarRail", author="Lumpy-Manager8580", flair="Official Media",
++             permalink="/r/HonkaiStarRail/comments/1xljt2l/aha/", created=int(NOW) - 300),
++        _rec(id="1xlfast", sub="Genshin_Impact", author="genshinimpact", flair="Official Media",
++             permalink="/r/Genshin_Impact/comments/1xlfast/v/", created=int(NOW) - 200,
++             title="Version 7.3 Special Program Preview", body="Premieres on 2026-11-20 at 08:00 (UTC-4)!"),
++    ]
++    f = _Fetcher(_msgs(recs, [60, 300, 200], noise=10))
++    s = _settings()
++    rc = RedditClient(f, s)  # type: ignore[arg-type]
++    rc.intake.now = NOW
++    sub = _run(rc.subreddit("HonkaiStarRail"))
++    assert sub and [e["id"] for e in sub] == ["1xljt2l"] and "r/honkaistarrail" in rc.reachable
++    user = _run(rc.user("genshinimpact"))
++    assert user and user[0]["id"] == "1xlfast" and "u/genshinimpact" in rc.reachable
++    # one channel read for the whole run, zero redlib / reddit.com requests for served targets
++    assert len([c for c in f.calls if "discord.com" in c[0]]) == 1
++    assert all("discord.com" in c[0] for c in f.calls)
++    # a target without records in the window falls back to the old chain (which the stub fails)
++    assert _run(rc.user("AnantaOfficial")) is None
++    assert any("discord.com" not in c[0] for c in f.calls)
++    assert rc.intake.summary_line().startswith("📡 reddit intake: relay ok — 3 record(s)")
++    assert "r/HonkaiStarRail" in rc.intake.summary_line() and "u/genshinimpact" in rc.intake.summary_line()
++
++    # items(): games with a publisher account read `u/<account>`; the relay serves it from the
++    # records authored by that account (its subreddit is polled too, so dormant accounts simply
++    # have no record and fall back to the old chain exactly as before)
++    f5 = _Fetcher(_msgs(recs + [_rec(id="1xlhsr1", sub="HonkaiStarRail", author="HonkaiStarRail",
++                                     flair="Official Media", permalink="/r/HonkaiStarRail/comments/1xlhsr1/v/",
++                                     created=int(NOW) - 120, title="Version 3.9 Special Program Preview")],
++                        [60, 300, 200, 120]))
++    rc5 = RedditClient(f5, _settings())  # type: ignore[arg-type]
++    rc5.intake.now = NOW
++    items = _run(rc5.items(load_games()["starrail"], lambda text: True, int(NOW) - 3600))
++    assert [it.id for it in items] == ["1xlhsr1"] and items[0].official is True and items[0].source == "reddit"
++    assert items[0].title == "Version 3.9 Special Program Preview" and items[0].author == "HonkaiStarRail"
++    assert all("discord.com" in c[0] for c in f5.calls)   # zero redlib requests
++    # WuWa has no publisher account: the subreddit listing + flair rule, served by the relay
++    f6 = _Fetcher(_msgs([_rec(id="1xlwuwa", sub="WutheringWaves", author="WutheringWavesMod", flair="Official News",
++                              permalink="/r/WutheringWaves/comments/1xlwuwa/v/", created=int(NOW) - 90,
++                              title="Version 3.2 Special Broadcast")], [90]))
++    rc6 = RedditClient(f6, _settings())  # type: ignore[arg-type]
++    rc6.intake.now = NOW
++    wuwa = _run(rc6.items(load_games()["wuwa"], lambda text: True, int(NOW) - 3600))
++    assert [it.id for it in wuwa] == ["1xlwuwa"] and wuwa[0].official is True
++
++    # shadow: reads, logs, but the old chain decides
++    f2 = _Fetcher(_msgs(recs, [60, 300, 200]))
++    rc2 = RedditClient(f2, _settings(INTAKE_READER="shadow"))  # type: ignore[arg-type]
++    rc2.intake.now = NOW
++    assert _run(rc2.subreddit("HonkaiStarRail")) is None
++    assert "shadow" in rc2.intake.summary_line()
++    # stale relay -> old chain, summary says why
++    f3 = _Fetcher(_msgs(recs, [5000, 5300, 5200]))
++    rc3 = RedditClient(f3, _settings())  # type: ignore[arg-type]
++    rc3.intake.now = NOW
++    assert _run(rc3.subreddit("HonkaiStarRail")) is None
++    assert rc3.intake.summary_line().startswith("📡 reddit intake: relay stale")
++    # unconfigured: identical to before the round — no Discord call, old chain, one summary line
++    f4 = _Fetcher()
++    rc4 = RedditClient(f4, load_settings({}))  # type: ignore[arg-type]
++    assert _run(rc4.subreddit("HonkaiStarRail")) is None
++    assert not any("discord.com" in c[0] for c in f4.calls)
++    assert "unconfigured" in rc4.intake.summary_line()
++
++
++def _update_msg(age: int, posts: list[dict]) -> dict:
++    return {"id": str(ri.snowflake_from_epoch(NOW - age)),
++            "content": "```json\n" + json.dumps({"v": 2, "kind": "update", "at": int(NOW - age), "posts": posts}) + "\n```"}
++
++
++def _item(pid: str, **over) -> dict:
++    base = {"id": pid, "sub": "HonkaiStarRail_leaks", "age": 640, "stage": 1, "removed": None, "deleted": False,
++            "edited": False, "spoiler": False, "nsfw": False, "locked": False, "score": 3, "comments": 1}
++    base.update(over)
++    return base
++
++
++_CDN = "https://cdn.discordapp.com/attachments/1/{}/record.json?ex=1&is=2&hm=3"
++
++
++def _att(msg: dict, pid: str) -> dict:
++    msg["attachments"] = [{"id": "9", "filename": "record.json", "url": _CDN.format(pid),
++                           "content_type": "application/json"}]
++    return msg
++
++
++def test_relay_007_updates_attachments_and_edits():
++    """Relay 0.0.7: v2 re-check messages, `record.json` completion, re-sent records after edits."""
++    # -- update parser ------------------------------------------------------------------------
++    upd = ri.parse_intake_update(_update_msg(30, [_item("1xl0000"), {"id": "bad id"}, _item("1xl0001", removed="moderator")])["content"])
++    assert upd and [p["id"] for p in upd["posts"]] == ["1xl0000", "1xl0001"] and upd["posts"][1]["removed"] == "moderator"
++    assert ri.parse_intake_update(_fence(_rec())) is None
++    assert ri.parse_intake_record(_update_msg(30, [])["content"]) is None
++    assert ri.parse_intake_update("```json\n{\"v\": 2, \"kind\": \"other\"}\n```") is None
++
++    # -- re-checks: freshness, latest look wins, removed/deleted posts leave the listing ---------
++    recs = [_rec(id=f"1xl000{i}", permalink=f"/r/HonkaiStarRail_leaks/comments/1xl000{i}/t/") for i in range(3)]
++    msgs = ([_update_msg(20, [_item("1xl0000", stage=2, removed="moderator")]),
++             _update_msg(200, [_item("1xl0000"), _item("1xl0001", deleted=True, removed="deleted")])]
++            + _msgs(recs, [900, 960, 1020]))
++    res = _run(ri.IntakeReader(_Fetcher(msgs), _settings()).fetch(NOW))
++    assert res["status"] == "ok" and res["newest_age"] == 20, res
++    assert res["update_msgs"] == 2 and res["updates"] == 2 and res["seen"] == 3
++    assert [e["id"] for e in res["records"]] == ["1xl0002"], "removed (latest look) and deleted posts are not listed"
++    # an initially removed record that the re-check later shows live IS listed (approved from the queue)
++    approved = [_update_msg(20, [_item("1xl0000", stage=1)])] + _msgs([_rec(id="1xl0000", removed="automod_filtered",
++                                                                           permalink="/r/HonkaiStarRail_leaks/comments/1xl0000/t/")], [900])
++    assert [e["id"] for e in _run(ri.IntakeReader(_Fetcher(approved), _settings()).fetch(NOW))["records"]] == ["1xl0000"]
++    # a channel holding only re-check messages is a live relay with nothing new (not stale)
++    only_upd = _run(ri.IntakeReader(_Fetcher([_update_msg(20, [_item("1xl0000")])]), _settings()).fetch(NOW))
++    assert only_upd["status"] == "empty" and only_upd["newest_age"] == 20 and only_upd["seen"] == 0
++    assert only_upd["detail"].startswith("relay alive"), only_upd["detail"]
++
++    # -- record.json completion -----------------------------------------------------------------
++    cut = _rec(id="1xlcut1", permalink="/r/HonkaiStarRail_leaks/comments/1xlcut1/c/", url="https://www.reddit.com/gallery/1xlcut1",
++               body="first part…", bodyTruncated=True, media=["https://preview.redd.it/a1.png?width=2048&s=1"],
++               mediaTruncated=True, full=True)
++    full = dict(cut, body="first part, then the whole code list " * 40, bodyTruncated=False,
++                media=[f"https://preview.redd.it/a{i}.png?width=2048&s={i}" for i in range(1, 9)], mediaTruncated=False, parent=None)
++    xp = _rec(id="1xlxpst", permalink="/r/HonkaiStarRail_leaks/comments/1xlxpst/x/",
++              url="https://www.reddit.com/r/HonkaiStarRail/comments/1xlpar0/parent/", body="", media=[], xpost="t3_1xlpar0", full=True)
++    parent = _rec(id="1xlpar0", sub="HonkaiStarRail", permalink="/r/HonkaiStarRail/comments/1xlpar0/parent/",
++                  media=["https://i.redd.it/parent1.png", "https://i.redd.it/parent2.png"], body="parent body")
++    plain = _rec(id="1xlplain", permalink="/r/HonkaiStarRail_leaks/comments/1xlplain/p/", full=True)
++    cut2 = dict(cut, id="1xlcut2", permalink="/r/HonkaiStarRail_leaks/comments/1xlcut2/c/")
++    cut3 = dict(cut, id="1xlcut3", permalink="/r/HonkaiStarRail_leaks/comments/1xlcut3/c/")
++    msgs = _msgs([cut, xp, plain, cut2, cut3], [100, 200, 300, 400, 500])
++    for m, r in zip(msgs, [cut, xp, plain, cut2, cut3]):
++        _att(m, r["id"])
++    f = _Fetcher(msgs, files={_CDN.format("1xlcut1"): full, _CDN.format("1xlxpst"): dict(xp, parent=parent, xpostPermalink=parent["permalink"]),
++                              _CDN.format("1xlcut2"): dict(full, id="1xlother"), _CDN.format("1xlplain"): full})
++    res = _run(ri.IntakeReader(f, _settings()).fetch(NOW))
++    by = {e["id"]: e for e in res["records"]}
++    assert res["completed"] == 2, res
++    assert by["1xlcut1"]["body_truncated"] is False and len(by["1xlcut1"]["text"]) > 1000 and len(by["1xlcut1"]["images"]) == 8
++    assert by["1xlxpst"]["crosspost_url"] == "https://www.reddit.com/r/HonkaiStarRail/comments/1xlpar0/parent/"
++    assert by["1xlxpst"]["images"] == parent["media"], "a crosspost shows its parent's media"
++    assert by["1xlcut2"]["body_truncated"] is True and by["1xlcut2"]["text"] == "first part…", "wrong-post attachment ignored"
++    assert by["1xlcut3"]["body_truncated"] is True, "missing attachment -> inline record kept"
++    assert sorted(f.cdn_calls) == sorted(_CDN.format(x) for x in ("1xlcut1", "1xlxpst", "1xlcut2", "1xlcut3")), "complete records cost no CDN request"
++    many = _msgs([dict(cut, id=f"1xlcu{i:02d}", permalink=f"/r/HonkaiStarRail_leaks/comments/1xlcu{i:02d}/c/") for i in range(15)],
++                 [10 + i for i in range(15)])
++    for i, m in enumerate(many):
++        _att(m, f"1xlcu{i:02d}")
++    f2 = _Fetcher(many)
++    _run(ri.IntakeReader(f2, _settings()).fetch(NOW))
++    assert len(f2.cdn_calls) == ri.INTAKE_ATTACHMENT_FETCHES == 10
++
++    # -- edits: the re-sent record (newer message, revision 2) supersedes ----------------------------
++    e1 = _msgs([dict(plain, body="v1 body")], [600])[0]
++    e2 = _msgs([dict(plain, body="v2 body (edited)", edited=True, revision=2)], [60])[0]
++    ed = _run(ri.IntakeReader(_Fetcher([e2, e1]), _settings()).fetch(NOW))["records"]
++    assert len(ed) == 1 and ed[0]["text"] == "v2 body (edited)" and ed[0]["edited"] is True
++
++    # -- summary line mentions re-checks without ids --------------------------------------------------
++    r = ri.IntakeReader(_Fetcher(msgs[:1] + [_update_msg(20, [_item("1xlcut1")])]), _settings())
++    _run(r.fetch(NOW))
++    line = r.summary_line()
++    assert "re-checked" in line and "1xl" not in line, line
++
++
++def test_relay_008_complete_records_need_no_resolve():
++    """Relay 0.0.8 / round 104: a complete record needs no post-page resolve (redlib / reddit.com) —
++    `items()` and `program_post()` alike. (The relay's record.json carries no comments; the
++    owner dropped the publisher-comment follow-up.)"""
++    inline = _rec(id="1xlofcl", sub="HonkaiStarRail", author="HonkaiStarRail", flair="Official Media",
++                  permalink="/r/HonkaiStarRail/comments/1xlofcl/o/", created=int(NOW) - 100,
++                  title="Version 3.9 Maintenance Notice", body="Servers go down at 06:00 (UTC+8).",
++                  resent="approved", revision=2)
++    plain = _rec(id="1xlplain", sub="HonkaiStarRail", author="HonkaiStarRail", flair="Official Media",
++                 permalink="/r/HonkaiStarRail/comments/1xlplain/p/", created=int(NOW) - 200,
++                 title="Version 3.9 Special Program Preview", body="")
++    msgs = _msgs([inline, plain], [100, 200])
++    _att(msgs[0], "1xlofcl")
++    f = _Fetcher(msgs, files={_CDN.format("1xlofcl"): dict(inline, parent=None)})
++    rc = RedditClient(f, _settings())  # type: ignore[arg-type]
++    rc.intake.now = NOW
++    res = _run(rc.intake.fetch(NOW))
++    by = {e["id"]: e for e in res["records"]}
++    assert res["completed"] == 0 and f.cdn_calls == [], "a re-sent complete record costs no CDN request"
++    assert by["1xlofcl"]["relay_complete"] is True and by["1xlplain"]["relay_complete"] is True
++    assert by["1xlofcl"]["comments"] == [] and by["1xlofcl"]["edited"] is False
++    assert ri.record_to_entry(_rec(id="1xlcutx", bodyTruncated=True))["relay_complete"] is False
++    assert ri.record_to_entry(_rec(id="1xlxpnp", xpost="t3_abc"))["relay_complete"] is False
++
++    # items(): the empty-text complete record (title-only post) is NOT resolved through the old
++    # chain — zero redlib / reddit.com requests for relay-served targets
++    items = _run(rc.items(load_games()["starrail"], lambda text: True, int(NOW) - 3600))
++    assert sorted(it.id for it in items) == ["1xlofcl", "1xlplain"], [it.id for it in items]
++    assert all("discord.com" in c[0] for c in f.calls), [c[0] for c in f.calls if "discord.com" not in c[0]]
++    # a cut record the CDN could not complete still takes the old-chain resolve (budgeted)
++    f2 = _Fetcher(_msgs([dict(plain, body="", bodyTruncated=True)], [200]))
++    rc2 = RedditClient(f2, _settings())  # type: ignore[arg-type]
++    rc2.intake.now = NOW
++    _run(rc2.items(load_games()["starrail"], lambda text: True, int(NOW) - 3600))
++    assert any("discord.com" not in c[0] for c in f2.calls), "fallback resolve kept for cut records"
++
++    # program_post(): a complete relay record with the announcement in its body needs no resolve
++    prog = _rec(id="1xlprog", sub="HonkaiStarRail", author="HonkaiStarRail", flair="Official Media",
++                permalink="/r/HonkaiStarRail/comments/1xlprog/v/", created=int(NOW) - 150,
++                title="Version 3.9 Special Program Preview",
++                body="The Version 3.9 Special Program premieres on 2026-11-20 at 08:00 (UTC-4)!")
++    f3 = _Fetcher(_msgs([prog], [150]))
++    rc3 = RedditClient(f3, _settings())  # type: ignore[arg-type]
++    rc3.intake.now = NOW
++    hit = _run(rc3.program_post(load_games()["starrail"], "3.9"))
++    assert hit is not None and hit.id == "1xlprog", hit
++    assert all("discord.com" in c[0] for c in f3.calls), [c[0] for c in f3.calls if "discord.com" not in c[0]]
++    src = inspect.getsource(RedditClient.program_post) + inspect.getsource(RedditClient.items)
++    assert src.count('e.get("relay_complete")') == 2 and "resolvable = not e.get" in src
++    assert not hasattr(ri, "parse_op_comments") and "opComments" not in inspect.getsource(ri)
++
++
++def test_wiring_is_in_place():
++    from gamexpress import runner
++    from gamexpress.sources import reddit as rmod
++    src = inspect.getsource(rmod.RedditClient._gather_listing)
++    assert src.index("await self.intake.listing(kind, target)") < src.index("feed_q = format_reddit_feed_query")
++    assert "reddit.intake.summary_line()" in inspect.getsource(runner.run_once)
++    assert isinstance(Fetcher.get_json, object) and time.time() > 0
++
++
++def main() -> int:
++    failed = 0
++    for name, fn in sorted(globals().items()):
++        if name.startswith("test_") and callable(fn):
++            try:
++                fn()
++                print(f"  PASS  {name}")
++            except Exception as exc:  # noqa: BLE001
++                failed += 1
++                print(f"  FAIL  {name}: {type(exc).__name__}: {exc}")
++    print("REDDIT INTAKE TEST:", "ALL PASS" if not failed else f"{failed} FAILED")
++    return 1 if failed else 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/tests/test_smoke.py b/tests/test_smoke.py
+index 993c87b..f761ad6 100644
+--- a/tests/test_smoke.py
++++ b/tests/test_smoke.py
+@@ -14964,7 +14964,7 @@ def test_final_pre_merge_edge_cases_and_repo_doc_consistency():
+         assert f"{len(config.DEFAULT_REDDIT)} Reddit/Redlib entries" in security_t
+         assert "arknights" not in sources_t.lower()
+         assert "Status: not integrated." not in sources_t
+-        assert "October 24, 2026" in privacy_t and "October 24, 2026" in terms_t
++        assert "November 2, 2026" in privacy_t and "November 2, 2026" in terms_t   # intake-reader revision
+         assert "aki-game.net" in privacy_t and "easebar.com" in privacy_t
+ 
+         import re
+-- 
+2.39.5
+

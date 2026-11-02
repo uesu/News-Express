@@ -112,10 +112,12 @@ leftovers. Never advise deleting the "other" platform's files.
   Since round 101 its PRIMARY listing is the Devvit relay channel
   (`fetch_intake_records` / `_IntakeEntry` / `intake_base_data`); the combined
   RSS → per-subreddit → Arctic chain is the automatic fallback (`INTAKE-FALLBACK`
-  log line). Read `docs/history/ROUND_101.md` before touching discovery or
-  liveness.
+  log line). Read `docs/history/ROUND_101.md`, `ROUND_102.md` (shared-channel
+  paging/freshness rules), `ROUND_103.md` (record.json, re-checks) and `ROUND_104.md`
+  (`relay_complete`: a complete relay record is served without archive / redlib /
+  reddit.com calls) before touching discovery, liveness or `resolve_post_media`.
 - `devvit/gaming-express/` — the Devvit relay app that runs on Reddit and
-  writes one fenced-JSON record per new post into `#reddit-intake`
+  writes one fenced-JSON record per new post into the private Discord intake channel
   (`docs/DEVVIT_SETUP.md`: deploy, settings, owner steps, uninstall). Its
   record shape (`RelayRecord` v1 in `src/server/relay.ts`) is a contract with
   the engine's `parse_intake_record`; bump `v` on any breaking change.
@@ -253,7 +255,7 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 ## Key defaults (all overridable via repo Variables, no code change)
 
 - `INTAKE_READER=primary` — round 101: `primary` makes a healthy relay
-  (`#reddit-intake` answers, newest message younger than
+  (the intake channel answers, newest message younger than
   `INTAKE_STALE_SECONDS=1800`) the listing and skips the RSS/redlib/Arctic
   sweep; `shadow` reads and compares only; `off` never reads. Needs the
   `DISCORD_BOT_TOKEN` secret + `INTAKE_CHANNEL_ID` Variable in the prod repo;
