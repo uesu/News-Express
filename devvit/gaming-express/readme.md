@@ -2,13 +2,16 @@
 
 A small personal relay. It reads the public `/new` listings of a configurable set of
 gaming subreddits and official publisher accounts and forwards each new post, once, as
-one compact JSON message to a private Discord channel owned by the developer.
+one compact JSON message (with the complete record attached as `record.json`) to a private
+Discord channel owned by the developer. It looks at each forwarded post again a few times
+during its first hours and reports removals, deletions and edits the same way.
 
 - Private, single-installation app for the developer's own use. Not intended for
   publication or for installation on other communities.
 - Reads only public post listings through the Reddit Developer Platform API. It never
   posts, comments, votes or messages on Reddit, and reads nothing private.
-- Stores only post identifiers (7-day de-duplication markers) and poll counters in Redis.
+- Stores only post identifiers (7-day de-duplication and re-check markers) and poll
+  counters in Redis.
 - Contacts a single external host, `discord.com`, to deliver the relayed records to the
   developer's own webhook (stored as an encrypted app setting).
 

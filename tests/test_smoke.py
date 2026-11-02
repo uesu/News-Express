@@ -12119,6 +12119,9 @@ class _R101Resp:
     async def json(self, content_type=None):
         return self._data
 
+    async def text(self):   # r103: record.json attachments are read as text
+        return self._data if isinstance(self._data, str) else json.dumps(self._data)
+
     async def __aenter__(self):
         return self
 
@@ -12210,6 +12213,185 @@ check("r102 reader: messages whose content comes back empty (Message Content Int
 _r102_old = asyncio.run(_r101_reader(_r101_msgs(3, 40) + _r101_msgs(2, v3.INTAKE_LOOKBACK_SECONDS + 600)))
 check("r102 reader: messages older than INTAKE_LOOKBACK_SECONDS are dropped and end the paging",
       len(_r102_old[0]["records"]) == 3 and len(_r102_old[1].calls) == 1)
+
+# r103 — relay 0.0.7: complete record attachment (record.json), batched v2 re-check
+# messages, re-sent records after edits. The relay is now the complete engine: body,
+# media, crosspost parent and liveness all arrive from Reddit's own API via the relay.
+class _R103Session(_R101Session):
+    def __init__(self, messages=None, files=None, status=200):
+        super().__init__(messages, status)
+        self.files, self.cdn_calls = files or {}, []
+
+    def get(self, url, **kw):
+        if "cdn.discordapp.com" in url:
+            self.cdn_calls.append(url)
+            body = self.files.get(url)
+            if body is None:
+                return _R101Resp(404, {"message": "Unknown"})
+            return _R101Resp(200, body)
+        return super().get(url, **kw)
+
+
+def _r103_update(at_age, posts):
+    return {"id": str(v3._snowflake_from_epoch(_r101_now - at_age)),
+            "content": "```json\n" + json.dumps({"v": 2, "kind": "update", "at": int(_r101_now - at_age),
+                                                 "posts": posts}) + "\n```"}
+
+
+def _r103_item(pid, **over):
+    item = {"id": pid, "sub": "HonkaiStarRail_leaks", "age": 640, "stage": 1, "removed": None,
+            "deleted": False, "edited": False, "spoiler": False, "nsfw": False, "locked": False,
+            "score": 3, "comments": 1}
+    item.update(over)
+    return item
+
+
+async def _r103_reader(messages, files=None, status=200, **env):
+    saved = {k: getattr(v3, k) for k in ("INTAKE_READER", "INTAKE_CHANNEL_ID", "DISCORD_BOT_TOKEN",
+                                          "INTAKE_STALE_SECONDS", "SUBREDDITS", "INTAKE_ATTACHMENT_FETCHES")}
+    try:
+        v3.INTAKE_READER, v3.INTAKE_CHANNEL_ID = "primary", "1430000000000000000"
+        v3.DISCORD_BOT_TOKEN, v3.INTAKE_STALE_SECONDS = "tok", 1800
+        v3.SUBREDDITS = ["HonkaiStarRail_leaks", "Genshin_Impact_Leaks"]
+        for k, val in env.items():
+            setattr(v3, k, val)
+        session = _R103Session(messages, files, status)
+        return await v3.fetch_intake_records(session, _r101_now), session
+    finally:
+        for k, val in saved.items():
+            setattr(v3, k, val)
+
+
+_r103_upd_ok = v3.parse_intake_update(_r103_update(30, [_r103_item("1xl0000"), {"id": "bad id"},
+                                                        _r103_item("1xl0001", removed="moderator")])["content"])
+check("r103 update parser: v2 `kind: update` messages parse (ids normalised, malformed items dropped), "
+      "v1 records and other content never do",
+      _r103_upd_ok and _r103_upd_ok["at"] == int(_r101_now - 30)
+      and [p["id"] for p in _r103_upd_ok["posts"]] == ["1xl0000", "1xl0001"]
+      and _r103_upd_ok["posts"][1]["removed"] == "moderator"
+      and v3.parse_intake_update(_r101_fence(_r101_rec)) is None
+      and v3.parse_intake_update("```json\n{\"v\": 2, \"kind\": \"other\"}\n```") is None
+      and v3.parse_intake_update("hello") is None
+      and v3.parse_intake_record(_r103_update(30, [])["content"]) is None)
+
+_r103_msgs = _r101_msgs(3, 900)            # records 900 s, 960 s, 1020 s old
+_r103_res, _r103_s = asyncio.run(_r103_reader(
+    [_r103_update(20, [_r103_item("1xl0000", stage=2, removed="moderator")]),
+     _r103_update(200, [_r103_item("1xl0000"), _r103_item("1xl0001", deleted=True, removed="deleted")])]
+    + _r103_msgs))
+check("r103 reader: re-check messages keep the relay fresh, the NEWEST look per id wins, every "
+      "record carries its `_update`, the module map serves the retraction seatbelt",
+      _r103_res["status"] == "ok" and _r103_res["newest_age"] == 20
+      and _r103_res["update_msgs"] == 2 and _r103_res["updates"] == 2
+      and _r103_res["seen"] == 3 and len(_r103_res["records"]) == 3
+      and {r["id"]: (r["_update"] or {}).get("removed") for r in _r103_res["records"]}
+          == {"1xl0000": "moderator", "1xl0001": "deleted", "1xl0002": None}
+      and _r103_res["records"][2]["_update"] is None
+      and v3._INTAKE_UPDATES["1xl0000"]["stage"] == 2
+      and v3.relay_removal_reason_for("1xl0000").startswith("removed by moderators/filters")
+      and v3.relay_removal_reason_for("1xl0001").startswith("deleted by the author")
+      and v3.relay_removal_reason_for("1xl0002") is None
+      and v3.relay_removal_reason_for(None) is None)
+
+check("r103 liveness: the relay's re-check is the verdict — still listed => live, removed => "
+      "hold, deleted => hold, queue category => pending approval; no update => no verdict",
+      v3.relay_update_verdict(_r103_item("x", age=640)) == ("live", "relay re-check 640 s after creation: still listed on Reddit", "relay-update")
+      and v3.relay_update_verdict(_r103_item("x", removed="moderator"))[0] == "removed"
+      and "removed by moderators/filters" in v3.relay_update_verdict(_r103_item("x", removed="moderator"))[1]
+      and v3.relay_update_verdict(_r103_item("x", deleted=True, removed="deleted"))[1].endswith("deleted by the author")
+      and v3.relay_update_verdict(_r103_item("x", removed="automod_filtered"))[1].endswith("pending approval")
+      and v3.relay_update_verdict(None) is None and v3.relay_update_verdict({}) == ("live", "relay re-check later: still listed on Reddit", "relay-update"))
+
+_r103_liveness_src = inspect.getsource(v3.candidate_liveness_verdict)
+check("r103 liveness wiring: candidate_liveness_verdict asks the relay re-check BEFORE the record's "
+      "own `removed` and before any archive lookup; the retraction seatbelt asks it before the "
+      "mirror/proxy probe",
+      _r103_liveness_src.index("relay_update_verdict(relay_record.get(\"_update\"))")
+      < _r103_liveness_src.index("\"relay-record\"") < _r103_liveness_src.index("_fetch_arctic_post_row(")
+      and "relay_removal_reason_for(post_id)" in inspect.getsource(v3.retract_dead_posts)
+      and inspect.getsource(v3.retract_dead_posts).index("relay_removal_reason_for(post_id)")
+      < inspect.getsource(v3.retract_dead_posts).index("await live_removal_reason("))
+
+# record.json completion
+_r103_cut = dict(_r101_rec, id="1xlcut1", permalink="/r/HonkaiStarRail_leaks/comments/1xlcut1/cut/", xpost=None,
+                 url="https://www.reddit.com/gallery/1xlcut1", body="first part…", bodyTruncated=True,
+                 media=["https://preview.redd.it/a1.png?width=2048&s=1"], mediaTruncated=True, full=True)
+_r103_full = dict(_r103_cut, body="first part, then the whole changelog " * 40, bodyTruncated=False,
+                  media=[f"https://preview.redd.it/a{i}.png?width=2048&s={i}" for i in range(1, 9)],
+                  mediaTruncated=False, parent=None)
+_r103_xp = dict(_r101_rec, id="1xlxpst", permalink="/r/HonkaiStarRail_leaks/comments/1xlxpst/x/",
+                url="https://www.reddit.com/r/HonkaiStarRail/comments/1xlpar0/parent/", body="", media=[],
+                xpost="t3_1xlpar0", full=True)
+_r103_parent = dict(_r101_rec, id="1xlpar0", sub="HonkaiStarRail",
+                    permalink="/r/HonkaiStarRail/comments/1xlpar0/parent/",
+                    media=["https://i.redd.it/parent1.png", "https://i.redd.it/parent2.png"], body="parent body")
+_r103_xp_full = dict(_r103_xp, parent=_r103_parent, xpostPermalink=_r103_parent["permalink"])
+_r103_plain = dict(_r101_rec, id="1xlplain", permalink="/r/HonkaiStarRail_leaks/comments/1xlplain/p/", full=True,
+                   xpost=None)
+_cdn = "https://cdn.discordapp.com/attachments/1/{}/record.json?ex=1&is=2&hm=3"
+def _r103_msg(rec, age, att=True):
+    m = {"id": str(v3._snowflake_from_epoch(_r101_now - age)), "content": _r101_fence(rec)}
+    if att:
+        m["attachments"] = [{"id": "9", "filename": "record.json", "url": _cdn.format(rec["id"]),
+                             "content_type": "application/json"}]
+    return m
+_r103_c, _r103_cs = asyncio.run(_r103_reader(
+    [_r103_msg(_r103_cut, 100), _r103_msg(_r103_xp, 200), _r103_msg(_r103_plain, 300),
+     _r103_msg(dict(_r103_cut, id="1xlcut2", permalink="/r/HonkaiStarRail_leaks/comments/1xlcut2/c/"), 400),
+     _r103_msg(dict(_r103_cut, id="1xlcut3", permalink="/r/HonkaiStarRail_leaks/comments/1xlcut3/c/"), 500)],
+    files={_cdn.format("1xlcut1"): _r103_full, _cdn.format("1xlxpst"): _r103_xp_full,
+           _cdn.format("1xlcut2"): dict(_r103_full, id="1xlother"),   # wrong post
+           _cdn.format("1xlplain"): _r103_full}))                       # never asked for
+_r103_by = {r["id"]: r for r in _r103_c["records"]}
+check("r103 record.json: cut records are completed from the attachment (full body, the whole media "
+      "list), crossposts gain the parent record + permalink, complete records cost no CDN request, "
+      "a wrong-post or missing attachment leaves the inline record (archive fill-in as before)",
+      _r103_c["status"] == "ok" and _r103_c["completed"] == 2
+      and _r103_by["1xlcut1"]["bodyTruncated"] is False and len(_r103_by["1xlcut1"]["body"]) > 1000
+      and len(_r103_by["1xlcut1"]["media"]) == 8 and _r103_by["1xlcut1"]["mediaTruncated"] is False
+      and _r103_by["1xlxpst"]["xpostPermalink"] == "/r/HonkaiStarRail/comments/1xlpar0/parent/"
+      and _r103_by["1xlxpst"]["parent"]["media"] == _r103_parent["media"]
+      and _r103_by["1xlcut2"]["bodyTruncated"] is True and _r103_by["1xlcut2"]["body"] == "first part…"
+      and _r103_by["1xlcut3"]["bodyTruncated"] is True
+      and sorted(_r103_cs.cdn_calls) == sorted([_cdn.format(x) for x in ("1xlcut1", "1xlxpst", "1xlcut2", "1xlcut3")])
+      and "Authorization" not in json.dumps(_r103_cs.cdn_calls))
+check("r103 record.json: at most INTAKE_ATTACHMENT_FETCHES CDN requests per run",
+      v3.INTAKE_ATTACHMENT_FETCHES == 10
+      and len(asyncio.run(_r103_reader(
+          [_r103_msg(dict(_r103_cut, id=f"1xlcu{i:02d}", permalink=f"/r/HonkaiStarRail_leaks/comments/1xlcu{i:02d}/c/"), 10 + i)
+           for i in range(15)]))[1].cdn_calls) == 10
+      and len(asyncio.run(_r103_reader(
+          [_r103_msg(dict(_r103_cut, id=f"1xlcu{i:02d}", permalink=f"/r/HonkaiStarRail_leaks/comments/1xlcu{i:02d}/c/"), 10 + i)
+           for i in range(15)], INTAKE_ATTACHMENT_FETCHES=3))[1].cdn_calls) == 3)
+
+_r103_e1 = _r103_msg(dict(_r103_plain, body="v1 body"), 600, att=False)
+_r103_e2 = _r103_msg(dict(_r103_plain, body="v2 body (edited)", edited=True, revision=2), 60, att=False)
+_r103_ed = asyncio.run(_r103_reader([_r103_e2, _r103_e1]))[0]["records"]
+check("r103 edits: a re-sent record (revision 2, newer message) supersedes the original for the same "
+      "id — one entry, the edited body, the newer message id",
+      len(_r103_ed) == 1 and _r103_ed[0]["body"] == "v2 body (edited)" and _r103_ed[0]["revision"] == 2
+      and _r103_ed[0]["_message_id"] == _r103_e2["id"])
+
+_r103_entry = v3._IntakeEntry(_r103_by["1xlxpst"], _r103_by["1xlxpst"]["_message_id"])
+_r103_base = v3.intake_base_data(_r103_entry)
+check("r103 crosspost: the relay's parent permalink is the crosspost path (no archive hop) and the "
+      "parent's media reach the native extractor through the entry's content_html",
+      _r103_base["crosspost_orig_path"] == "/r/HonkaiStarRail/comments/1xlpar0/parent/"
+      and "https://i.redd.it/parent1.png" in _r103_entry.get("content")[0]["value"]
+      and "https://i.redd.it/parent2.png" in v3.intake_content_html(_r103_by["1xlxpst"])
+      and v3.intake_base_data(v3._IntakeEntry(_r103_by["1xlplain"]))["crosspost_orig_path"]
+          == v3.find_crosspost_original_path("\n".join([_r103_plain["url"], _r103_plain["body"]]),
+                                             v3.normalize_reddit_path("https://www.reddit.com" + _r103_plain["permalink"])))
+_r103_only = asyncio.run(_r103_reader([_r103_update(20, [_r103_item("1xl0000")])]))[0]
+check("r103 reader: a window holding only re-check messages is a live relay with nothing new — "
+      "status empty with a 'relay alive' detail (old chain runs), never the Intent hint",
+      _r103_only["status"] == "empty" and _r103_only["newest_age"] == 20
+      and _r103_only["detail"].startswith("relay alive") and "Intent" not in _r103_only["detail"])
+check("r103 summary: the intake line reports re-checks and completions without ids",
+      "2 re-checked" in v3._intake_line(v3._intake_summary(_r103_res))
+      and "2 completed" in v3._intake_line(v3._intake_summary(_r103_c))
+      and "1xl" not in v3._intake_line(v3._intake_summary(_r103_c))
+      and "re-checked" not in v3._intake_line(v3._intake_summary(_r101_ok)))
 _r101_main = inspect.getsource(v3.main)
 check("r101 main: the relay is read BEFORE the combined feed; `ok` in primary mode makes it the "
       "listing (combined request, per-sub fallback and archive sweep skipped, status 'relay'); "
@@ -12241,7 +12423,8 @@ check("r101: the summary learns the outcome through the existing settings line (
       and "relay STALE" in v3._intake_line({"status": "stale", "mode": "primary"})
       and set(v3._intake_summary(_r101_ok)) == {"status", "mode", "records_in_window",
                                                  "records_for_this_engine", "newest_age_seconds",
-                                                 "pages", "detail"}
+                                                 "pages", "detail",
+                                                 "update_msgs", "updates", "completed"}   # r103
       and "_intake_line(intake)" in inspect.getsource(v3._settings_line))
 # r101b — first live records (owner screenshots, 2026-11-02 06:27–07:15 PHT).
 _r102_inline = dict(_r101_rec, id="1xlh3fw", media=[], url="https://www.reddit.com/r/Genshin_Impact/comments/1xlh3fw/x/",

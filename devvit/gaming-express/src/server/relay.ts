@@ -29,6 +29,171 @@ export type RelayRecord = {
   media: string[] // image / video URLs, oldest-first gallery order
   body: string // selftext markdown, possibly truncated
   bodyTruncated: boolean
+  // ---- 0.0.7 additions (all optional; v1 readers ignore unknown keys) ----
+  /** true when the message also carries `record.json` — the complete record
+   *  (untruncated body, every media URL, video renditions, crosspost parent). */
+  full?: boolean
+  /** true when `media` lost entries to the message budget (the attachment has all). */
+  mediaTruncated?: boolean
+  /** Reddit's `edited` flag at relay time; a re-sent record after an edit
+   *  carries `revision` ≥ 2 (readers keep the newest message per id). */
+  edited?: boolean
+  revision?: number
+  /** Crosspost parent permalink (`/r/<sub>/comments/<id>/…/`) when known. */
+  xpostPermalink?: string | null
+  /** Reddit-hosted video renditions, when the post is a v.redd.it video. */
+  video?: {fallback?: string; hls?: string; gif?: boolean} | null
+}
+
+/** The complete record: the same shape as RelayRecord but never trimmed, plus
+ *  the crosspost parent as a nested record. Shipped as the `record.json`
+ *  attachment of the same Discord message. */
+export type FullRecord = RelayRecord & {
+  parent?: RelayRecord | null
+}
+
+/** One post's live state as re-checked by the relay after delivery (0.0.7). */
+export type UpdateItem = {
+  id: string
+  sub: string
+  /** seconds since creation at check time */
+  age: number
+  /** re-check stage that produced this item (1 = first look, ~10 min) */
+  stage: number
+  removed: string | null // removedByCategory, null when live
+  deleted: boolean // author account or post deleted
+  edited: boolean
+  spoiler: boolean
+  nsfw: boolean
+  locked: boolean
+  score: number
+  comments: number
+}
+
+/** A batched liveness update message. `v: 2` on purpose: pre-0.0.7 readers
+ *  accept `v: 1` only and therefore ignore these messages entirely. */
+export type UpdateMessage = {
+  v: 2
+  kind: 'update'
+  at: number // unix seconds
+  posts: UpdateItem[]
+}
+
+/** Re-check schedule after delivery: the stage a post of `ageSeconds` is due
+ *  for (0 = not yet). Four looks per post: ~10 min (modqueue / AutoMod
+ *  removals surface here), 30 min, 2 h, 6 h. */
+export const RECHECK_STAGES_SECONDS = [600, 1800, 7200, 21600] as const
+
+export function dueStage(ageSeconds: number): number {
+  let stage = 0
+  for (const [i, at] of RECHECK_STAGES_SECONDS.entries())
+    if (ageSeconds >= at) stage = i + 1
+  return stage
+}
+
+/** The fields whose change is worth a message. Score/comment counts are
+ *  carried but never trigger one. */
+const STATE_FIELDS = [
+  'removed',
+  'deleted',
+  'edited',
+  'spoiler',
+  'nsfw',
+  'locked',
+] as const
+
+/** Compact state string stored in Redis (`state:<id>`) and compared between
+ *  looks. */
+export function stateKeyOf(
+  item: Pick<UpdateItem, (typeof STATE_FIELDS)[number]>,
+): string {
+  return STATE_FIELDS.map(f => `${f}=${String(item[f])}`).join('|')
+}
+
+/** Whether an item must be sent: the first look is always reported (it is the
+ *  readers' positive "still listed" verdict), later looks only on change. */
+export function shouldReport(
+  item: UpdateItem,
+  previousState: string | null,
+): boolean {
+  if (item.stage <= 1) return true
+  return previousState !== stateKeyOf(item)
+}
+
+/** Serialise update items into as few fenced messages as fit the budget. */
+export function toUpdateContents(
+  items: UpdateItem[],
+  at: number,
+  budget = CONTENT_BUDGET,
+): string[] {
+  const wrap = (posts: UpdateItem[]): string =>
+    `\`\`\`json\n${JSON.stringify({v: 2, kind: 'update', at, posts} satisfies UpdateMessage)}\n\`\`\``
+  const out: string[] = []
+  let batch: UpdateItem[] = []
+  for (const item of items) {
+    const next = [...batch, item]
+    if (batch.length > 0 && wrap(next).length > budget) {
+      out.push(wrap(batch))
+      batch = [item]
+    } else {
+      batch = next
+    }
+  }
+  if (batch.length > 0) out.push(wrap(batch))
+  return out
+}
+
+/** Redis keys for the post-delivery re-check (0.0.7). */
+export const SENT_ZSET = 'sent:z'
+export function stageKey(id: string): string {
+  return `stage:${bareId(id)}`
+}
+export function stateKey(id: string): string {
+  return `state:${bareId(id)}`
+}
+export function bodyHashKey(id: string): string {
+  return `bh:${bareId(id)}`
+}
+
+/** Cheap stable hash (FNV-1a, 32 bit) of a body — enough to notice an edit. */
+export function bodyHash(s: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
+
+/** Multipart webhook body: the fenced content as `payload_json` plus the
+ *  complete record as the `record.json` file. Built by hand as one string so
+ *  it needs nothing beyond `fetch(url, {body: string})`. */
+export function toMultipartBody(
+  content: string,
+  full: FullRecord,
+  filename = 'record.json',
+): {body: string; contentType: string} {
+  const fileText = JSON.stringify(full)
+  const payload = JSON.stringify({
+    content,
+    allowed_mentions: {parse: []},
+    attachments: [
+      {id: 0, filename, description: `relay record ${full.id} (complete)`},
+    ],
+  })
+  let boundary = `----GamingExpress${Date.now().toString(36)}`
+  let n = 0
+  while (fileText.includes(boundary) || payload.includes(boundary))
+    boundary = `----GamingExpress${Date.now().toString(36)}x${++n}`
+  const body =
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="payload_json"\r\n` +
+    `Content-Type: application/json\r\n\r\n${payload}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="files[0]"; filename="${filename}"\r\n` +
+    `Content-Type: application/json\r\n\r\n${fileText}\r\n` +
+    `--${boundary}--\r\n`
+  return {body, contentType: `multipart/form-data; boundary=${boundary}`}
 }
 
 /** Discord message content hard limit is 2000; keep a margin for the fence. */
@@ -153,9 +318,9 @@ export function toContent(rec: RelayRecord, budget = CONTENT_BUDGET): string {
     if (text.length <= budget) return text
   }
 
-  // 2. shrink the media list
+  // 2. shrink the media list (the complete list travels in record.json)
   while (r.media.length > 0 && text.length > budget) {
-    r = {...r, media: r.media.slice(0, -1)}
+    r = {...r, media: r.media.slice(0, -1), mediaTruncated: true}
     text = wrap(r)
   }
   if (text.length <= budget) return text

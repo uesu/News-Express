@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased — Round 103: the relay is the complete Reddit source — relay 0.0.7 (2026-11-02)
+
+`devvit/gaming-express` 0.0.7, `testing area/reddit_main_v3.py` (intake block, liveness verdict,
+retraction seatbelt), `tests/test_smoke.py`, docs/policies, `docs/handoffs/` refreshed. No card,
+cache or Twitter change. Full record: [`docs/history/ROUND_103.md`](history/ROUND_103.md).
+
+- **Why:** after rounds 101/102 the relay owned discovery, but long bodies, crosspost parents and
+  liveness still leaned on the archive/mirrors per post. The owner asked for the relay to be the
+  complete feature now, so nothing needs a new PR when the old sources go dark (video-audio
+  proxies excepted, old chain kept as fallback).
+- **Relay 0.0.7 (uploads as Reddit 0.0.6):** every record message carries the untrimmed record as
+  a `record.json` attachment (full body, all media, video renditions, crosspost parent) — inline
+  record still `v: 1` with optional `full`, `mediaTruncated`, `edited`, `revision`,
+  `xpostPermalink`, `video`; plain-content fallback if the multipart form is refused. Delivered
+  posts are re-checked at ~10 min / 30 min / 2 h / 6 h and reported in one batched `v: 2` update
+  message per poll (first look always, then on change); an edited body is re-sent as a record with
+  `revision` ≥ 2.
+- **Reader:** completes cut records / crossposts from `record.json` (≤ 10 CDN reads per run, no
+  token); the latest re-check per post is the liveness verdict before the record's own `removed`
+  and before any archive lookup (`relay-update`), and feeds the retraction seatbelt; re-check
+  messages count as relay liveness (`empty — relay alive …`, not stale); crosspost path and parent
+  media from the relay; summary gains `U re-checked, C completed`.
+- **Game-Express:** same reader rules in the hand-off patch (updates drop removed/deleted, admit
+  approved; `record.json` completion; edits supersede; `edited`/`crosspost_url` on entries).
+- Tests: 10 `r103` smoke guards, 23 Devvit unit tests; three suites ALL PASS here and in a
+  `sync_tree()` production checkout; Game-Express smoke 628/628 + intake suite 6/6 on `3af83ff`.
+
 ## Unreleased — Round 102: shared intake channel, 5-minute relay, Game-Express hand-off (2026-11-02)
 
 `testing area/reddit_main_v3.py` (`fetch_intake_records()` only), `tests/test_smoke.py`,
@@ -17,7 +44,7 @@ Full record: [`docs/history/ROUND_102.md`](history/ROUND_102.md).
   10 → 15 (per-minute ceiling unchanged), no record change. Uploads as Reddit **0.0.5**.
 - **Game-Express hand-off:** [`docs/handoffs/GAME_EXPRESS_INTAKE_READER.md`](handoffs/GAME_EXPRESS_INTAKE_READER.md)
   + `git am`-able patch — same reader rules, same two settings, `RedditClient._gather_listing()`
-  relay-first with per-target fallback; verified against Game-Express `main` @ `1d133c3`
+  relay-first with per-target fallback; verified against Game-Express `main` @ `3af83ff`
   (smoke 626/626, new suite 5/5, ruff, production-shape checkout).
 - **Docs audit:** every `#reddit-intake` / "every 2 minutes" / "Game-Express does not read it
   yet" statement replaced across README, AGENTS, privacy (effective 2026-11-02), terms,

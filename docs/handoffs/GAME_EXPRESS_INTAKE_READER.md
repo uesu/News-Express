@@ -1,13 +1,13 @@
 # Hand-off — Game-Express: the Devvit relay as the primary Reddit listing (intake reader)
 
 **For:** the `uesu/Game-Express` maintainer session (dev repo → prod `uesu/8mqzv4k2n7c` via its
-own `sync_prod.yml`). **From:** News-Express round 101/101b (2026-11-02). **Base:** Game-Express
-`main` @ `1d133c3` (PR #131). **Scope:** Game-Express's needs only — the Reddit *listing* source;
+own `sync_prod.yml`). **From:** News-Express rounds 101–103 (2026-11-02). **Base:** Game-Express
+`main` @ `3af83ff` (PR #134). **Scope:** Game-Express's needs only — the Reddit *listing* source;
 no card, schedule, codes, beta or news logic is touched.
 
 The complete, tested patch is next to this file:
 [`game-express-intake-reader.patch`](game-express-intake-reader.patch) (`git am`-able, 19 files,
-+715/−10). Everything below is a description of what that patch does and how to verify it.
++943/−10). Everything below is a description of what that patch does and how to verify it.
 
 ## 1. What it does
 
@@ -39,16 +39,32 @@ records. `removed` records count as a live relay but never become entries. Relay
 Game-Express's zero-waste rule is kept: Reddit is still consulted only when X or a primary API
 missed; when it is, a served target costs nothing.
 
+### Relay 0.0.7 — the relay is the complete source (round 103)
+
+- **`record.json`**: every record message also carries the untrimmed record (full body, every
+  media URL, the crosspost parent as a nested record). The reader fetches it from
+  `cdn.discordapp.com` (`source="intake-cdn"`, no token) **only** for cut records
+  (`bodyTruncated` / `mediaTruncated`) and crossposts without a parent permalink, ≤ 10 per run;
+  a failed read leaves the inline record (and `resolve_post()` fills the body as before).
+- **`v: 2` update messages**: the relay re-checks delivered posts at ~10 min / 30 min / 2 h / 6 h.
+  The latest look per id decides: removed or deleted ⇒ not listed; a post first relayed as
+  filtered and later shown live ⇒ listed. Update messages count as relay liveness (a quiet relay
+  is `empty (relay alive …)`, old chain runs, nothing to serve anyway).
+- **Edits**: an edited body arrives as a re-sent record (`revision` ≥ 2); newest message per id
+  wins, entries carry `edited`.
+- Entries gain `crosspost_url` (parent permalink) and a crosspost shows its parent's media.
+- Step summary: `… newest S s, N re-checked, N completed from record.json; served …`.
+
 ## 2. Files in the patch
 
 | File | Change |
 |---|---|
-| `gamexpress/sources/reddit_intake.py` | **new** — `parse_intake_record`, `record_to_entry`, `IntakeReader` (`fetch`, `listing`, `summary_line`) |
+| `gamexpress/sources/reddit_intake.py` | **new** — `parse_intake_record`, `parse_intake_update`, `attachment_url`, `apply_full_record`, `record_to_entry`, `IntakeReader` (`fetch`, `listing`, `summary_line`) |
 | `gamexpress/sources/reddit.py` | `RedditClient.__init__` creates `self.intake`; `_gather_listing()` returns the relay listing when available (6 lines) |
 | `gamexpress/config.py` | `Settings.intake_reader / discord_bot_token / intake_channel_id / intake_stale_seconds / intake_lookback_seconds` + env wiring (`GE_SECRETS_JSON` / `GE_VARS_JSON` already carry every secret/variable → **no workflow env edit**) |
 | `gamexpress/runner.py` | one `ctx.report` line from `reddit.intake.summary_line()` |
 | `gamexpress/__main__.py` | `validate` prints `Reddit intake=… bot_token=set/— channel_id=set/—` |
-| `tests/test_reddit_intake.py` | **new** — real first-day records (gallery + `\_` escapes, video + poster + truncated body, inline images, YouTube link, gif, official flair), every status, paging, shared-channel noise, `items()` for a publisher-account game and for Wuthering Waves, shadow/stale/unconfigured |
+| `tests/test_reddit_intake.py` | **new** — real first-day records (gallery + `\_` escapes, video + poster + truncated body, inline images, YouTube link, gif, official flair), every status, paging, shared-channel noise, `items()` for a publisher-account game and for Wuthering Waves, shadow/stale/unconfigured; 0.0.7 updates, `record.json` completion + bounds, edits, approvals |
 | `tests/test_smoke.py` | policy effective date `November 2, 2026` |
 | `.github/workflows/ci.yml`, `python_version_bump.yml` | run `tests/test_reddit_intake.py` (the "every test file is a gate" guard requires it) |
 | `.env.example`, `README.md`, `docs/CONFIGURATION.md`, `docs/SOURCES.md`, `docs/PROD-REPO-SETUP.md` (file count 47 → 48), `docs/changelog/CHANGELOG.md` + `README.md` index, `PRIVACY_POLICY.md`, `TERMS_OF_SERVICE.md`, `AGENTS.md` | documentation of the reader, the two settings, the bot's read-only scope |
@@ -148,13 +164,13 @@ index 31b101c..57bceda 100644
 ## 3. Apply & verify
 
 ```bash
-# in a Game-Express checkout on main @ 1d133c3 (or later; the touched regions are stable)
+# in a Game-Express checkout on main @ 3af83ff (or later; the touched regions are stable)
 gh api -H "Accept: application/vnd.github.raw" \
   "repos/uesu/News-Express/contents/docs/handoffs/game-express-intake-reader.patch" > /tmp/gx-intake.patch
 git am --3way /tmp/gx-intake.patch          # or: git apply --3way /tmp/gx-intake.patch
 pip install -r requirements.txt pyyaml ruff
-python tests/test_reddit_intake.py           # REDDIT INTAKE TEST: ALL PASS
-python tests/test_smoke.py                   # 626/626 passed
+python tests/test_reddit_intake.py           # REDDIT INTAKE TEST: ALL PASS (6 blocks)
+python tests/test_smoke.py                   # 628/628 passed
 python tests/test_schedule_epithet_and_settled.py tests/test_gachawiki_placeholder.py   # and gachabase_kit / beta_sources
 ruff check .                                 # All checks passed
 DISCORD_BOT_TOKEN=x INTAKE_CHANNEL_ID=1 python -m gamexpress validate | grep "Reddit intake"
@@ -176,12 +192,15 @@ Nothing changes until both exist. Rollback: Variable `INTAKE_READER=off`. Step s
 `📡 reddit intake: relay ok — N record(s) in window, newest Ns; served r/…, u/…` when the relay
 served a listing, or the fallback reason.
 
-## 5. Record contract (v1, written by Devvit `gaming-express` 0.0.6)
+## 5. Record contract (written by Devvit `gaming-express` 0.0.7)
 
 `v, id, sub, title, permalink, url, created (epoch s), author, flair, distinguished
 (moderator|admin|null), spoiler, nsfw, score, comments, removed, xpost (parent fullname|null),
 media[] (preview/i.redd.it images, v.redd.it fallback mp4 for videos), body (markdown, may be
-cut), bodyTruncated`. Subreddits polled: `AnantaLeaks, Genshin_Impact_Leaks,
+cut), bodyTruncated`; 0.0.7 optional keys `full, mediaTruncated, edited, revision, xpostPermalink,
+video{fallback,hls,gif}`; attachment `record.json` = the same record untrimmed + `parent`.
+Update messages: `{"v":2,"kind":"update","at":<epoch>,"posts":[{id,sub,age,stage,removed,
+deleted,edited,spoiler,nsfw,locked,score,comments}]}`. Subreddits polled: `AnantaLeaks, Genshin_Impact_Leaks,
 HonkaiNexusAnimaLeaks, HonkaiStarRail_leaks, WutheringWavesLeaks, Zenlesszonezeroleaks_,
 Genshin_Impact, HonkaiStarRail, ZZZ_Official, WutheringWaves, HonkaiNexusAnima, AnantaOfficial`;
 accounts: `genshinimpact, HonkaiStarRail, HonkaiNexusAnima`. Poll every 5 minutes; a post

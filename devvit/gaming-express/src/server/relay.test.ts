@@ -3,20 +3,28 @@ import {readFileSync} from 'node:fs'
 import {test} from 'node:test'
 import {
   bareId,
+  bodyHash,
   bootKey,
   CONTENT_BUDGET,
   classifyStatus,
+  dueStage,
   failKey,
   isDiscordWebhook,
   legacySeenKey,
   parseEnabled,
   parseSubreddits,
   parseUsers,
+  RECHECK_STAGES_SECONDS,
   type RelayRecord,
   seenKey,
+  shouldReport,
   sortOldestFirst,
+  stateKeyOf,
   toContent,
+  toMultipartBody,
+  toUpdateContents,
   toWebhookBody,
+  type UpdateItem,
   uniqueById,
   userTarget,
 } from './relay.ts'
@@ -325,4 +333,165 @@ test('uniqueById: a post seen in both the u/ feed and the subreddit listing is s
     bootKey(userTarget('HonkaiStarRail')),
     bootKey('HonkaiStarRail'),
   )
+})
+
+// ---------------------------------------------------------------------------
+// 0.0.7 — complete record attachment + post-delivery re-check
+// ---------------------------------------------------------------------------
+
+function item(over: Partial<UpdateItem> = {}): UpdateItem {
+  return {
+    id: '1xlmk75',
+    sub: 'Genshin_Impact_Leaks',
+    age: 640,
+    stage: 1,
+    removed: null,
+    deleted: false,
+    edited: false,
+    spoiler: false,
+    nsfw: false,
+    locked: false,
+    score: 14,
+    comments: 3,
+    ...over,
+  }
+}
+
+test('toContent: 0.0.7 optional fields round-trip and the media cut is flagged', () => {
+  const r = rec({
+    full: true,
+    edited: false,
+    xpostPermalink: '/r/Genshin_Impact/comments/1xl0000/parent/',
+    video: {
+      fallback: 'https://v.redd.it/abc/CMAF_1080.mp4?source=fallback',
+      hls: 'https://v.redd.it/abc/HLSPlaylist.m3u8',
+      gif: false,
+    },
+  })
+  const back = parseContent(toContent(r))
+  assert.equal(
+    back.v,
+    1,
+    'post records stay v1 so pre-0.0.7 readers keep working',
+  )
+  assert.equal(back.full, true)
+  assert.equal(back.xpostPermalink, r.xpostPermalink)
+  assert.deepEqual(back.video, r.video)
+  assert.equal(back.mediaTruncated, undefined)
+
+  const huge = rec({
+    media: Array.from(
+      {length: 40},
+      (_, i) =>
+        `https://preview.redd.it/${'x'.repeat(40)}${i}.png?width=2048&s=${'s'.repeat(40)}`,
+    ),
+    body: 'b'.repeat(3000),
+  })
+  const cut = parseContent(toContent(huge))
+  assert.ok(cut.media.length < 40 && cut.media.length > 0)
+  assert.equal(
+    cut.mediaTruncated,
+    true,
+    'readers fetch record.json when the inline list was cut',
+  )
+  assert.equal(cut.bodyTruncated, true)
+})
+
+test('toMultipartBody: payload_json + record.json in one hand-built form, boundary never inside the parts', () => {
+  const full = {...rec({body: 'x'.repeat(5000), full: true}), parent: null}
+  const content = toContent(full)
+  const {body, contentType} = toMultipartBody(content, full)
+  const boundary = /boundary=(.+)$/.exec(contentType)?.[1] as string
+  assert.ok(boundary.startsWith('----GamingExpress'))
+  const parts = body.split(`--${boundary}`)
+  assert.equal(parts.length, 4, 'preamble, payload, file, closing')
+  assert.ok(parts[3]?.startsWith('--\r\n'), 'closing delimiter')
+  const payloadPart = parts[1] as string
+  assert.match(payloadPart, /name="payload_json"/)
+  const payload = JSON.parse(payloadPart.split('\r\n\r\n')[1]?.trim() as string)
+  assert.equal(payload.content, content)
+  assert.deepEqual(payload.allowed_mentions, {parse: []})
+  assert.deepEqual(payload.attachments[0], {
+    id: 0,
+    filename: 'record.json',
+    description: `relay record ${full.id} (complete)`,
+  })
+  const filePart = parts[2] as string
+  assert.match(filePart, /name="files\[0\]"; filename="record.json"/)
+  const file = JSON.parse(filePart.split('\r\n\r\n')[1]?.trim() as string)
+  assert.equal(file.body.length, 5000, 'the attachment is never trimmed')
+  assert.equal(file.bodyTruncated, false)
+  assert.equal(
+    parseContent(content).bodyTruncated,
+    true,
+    'while the inline record is',
+  )
+  assert.ok(!JSON.stringify(full).includes(boundary))
+})
+
+test('dueStage: four looks — 10 min, 30 min, 2 h, 6 h', () => {
+  assert.deepEqual([...RECHECK_STAGES_SECONDS], [600, 1800, 7200, 21600])
+  assert.equal(dueStage(0), 0)
+  assert.equal(dueStage(599), 0)
+  assert.equal(dueStage(600), 1)
+  assert.equal(dueStage(1799), 1)
+  assert.equal(dueStage(1800), 2)
+  assert.equal(dueStage(7200), 3)
+  assert.equal(dueStage(21600), 4)
+  assert.equal(dueStage(99999), 4)
+})
+
+test('shouldReport: the first look is always sent, later looks only when the state changed', () => {
+  const first = item({stage: 1})
+  assert.equal(shouldReport(first, stateKeyOf(first)), true)
+  const same = item({stage: 2, score: 99, comments: 40})
+  assert.equal(
+    shouldReport(same, stateKeyOf(item({stage: 1}))),
+    false,
+    'score/comment drift is not a change',
+  )
+  const removed = item({stage: 2, removed: 'moderator'})
+  assert.equal(shouldReport(removed, stateKeyOf(item())), true)
+  const deleted = item({stage: 3, deleted: true, removed: 'deleted'})
+  assert.equal(shouldReport(deleted, stateKeyOf(removed)), true)
+  assert.equal(
+    shouldReport(item({stage: 4}), null),
+    true,
+    'unknown previous state is reported',
+  )
+})
+
+test('toUpdateContents: v2 batched messages that fit the budget, split only when needed', () => {
+  const one = toUpdateContents([item()], 1793590000)
+  assert.equal(one.length, 1)
+  const m = /^```json\n([\s\S]*)\n```$/.exec(one[0] as string)
+  assert.ok(m)
+  const msg = JSON.parse(m[1] as string)
+  assert.equal(msg.v, 2)
+  assert.equal(msg.kind, 'update')
+  assert.equal(msg.at, 1793590000)
+  assert.deepEqual(msg.posts, [item()])
+
+  const many = toUpdateContents(
+    Array.from({length: 60}, (_, i) =>
+      item({id: `1xlm${i.toString(36).padStart(3, '0')}`}),
+    ),
+    1793590000,
+  )
+  assert.ok(many.length > 1)
+  let total = 0
+  for (const c of many) {
+    assert.ok(c.length <= CONTENT_BUDGET, `batch within budget (${c.length})`)
+    total += JSON.parse(
+      (/^```json\n([\s\S]*)\n```$/.exec(c) as RegExpExecArray)[1] as string,
+    ).posts.length
+  }
+  assert.equal(total, 60, 'no item lost across batches')
+})
+
+test('bodyHash: stable, short, and sensitive to edits', () => {
+  assert.equal(bodyHash('hello'), bodyHash('hello'))
+  assert.equal(bodyHash('hello').length, 8)
+  assert.notEqual(bodyHash('hello'), bodyHash('hello.'))
+  assert.notEqual(bodyHash(''), bodyHash(' '))
 })

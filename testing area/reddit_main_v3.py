@@ -2616,6 +2616,14 @@ INTAKE_STALE_SECONDS = max(120, _env_int("INTAKE_STALE_SECONDS", 1800))
 # for held posts; one HTTP page per 100 messages, INTAKE_MAX_PAGES cap).
 INTAKE_LOOKBACK_SECONDS = max(600, _env_int("INTAKE_LOOKBACK_SECONDS", 6 * 3600))
 INTAKE_MAX_PAGES = 8
+# Round 103: complete records (`record.json` attachment, relay 0.0.7) are
+# fetched only when the inline record was cut or names a crosspost parent —
+# at most this many per run, from Discord's CDN, no token.
+INTAKE_ATTACHMENT_FETCHES = 10
+# Round 103: the latest relay re-check per post id (relay 0.0.7 `v: 2`
+# update messages) — consulted by the liveness verdict and the retraction
+# seatbelt instead of an archive/mirror request. Filled by fetch_intake_records.
+_INTAKE_UPDATES: dict = {}
 _DISCORD_EPOCH_MS = 1420070400000
 _INTAKE_FENCE_RE = re.compile(r"```json\s*\n(.*?)\n\s*```", re.DOTALL)
 
@@ -2666,6 +2674,92 @@ def parse_intake_record(content: str | None) -> dict | None:
     return out
 
 
+def parse_intake_update(content: str | None) -> dict | None:
+    """Round 103: a relay 0.0.7 re-check message — ```json {"v":2,"kind":
+    "update","at":…,"posts":[{id,sub,age,stage,removed,deleted,edited,
+    spoiler,<age flag>,locked,score,comments},…]}```. Returns the message dict with
+    `posts` filtered to well-formed items, or None for anything else."""
+    m = _INTAKE_FENCE_RE.search(content or "")
+    if not m:
+        return None
+    try:
+        msg = json.loads(m.group(1))
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(msg, dict) or msg.get("v") != 2 or msg.get("kind") != "update":
+        return None
+    posts = []
+    for item in msg.get("posts") or []:
+        if not isinstance(item, dict):
+            continue
+        pid = str(item.get("id") or "").strip().lower()
+        if not re.fullmatch(r"[a-z0-9]{4,12}", pid):
+            continue
+        it = dict(item)
+        it["id"] = pid
+        it["removed"] = (str(item["removed"]) if item.get("removed") else None)
+        it["deleted"] = bool(item.get("deleted"))
+        it["edited"] = bool(item.get("edited"))
+        posts.append(it)
+    at = msg.get("at")
+    return {"at": int(at) if isinstance(at, (int, float)) and not isinstance(at, bool) else None,
+            "posts": posts}
+
+
+def _intake_attachment_url(message: dict) -> str | None:
+    """The `record.json` attachment URL of a relay message (0.0.7), if any."""
+    for a in message.get("attachments") or []:
+        if not isinstance(a, dict):
+            continue
+        if str(a.get("filename") or "").lower() != "record.json":
+            continue
+        url = str(a.get("url") or "")
+        try:
+            host = urllib.parse.urlsplit(url).hostname or ""
+        except Exception:
+            return None
+        if host in ("cdn.discordapp.com", "media.discordapp.net"):
+            return url
+    return None
+
+
+def apply_intake_full_record(rec: dict, full) -> bool:
+    """Round 103: merge the complete record (attachment) into the inline one.
+
+    Only the fields the message budget can cut are taken — body, media,
+    crosspost parent — after checking the attachment describes the same
+    post. Returns True when something was completed."""
+    if not isinstance(full, dict) or str(full.get("id") or "").strip().lower() != rec.get("id"):
+        return False
+    changed = False
+    if rec.get("bodyTruncated") and isinstance(full.get("body"), str):
+        rec["body"] = full["body"]
+        rec["bodyTruncated"] = bool(full.get("bodyTruncated"))
+        changed = True
+    media = [str(u) for u in (full.get("media") or []) if isinstance(u, str) and u]
+    if media and len(media) > len(rec.get("media") or []):
+        rec["media"] = media
+        rec["mediaTruncated"] = False
+        changed = True
+    parent = full.get("parent")
+    if isinstance(parent, dict) and str(parent.get("permalink") or "").startswith("/r/"):
+        rec["parent"] = parent
+        rec["xpostPermalink"] = rec.get("xpostPermalink") or parent.get("permalink")
+        changed = True
+    elif isinstance(full.get("xpostPermalink"), str) and not rec.get("xpostPermalink"):
+        rec["xpostPermalink"] = full["xpostPermalink"]
+        changed = True
+    if isinstance(full.get("video"), dict) and not rec.get("video"):
+        rec["video"] = full["video"]
+    rec["_completed"] = changed
+    return changed
+
+
+def _intake_needs_full_record(rec: dict) -> bool:
+    return bool(rec.get("bodyTruncated") or rec.get("mediaTruncated")
+                or (rec.get("xpost") and not rec.get("xpostPermalink")))
+
+
 def intake_content_html(rec: dict) -> str:
     """RSS-shaped HTML for the extractors that still read `content_html`.
 
@@ -2678,6 +2772,12 @@ def intake_content_html(rec: dict) -> str:
     parts = []
     seen = set()
     urls = list(rec.get("media") or [])
+    # Round 103: a crosspost's own record has no media; the complete record
+    # (relay 0.0.7 attachment) carries the parent's, so the card can be built
+    # without an archive hop.
+    parent = rec.get("parent") if isinstance(rec.get("parent"), dict) else None
+    if not urls and parent:
+        urls = list(parent.get("media") or [])
     # Inline rich-text images live in the markdown body as bare preview.redd.it
     # / i.redd.it URLs (live records 1xlgs9j, 1xlh3fw). Reddit's RSS content
     # carried them as anchors, so the native extractor must still see them.
@@ -2754,8 +2854,12 @@ def intake_base_data(entry) -> dict:
         "content_html": content_html,
         "thumb": None,
         "body": body,
-        "crosspost_orig_path": find_crosspost_original_path(
-            "\n".join([url, rec.get("body") or ""]), own_path),
+        # Round 103: the relay names the parent's permalink itself (0.0.7);
+        # the text scan stays as the fallback for older records.
+        "crosspost_orig_path": (normalize_reddit_path(f"https://www.reddit.com{rec['xpostPermalink']}")
+                                if str(rec.get("xpostPermalink") or "").startswith("/r/")
+                                else find_crosspost_original_path(
+                                    "\n".join([url, rec.get("body") or ""]), own_path)),
         # Round 101: the relay names the crosspost parent by fullname; the
         # media resolver turns the id into a path via the archive.
         "crosspost_parent_id": parent_fullname_id(rec.get("xpost")),
@@ -2775,7 +2879,11 @@ async def fetch_intake_records(session: aiohttp.ClientSession, now: float) -> di
     `ok` is the ONLY status that makes the relay the primary listing.
     """
     out = {"status": "unconfigured", "records": [], "seen": 0,
-           "newest_age": None, "pages": 0, "detail": ""}
+           "newest_age": None, "pages": 0, "detail": "",
+           # Round 103 (relay 0.0.7): re-check messages seen, posts they
+           # cover, and inline records completed from their attachment.
+           "update_msgs": 0, "updates": 0, "completed": 0}
+    _INTAKE_UPDATES.clear()
     if INTAKE_READER == "off":
         out["status"] = "off"
         return out
@@ -2832,30 +2940,76 @@ async def fetch_intake_records(session: aiohttp.ClientSession, now: float) -> di
 
     messages.sort(key=lambda m: int(m["id"]), reverse=True)
     records, by_id = [], {}
+    updates: dict = {}
     for m in messages:
         rec = parse_intake_record(m.get("content"))
-        if not rec:
+        upd = None if rec else parse_intake_update(m.get("content"))
+        if not rec and not upd:
             continue
-        out["seen"] += 1
-        # Freshness is measured on RELAY RECORDS only: in a shared channel a
-        # fresh message from another bot must not vouch for a silent relay,
-        # and webhook messages returned with an empty `content` (Message
-        # Content Intent missing) must not count as a healthy relay either.
+        # Freshness is measured on RELAY MESSAGES only (records and 0.0.7
+        # re-checks): in a shared channel a fresh message from another bot
+        # must not vouch for a silent relay, and webhook messages returned
+        # with an empty `content` (Message Content Intent missing) must not
+        # count as a healthy relay either.
         if out["newest_age"] is None:
             newest = _epoch_from_snowflake(m["id"])
             if newest is not None:
                 out["newest_age"] = max(0, int(now - newest))
+        if upd:
+            # Newest message first, so the first item per id is the latest look.
+            out["update_msgs"] += 1
+            at = upd["at"] or _epoch_from_snowflake(m["id"]) or now
+            for item in upd["posts"]:
+                if item["id"] not in updates:
+                    item["_at"] = int(at)
+                    updates[item["id"]] = item
+            continue
+        out["seen"] += 1
         sub = _subreddit_by_name(rec["sub"])
         if not sub or rec["id"] in by_id:
             continue
         rec["sub"] = sub
         rec["_message_id"] = str(m["id"])
+        rec["_attachment"] = _intake_attachment_url(m)
         by_id[rec["id"]] = rec
         records.append(rec)
+    out["updates"] = len(updates)
+    _INTAKE_UPDATES.update(updates)
+    for rec in records:
+        rec["_update"] = updates.get(rec["id"])
+    # Round 103: complete cut records from their `record.json` attachment
+    # (bounded; the CDN needs no token; a failure leaves the inline record
+    # and the archive/proxy fill-in exactly as in round 101).
+    fetched = 0
+    for rec in records:
+        if fetched >= INTAKE_ATTACHMENT_FETCHES:
+            break
+        if not rec.get("_attachment") or not _intake_needs_full_record(rec):
+            continue
+        fetched += 1
+        try:
+            async with session.get(rec["_attachment"],
+                                   headers={"User-Agent": headers["User-Agent"]},
+                                   timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    raise ValueError(f"HTTP {resp.status}")
+                full = json.loads(await resp.text())
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logging.info(f"[{rec['id']}] relay record.json unavailable "
+                         f"({_sanitize_error_message(e)}) — inline record kept")
+            continue
+        if apply_intake_full_record(rec, full):
+            out["completed"] += 1
     out["records"] = records
     if not messages:
         out["status"] = "empty"
         out["detail"] = f"no messages in the last {INTAKE_LOOKBACK_SECONDS // 60} min"
+    elif not out["seen"] and out["update_msgs"]:
+        out["status"] = "empty"
+        out["detail"] = (f"relay alive ({out['update_msgs']} re-check message(s)) but no new "
+                         f"post in the last {INTAKE_LOOKBACK_SECONDS // 60} min")
     elif not out["seen"]:
         out["status"] = "empty"
         out["detail"] = (f"{len(messages)} message(s) in the last "
@@ -2881,6 +3035,9 @@ def _intake_summary(intake: dict) -> dict:
         "newest_age_seconds": intake.get("newest_age"),
         "pages": intake.get("pages"),
         "detail": intake.get("detail") or "",
+        "update_msgs": intake.get("update_msgs"),
+        "updates": intake.get("updates"),
+        "completed": intake.get("completed"),
     }
 
 
@@ -2898,6 +3055,12 @@ def _intake_line(intake: dict | None) -> str:
         tail.append(f"{n} record(s)")
     if isinstance(age, int):
         tail.append(f"newest {age} s")
+    upd = intake.get("updates")
+    if isinstance(upd, int) and upd > 0:
+        tail.append(f"{upd} re-checked")
+    done = intake.get("completed")
+    if isinstance(done, int) and done > 0:
+        tail.append(f"{done} completed")
     inner = (", ".join(tail)) if tail else (intake.get("detail") or "")
     label = {"ok": "relay ok", "stale": "relay STALE → old chain",
              "empty": "relay EMPTY → old chain",
@@ -4278,6 +4441,12 @@ async def candidate_liveness_verdict(session, *, key: str, path: str,
     # the moment the app listed the post — positive evidence, no request.
     relay_record = getattr(entry, "record", None) if isinstance(entry, _IntakeEntry) else None
     if isinstance(relay_record, dict):
+        # Round 103: the relay looked at the post AGAIN after listing it
+        # (0.0.7 re-checks at ~10 min / 30 min / 2 h / 6 h). That is Reddit's
+        # own current state — positive evidence either way, no request.
+        verdict = relay_update_verdict(relay_record.get("_update"))
+        if verdict:
+            return verdict
         relay_reason = _queue_or_removal_reason(relay_record.get("removed"))
         if relay_reason:
             return "removed", f"relay record: {relay_reason}", "relay-record"
@@ -4303,6 +4472,35 @@ async def candidate_liveness_verdict(session, *, key: str, path: str,
             return ("live", f"listed on Reddit's /new {fresher} s after the archive "
                             f"snapshot that said '{why}'", "relay-listing")
     return state, why, "arctic-lookup"
+
+
+def relay_update_verdict(update: dict | None) -> tuple[str, str, str] | None:
+    """Round 103: (state, why, source) from the relay's latest re-check of a
+    post, or None when there is none. Source is always `relay-update`."""
+    if not isinstance(update, dict):
+        return None
+    age = update.get("age")
+    when = f"{int(age)} s after creation" if isinstance(age, (int, float)) else "later"
+    if update.get("deleted"):
+        return "removed", f"relay re-check {when}: deleted by the author", "relay-update"
+    reason = _queue_or_removal_reason(update.get("removed"))
+    if reason:
+        return "removed", f"relay re-check {when}: {reason}", "relay-update"
+    return "live", f"relay re-check {when}: still listed on Reddit", "relay-update"
+
+
+def relay_removal_reason_for(post_id: str | None) -> str | None:
+    """Round 103: a live removal verdict for the retraction seatbelt from the
+    relay's re-checks (no request). None = no relay evidence of removal."""
+    upd = _INTAKE_UPDATES.get(str(post_id or "").lower())
+    if not isinstance(upd, dict):
+        return None
+    if upd.get("deleted"):
+        return "deleted by the author (relay re-check)"
+    cat = str(upd.get("removed") or "").strip().lower()
+    if cat:
+        return f"removed by moderators/filters (relay re-check: {cat})"
+    return None
 
 
 def relay_listing_is_fresher(entry, record: dict | None,
@@ -7678,7 +7876,11 @@ async def retract_dead_posts(session, posted_messages: dict, now: float) -> None
         post_id = extract_post_id(path) or unique_key.rsplit("_", 1)[-1]
         listing = await _fetch_new_listing(session, subreddit)
         listing_ids, listing_oldest_age = listing if listing else (None, None)
-        reason = await live_removal_reason(session, path, label=f"retract {unique_key}")
+        # Round 103: the relay's own re-check first (no request); the
+        # mirror/proxy probe only when the relay has not looked yet.
+        reason = relay_removal_reason_for(post_id)
+        if reason is None:
+            reason = await live_removal_reason(session, path, label=f"retract {unique_key}")
         decision = reddit_signals.retraction_decision(
             enabled=RETRACT_DEAD_POSTS,
             mode=RETRACT_MODE,
@@ -7974,7 +8176,9 @@ async def main():
                     logging.info(
                         f"INTAKE: relay ok — {len(intake['records'])} record(s) for this "
                         f"engine ({intake['seen']} in window, {intake['pages']} page(s), "
-                        f"newest {intake['newest_age']} s) — relay is the listing; "
+                        f"newest {intake['newest_age']} s, {intake.get('updates') or 0} "
+                        f"re-checked, {intake.get('completed') or 0} completed from "
+                        f"record.json) — relay is the listing; "
                         f"combined feed / fallback / archive sweep skipped.")
                 elif INTAKE_READER == "shadow":
                     logging.info(
