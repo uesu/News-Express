@@ -8,7 +8,7 @@ audit + `relay_restores` counters), `.github/workflows/reddit_monitor.yml` (summ
 Record: [`docs/history/ROUND_107.md`](history/ROUND_107.md).
 
 - **Why:** `Zenlesszonezeroleaks__1xlrj90` was held as `removal_notice` by the old chain's archive
-  sweep at 07:40Z (mod queue), approved by the mods ~12:35Z, listed by the relay at 12:36Z with
+  sweep at 08:20Z (mod queue), approved by the mods ~12:35Z, listed by the relay at 12:36Z with
   `removed: null` — and suppressed as "known-pending" on every run after that, because round 101
   treated every relay record as a replay (never a restore). Relay mode has no RSS to "re-enter via".
 - **Now:** a relay message newer than the hold's last look, whose record (and latest `v: 2`

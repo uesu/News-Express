@@ -1,4 +1,4 @@
-From c9c1756242bfa5f48f5a5481bf70b1af81c7edb0 Mon Sep 17 00:00:00 2001
+From 00fdd349c6e0eef3eb8b5f7d85e49de9c50254e0 Mon Sep 17 00:00:00 2001
 From: News-Express hand-off <noreply@github.com>
 Date: Mon, 2 Nov 2026 13:26:31 +0000
 Subject: [PATCH] Reddit: the Devvit relay is the primary listing (intake
@@ -861,7 +861,7 @@ index 00000000..1e9d7f7d
 +        return f"📡 reddit intake: relay {res['status']}{detail} — redlib/reddit.com chain used"
 diff --git a/tests/test_reddit_intake.py b/tests/test_reddit_intake.py
 new file mode 100644
-index 00000000..ed945229
+index 00000000..f8cf7f03
 --- /dev/null
 +++ b/tests/test_reddit_intake.py
 @@ -0,0 +1,486 @@
@@ -1294,7 +1294,7 @@ index 00000000..ed945229
 +
 +
 +def test_round107_post_approved_from_the_mod_queue_hours_later_is_a_plain_new_item():
-+    """News-Express round 107 cross-check (live 1xlrj90, 2026-11-02): a post created 07:31Z sat in
++    """News-Express round 107 cross-check (live 1xlrj90, 2026-11-02): a post created 08:11Z sat in
 +    the mod queue until ~12:35Z; the relay listed it at 12:36Z (`removed: null`, score 1). In
 +    News-Express an archive hold from the old chain suppressed it. Game-Express keeps no hold
 +    memory for Reddit (a removed post is simply not an item), so the same record must be a plain

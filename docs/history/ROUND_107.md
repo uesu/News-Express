@@ -7,8 +7,8 @@ Boss (2:58)" — video post, flair Showcases, spoiler.
 
 | time (UTC) | what happened |
 |---|---|
-| 07:31:03 | post created; it sat in the subreddit's mod queue (not in `/new`) |
-| 07:40:24 | old chain (pre-relay): the archive sweep saw the row with a removal state → `pending_reddit.json` `Zenlesszonezeroleaks__1xlrj90 = {reason: removal_notice, source: arctic}` |
+| 08:11:03 | post created; it sat in the subreddit's mod queue (not in `/new`) |
+| 08:20:24 | old chain (pre-relay): the archive sweep saw the row with a removal state → `pending_reddit.json` `Zenlesszonezeroleaks__1xlrj90 = {reason: removal_notice, source: arctic}` |
 | ~12:35 | mods approved it; comments start ("11m ago" at 12:48) |
 | 12:36 | relay (which lists a post only while Reddit's `/new` lists it) sent the complete record: `removed: null`, `full: true`, video `CMAF_720.mp4` + HLS |
 | 12:40, 12:45, 12:50, 12:55 | every run: `INTAKE: relay ok — 1 record(s)` … `1 known-pending` (`Known-pending by reason: removal_notice: 1`) — **no card**, while the post sat live with 24 votes / 10 comments |
@@ -70,6 +70,16 @@ round-101 rule still holds for it. No request, bookkeeping on data already in ha
   intake 8/8, smoke 610/610, ruff clean).
 - Devvit relay: nothing to change — it already detected the approval (the post entered `/new`
   at ~12:35Z and the record went out at 12:36Z with `score: 1, comments: 0`).
+
+## Live result (production run #12276, 13:40Z — first run after the merge)
+
+`Held posts Reddit listed again (relay restore): 1 — restored: Zenlesszonezeroleaks__1xlrj90 —
+held as 'removal_notice' for 255.6 min` · `Known-rejected candidates (held earlier; no newer
+listing): 0` · delivered `video/proxy: vxreddit, 1 item(s), LATENCY 329.4 min, held as
+'removal_notice'` · liveness `relay-listing` · card = title, body (markdown kept), 720p video
+with audio, `💬 36 👍 78`, created-time stamp, three buttons. `pending_reddit.json` no longer
+holds the key; `posted_reddit.json` has it. The restore cost no archive, redlib or reddit.com
+request.
 
 ## Verification
 
