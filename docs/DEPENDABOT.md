@@ -86,7 +86,7 @@ free; private repos: the CI checks use normal Actions minutes).
 ## 3a. Does Dependabot auto-bump Python itself?
 
 **No.** Dependabot manages pip package manifests and `uses:` Action versions;
-`python-version: '3.14.9'` is a workflow setting, not a Dependabot ecosystem.
+`python-version: '3.14.10'` is a workflow setting, not a Dependabot ecosystem.
 That is intentional: floating `3.14` would silently take a newly released patch
 into a live posting run without a dedicated PR or a pre-merge runtime test.
 
