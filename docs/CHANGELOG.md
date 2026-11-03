@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Devvit SDK/CLI 0.15.1 → 0.15.2 (2026-11-03)
+
+`devvit/gaming-express/package.json` + `package-lock.json` only (`devvit`, `@devvit/web` and the 22
+`@devvit/*` transitive packages). Release notes for 0.15.2: Community Engagement Playbook docs and
+`media.upload` attribution — neither touches the relay. `npm test` (tsc, biome, 25 unit tests,
+esbuild) green. Ships to Reddit with the usual `upload --copy-paste` + `install` as Reddit 0.0.7;
+`docs/DEVVIT_SETUP.md` §8 row 0.0.10.
+
 ## Unreleased — Round 108: Arctic hardening for the backup chain (2026-11-02)
 
 `testing area/reddit_main_v3.py` (`_arctic_get_rows` shared by the four archive call sites,
