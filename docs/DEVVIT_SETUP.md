@@ -4,7 +4,9 @@ Operating notes for the Reddit Developer Platform app in
 [`devvit/gaming-express/`](../devvit/gaming-express/) (Reddit slug `gaming-express`).
 The app's own `readme.md` is the text Reddit shows on the app's Directory page: a generic
 product readme (behaviour, setup, settings, inbox contract, fetch domains, sources) that
-names no repository and no consumer. Operating notes for *this* deployment live here.
+names no repository and no consumer, and keeps the exact numbers, Redis keys, record schema
+and command sequence out — enough to understand the app, not enough to clone the pipeline.
+Operating notes for *this* deployment live here.
 
 The relay is **not part of the engine**. `sync_prod.yml` copies `testing area/**` and
 `tests/**` only, so nothing in `devvit/` reaches the production repositories, and the
