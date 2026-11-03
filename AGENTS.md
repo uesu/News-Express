@@ -120,7 +120,11 @@ leftovers. Never advise deleting the "other" platform's files.
   summary step; `ROUND_106.md` is why `r106` compiles every `.py` with warnings as
   failures (keep docstrings that quote backslashes raw); `ROUND_107.md` is the
   relay-restore rule (`relay_listed_after_hold`): a never-re-check hold reopens only
-  when a relay message newer than the hold vouches for the post.
+  when a relay message newer than the hold vouches for the post; `ROUND_108.md` is the
+  backup-chain counterpart — every Arctic Shift request goes through `_arctic_get_rows`
+  (spacing, one budgeted retry, strict rows, `after=` always) and
+  `archive_listed_after_hold` reopens a hold only off an archive row re-read AFTER the
+  hold; keep the four call sites on the helper and the relay-primary path archive-free.
 - `devvit/gaming-express/` — the Devvit relay app that runs on Reddit and
   writes one fenced-JSON record per new post into the private Discord intake channel
   (`docs/DEVVIT_SETUP.md`: deploy, settings, owner steps, uninstall). Its
