@@ -273,9 +273,10 @@ Node.js › Uninstall → delete `%USERPROFILE%\.devvit`, `%APPDATA%\npm`,
 
 The **code** versions below are the repository's numbering (rounds 99–104). Reddit numbers
 uploads itself: 0.0.1–0.0.4 were uploaded one by one; code 0.0.5–0.0.8 went up together as
-**Reddit 0.0.5** on 2026-11-02 (merge of PR #109, `--copy-paste` login), live on
-`r/GamingExpressRelay` since then. `npx devvit install` / the portal's **Update** button name
-the Reddit number.
+**Reddit 0.0.5** on 2026-11-02 (merge of PR #109, `--copy-paste` login); the readme-only
+code 0.0.9 went up as **Reddit 0.0.6** on 2026-11-03 (same code as 0.0.8, settings and Redis
+memory carried over, no re-bootstrap), live on `r/GamingExpressRelay` since then.
+`npx devvit install` / the portal's **Update** button name the Reddit number.
 
 | Version | Date | Change |
 | --- | --- | --- |
@@ -287,7 +288,7 @@ the Reddit number.
 | 0.0.6 | 2026-11-02 | poll cadence 2 → **5 minutes** (owner's choice, matching the 5-minute engine crons; 3 requests/min); per-poll send cap 10 → 15 so the per-minute ceiling is unchanged. No record-format change. Uploads as Reddit **`0.0.5`**. |
 | 0.0.7 | 2026-11-02 | **the relay is the complete source** (round 103). (a) Every record message also carries **`record.json`** — the untrimmed record (full body, every media URL, video renditions, the crosspost parent as a nested record) — sent as a multipart webhook upload; the inline fenced record stays `v: 1` (new optional keys `full`, `mediaTruncated`, `edited`, `revision`, `xpostPermalink`, `video`), so older readers keep working. If Discord refuses the form, the record goes out as plain content exactly as before (`attachment refused` log line; three in a row pause the attachment for an hour). (b) **Post-delivery re-check**: each delivered post is looked at again ~10 min, 30 min, 2 h and 6 h after creation (`reddit.getPostById`, ≤ 20 per poll) and the result is written as one batched **`v: 2` update message** per poll (`{v:2,kind:"update",at,posts:[{id,sub,age,stage,removed,deleted,edited,spoiler,…,locked,score,comments}]}`) — the first look always, later looks only when the state changed. An **edited body** is re-sent as a `v: 1` record with `revision` ≥ 2 (readers keep the newest message per id). New Redis keys: `sent:z` (sorted set, 7.5 h), `stage:<id>`, `state:<id>`, `bh:<id>`, `rev:<id>`, `attach:fails`/`attach:off`. Poll line gains `; recheck N looked, N update msg, N re-sent`. Uploads as Reddit **`0.0.6`**. |
 | 0.0.8 | 2026-11-02 | **1:1 with the old chain** (round 104). (a) Re-check stages ~**5 min** / 30 min / 2 h / 6 h / **24 h** (the first look is the next poll after delivery; late approvals and late publisher comments are caught by the 24 h look). (b) A post first seen filtered/removed and later live (**approval**) is re-sent complete (`resent: "approved"`, `revision` ≥ 2; reasons join with `+`) so a reader whose 6 h window lost the first record still has the whole post. (c) Record keeps `v: 1`; `RECHECK_WINDOW` 24 h + 30 min. A publisher-comment follow-up was prototyped the same day and dropped at the owner's request before upload (neither engine shows OP comments). Uploads as Reddit **`0.0.7`**. |
-| 0.0.9 | 2026-11-03 | Directory readme rewritten as a full product readme (how it works, delivery semantics, setup, settings, inbox contract with `v:1` / `v:2` examples, permissions, Devvit/Discord sources, toolchain). No code change. |
+| 0.0.9 | 2026-11-03 | Directory readme rewritten as a full product readme (how it works, delivery semantics, setup, settings, inbox contract with `v:1` / `v:2` examples, permissions, Devvit/Discord sources, toolchain). No code change. Vaguer second pass the same day (#116: no exact numbers, keys, schema or command sequence). Uploaded as Reddit **`0.0.6`** on 2026-11-03 10:16 PHT and installed in place. |
 
 ## 9. News-Express reader (round 101 — the relay as the primary listing)
 
