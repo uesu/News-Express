@@ -3782,9 +3782,72 @@ def _drop_gallery_media_lines(body: str, media: list) -> str:
 # ---------------------------------------------------------------------------
 _INLINE_IMG_TOKEN_CH = "\u2063"   # INVISIBLE SEPARATOR — never typed in prose
 _INLINE_IMG_TOKEN_RE = re.compile(r"\u2063IMG(\d+)\u2063")
-_INLINE_IMG_STRAY_RE = re.compile(r"\u2063(?:IMG\d*)?\u2063?")
+# Old-structure (HTML) route: clean_rss_body cannot know the gallery yet, so
+# it leaves a position marker carrying the picture's file identity instead
+# of the URL (`⁣MEDIA:<_reddit_media_key>⁣`); the card builder resolves it.
+_MEDIA_MARK_RE = re.compile(r"\u2063MEDIA:([^\u2063\n]+)\u2063")
+# a marker line inside a quote block carries the "> " prefix — swallow it too
+_MEDIA_MARK_LINE_RE = re.compile(r"(?m)^[ \t>]*\u2063MEDIA:([^\u2063\n]+)\u2063[ \t]*$")
+_INLINE_IMG_STRAY_RE = re.compile(r"\u2063(?:IMG\d*|MEDIA:[^\u2063\n]*)?\u2063?")
 _INLINE_IMG_LINK_RE = re.compile(r"!?\[([^\]\n]*)\]\((https?://[^)\s]+)\)")
+_HTML_MEDIA_LINK_RE = re.compile(
+    r"\[([^\]\n]*)\]\(\s*(https?://(?:i\.|preview\.)redd\.it/[^\s)]*)\s*\)")
+_HTML_MEDIA_BARE_RE = re.compile(
+    r"(?<!\]\()https?://(?:i\.|preview\.)redd\.it/[^\s<>)\]]+(?!\))")
 _V2_COMPONENT_CAP = 40   # Discord: every component, nested ones included
+
+
+def _media_marker(url: str) -> str:
+    return f"{_INLINE_IMG_TOKEN_CH}MEDIA:{_reddit_media_key(url)}{_INLINE_IMG_TOKEN_CH}"
+
+
+def _html_media_refs_to_markers(text: str) -> str:
+    """clean_rss_body step (round 109, old-structure route): an i.redd.it /
+    preview.redd.it PICTURE reference — `[label](url)` from an anchor, or a
+    bare URL — becomes a position marker line; a caption label survives as
+    text, a label that is the picture's own URL (or empty) does not. Short
+    `redd.it/` links, external-preview thumbs and non-picture URLs are left
+    for the round-14 removal that follows."""
+    def _link(m: re.Match) -> str:
+        label, url = m.group(1), m.group(2)
+        cand = html_lib.unescape(url).rstrip(".,;")
+        if not REDDIT_MEDIA_URL_RE.fullmatch(cand):
+            return m.group(0)
+        label_out = html_lib.unescape(label).strip()
+        if (REDDIT_MEDIA_URL_RE.fullmatch(label_out.rstrip(".,;"))
+                and _reddit_media_key(label_out) == _reddit_media_key(cand)):
+            label_out = ""
+        return f"{label_out}\n{_media_marker(cand)}\n"
+
+    def _bare(m: re.Match) -> str:
+        cand = html_lib.unescape(m.group(0)).rstrip(".,;")
+        if not REDDIT_MEDIA_URL_RE.fullmatch(cand):
+            return m.group(0)
+        return f"\n{_media_marker(cand)}\n"
+
+    text = _HTML_MEDIA_LINK_RE.sub(_link, text)
+    return _HTML_MEDIA_BARE_RE.sub(_bare, text)
+
+
+def _hoist_media_markers(lines: list) -> list:
+    """Give every marker its own line: a marker that ended up inside a
+    heading/bold/italic/strike/spoiler wrapper (`**6 - Enemies ⁣MEDIA…⁣**`)
+    is lifted out and the wrapper closed cleanly; a wrapper left empty
+    disappears."""
+    out: list = []
+    for line in lines:
+        if _INLINE_IMG_TOKEN_CH not in line:
+            out.append(line)
+            continue
+        marks = _MEDIA_MARK_RE.findall(line)
+        rest = _INLINE_IMG_STRAY_RE.sub(" ", line)
+        rest = re.sub(r"(\*\*|\*|~~|\|\||__|_)\s+\1", " ", rest)
+        rest = re.sub(r"(\S)\s+(\*\*|~~|\|\|)(?=\s|$)", r"\1\2", rest)
+        rest = re.sub(r"\s{2,}", " ", rest).strip()
+        if rest and not re.fullmatch(r"(?:\*\*|\*|~~|\|\||_)+", rest):
+            out.append(rest)
+        out.extend(f"{_INLINE_IMG_TOKEN_CH}MEDIA:{k}{_INLINE_IMG_TOKEN_CH}" for k in marks)
+    return out
 
 
 def _inline_img_token(idx: int) -> str:
@@ -3811,16 +3874,26 @@ def _mark_inline_gallery_images(body: str, photo_media: list) -> str:
     picture (or empty) is dropped. Links to non-gallery targets and bodies
     without any gallery reference are returned byte-identical.
     """
-    if not body or not photo_media:
+    if not body:
+        return body
+    has_marks = _INLINE_IMG_TOKEN_CH in body
+    if not photo_media and not has_marks:
         return body
     key_to_idx: dict[str, int] = {}
-    for idx, m in enumerate(photo_media):
+    for idx, m in enumerate(photo_media or []):
         u = str((m or {}).get("url") or "") if isinstance(m, dict) else ""
         if u:
             key_to_idx.setdefault(_reddit_media_key(u), idx)
     if not key_to_idx:
-        return body
+        return _strip_inline_img_tokens(body) if has_marks else body
     used: set[int] = set()
+
+    def _repl_marker(m: re.Match) -> str:
+        idx = key_to_idx.get(m.group(1).strip().lower())
+        if idx is None or idx in used:
+            return ""
+        used.add(idx)
+        return f"\n{_inline_img_token(idx)}\n"
 
     def _token_for(url: str) -> str | None:
         cand = html_lib.unescape(url.strip()).rstrip(".,;")
@@ -3851,10 +3924,13 @@ def _mark_inline_gallery_images(body: str, photo_media: list) -> str:
         tok = _token_for(m.group(0))
         return m.group(0) if tok is None else tok
 
-    marked = _INLINE_IMG_LINK_RE.sub(_repl_link, body)
+    marked = body
+    if has_marks:
+        marked = _MEDIA_MARK_RE.sub(_repl_marker, _MEDIA_MARK_LINE_RE.sub(_repl_marker, marked))
+    marked = _INLINE_IMG_LINK_RE.sub(_repl_link, marked)
     marked = REDDIT_MEDIA_URL_RE.sub(_repl_bare, marked)
     if not used:
-        return body
+        return _strip_inline_img_tokens(body) if has_marks else body
     return _collapse_blanks([ln.rstrip() for ln in marked.splitlines()])
 
 
@@ -5282,6 +5358,10 @@ def clean_rss_body(value: str | None) -> str:
     text = re.sub(r"(?i)<span>\s*<a[^>]*>\[(?:link|comments)\]</a>\s*</span>", " ", text)
     # links stay clickable: <a href="U">T</a> -> [T](U)
     text = re.sub(r'(?is)<a\s[^>]*href="([^"]+)"[^>]*>(.*?)</a>', r'[\2](\1)', text)
+    # Round 109: picture references keep their PLACE as marker lines (the
+    # card builder interleaves text and gallery in reading order); the URL
+    # text itself is still gone from the body.
+    text = _html_media_refs_to_markers(text)
     # round 16: blockquotes -> Discord quote markers (applied per line below)
     text = re.sub(r"(?is)<blockquote[^>]*>", "\x01", text)
     text = re.sub(r"(?i)</blockquote>", "\x02", text)
@@ -5334,6 +5414,7 @@ def clean_rss_body(value: str | None) -> str:
     # RSS nav leftovers that survived as markdown links: [link](…) [comments](…)
     text = re.sub(r"(?i)\[(?:link|comments)\]\(\s*[^\s)]*\s*\)", " ", text)
     lines = [re.sub(r"\s{2,}", " ", ln).strip() for ln in text.splitlines()]
+    lines = _hoist_media_markers(lines)
     lines = _apply_quote_markers(lines)
     return _collapse_blanks(_line_stage(lines))
 

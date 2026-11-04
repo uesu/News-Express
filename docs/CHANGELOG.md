@@ -9,8 +9,10 @@ that embeds its pictures inside the prose now renders in the post's reading orde
 segment is followed by a gallery of the pictures it references, the raw `preview.redd.it` URLs are
 scrubbed from headings and prose, a caption's escaped `\/` is restored, pictures the text never
 mentions stay in a trailing gallery, and sections are packed into ≤10-child containers under the
-40-component cap. Header, stats, buttons, accent, continuation pages and the legacy card for a body
-without inline references are unchanged. [`docs/history/ROUND_109.md`](history/ROUND_109.md).
+40-component cap. The old-structure RSS / redlib route builds the same card: `clean_rss_body` leaves a
+URL-free position marker where a picture stood (`_html_media_refs_to_markers`, `_hoist_media_markers`)
+instead of deleting the reference. Header, stats, buttons, accent, continuation pages and the legacy card
+for a body without inline references are unchanged. [`docs/history/ROUND_109.md`](history/ROUND_109.md).
 
 ## Unreleased — Game-Express hand-off: feature 4 "Servers Live" card + sources (2026-11-04)
 

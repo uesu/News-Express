@@ -13162,6 +13162,61 @@ for _r109_n in (12, 14, 20, 30):
           and sorted(u for c in _r109_bs for t, v in c if t == 12 for u in v)
           == sorted(_r109_url(i) for i in range(_r109_n)),
           (v3._count_v2_components(_r109_bp["components"]), [len(c["components"]) for c in _r109_bp["components"]]))
+# Old-structure (RSS / redlib HTML) route: clean_rss_body leaves a position
+# marker (`⁣MEDIA:<file key>⁣`, no URL) where a picture reference stood, the
+# builder resolves it against the gallery, and the same interleaved card comes
+# out. Markers never reach Discord, the round-14 "no redd.it URL in the body"
+# contract still holds, and a marker with no matching gallery picture vanishes.
+_r109_P = "https://preview.redd.it/abc123.png?width=1280&amp;s=x"
+_r109_P2 = "https://preview.redd.it/def456.png?width=640&amp;s=y"
+_r109_html = ('<!-- SC_OFF --><div class="md"><p>Hey Guys! Big Update.</p>'
+              f'<h1>1 - Revision Timeline</h1><p><a href="{_r109_P}">https://zzz.gachabase.net/timeline</a></p>'
+              '<p>You can now view any version.</p>'
+              f'<h1>6 - Enemies <a href="{_r109_P2}">{_r109_P2}</a></h1>'
+              f'<p><a href="{_r109_P}">{_r109_P}</a></p>'
+              '<p>Check it out.</p></div><!-- SC_ON --> submitted by <a href="https://www.reddit.com/user/x"> /u/x </a>')
+_r109_hb = v3.clean_rss_body(_r109_html)
+_r109_hm = v3.extract_native_media(_r109_html)
+check("r109b: clean_rss_body keeps a picture's PLACE as a marker line (caption kept, heading closed "
+      "cleanly as **bold**) and still carries no redd.it URL",
+      _r109_hb == ("Hey Guys! Big Update.\n\n**1 - Revision Timeline**\n\nhttps://zzz.gachabase.net/timeline\n"
+                   "\u2063MEDIA:abc123.png\u2063\n\nYou can now view any version.\n\n**6 - Enemies**\n"
+                   "\u2063MEDIA:def456.png\u2063\n\n\u2063MEDIA:abc123.png\u2063\n\nCheck it out.")
+      and "redd.it" not in _r109_hb, repr(_r109_hb))
+_r109_hp = _r109_build({"title": "T", "author": "a", "crosspost": None, "youtube_url": None, "stats": None,
+                        "media": _r109_hm, "body": _r109_hb})
+_r109_hs = _r109_shape(_r109_hp)
+check("r109b: the HTML route builds the same interleaved card — section text, its picture(s) in "
+      "reading order, a second reference to a picture already shown is dropped, no token leaks",
+      _r109_hs == [[_r109_hdr,
+                    (10, "Hey Guys! Big Update.\n\n**1 - Revision Timeline**\n\nhttps://zzz.gachabase.net/timeline"),
+                    (12, [_r109_hm[0]["url"]]),
+                    (10, "You can now view any version.\n\n**6 - Enemies**"),
+                    (12, [_r109_hm[1]["url"]]),
+                    (10, "Check it out."),
+                    (10, "-# 🕐 <t:1:f>"), _r109_div, (1, None)]]
+      and "\u2063" not in json.dumps(_r109_hp, ensure_ascii=False)
+      and "MEDIA:" not in json.dumps(_r109_hp), _r109_hs)
+check("r109b: marker lines inside a quote block keep their picture in place; wrappers left empty "
+      "by the hoist disappear; a marker without a gallery match (or no gallery) is removed",
+      _r109_shape(_r109_build({"title": "T", "author": "a", "crosspost": None, "youtube_url": None,
+                               "stats": None, "media": [{"kind": "image", "url": "https://i.redd.it/abc123.png"}],
+                               "body": v3.clean_rss_body(
+                                   f'<blockquote><p>q <a href="{_r109_P}">{_r109_P}</a></p><p>q2</p></blockquote><p>x</p>')}))[0][1:4]
+      == [(10, "> q"), (12, ["https://i.redd.it/abc123.png"]), (10, "> q2\nx")]
+      and v3.clean_rss_body(f'<p><strong><a href="{_r109_P}">{_r109_P}</a></strong></p><p>after</p>')
+      == "\u2063MEDIA:abc123.png\u2063\n\nafter"
+      and v3._mark_inline_gallery_images(_r109_hb, []) == (
+          "Hey Guys! Big Update.\n\n**1 - Revision Timeline**\n\nhttps://zzz.gachabase.net/timeline\n\n"
+          "You can now view any version.\n\n**6 - Enemies**\n\nCheck it out.")
+      and v3._mark_inline_gallery_images(
+          "**6 - Enemies**\n\u2063MEDIA:zzz.png\u2063\n\ntext",
+          [{"kind": "image", "url": "https://i.redd.it/abc123.png"}]) == "**6 - Enemies**\n\ntext")
+check("r109b: external-preview thumbs, redd.it short links and <img> tags keep the round-14 "
+      "removal (no marker)",
+      v3.clean_rss_body('<p><a href="https://external-preview.redd.it/x.png?s=1">'
+                        'https://external-preview.redd.it/x.png?s=1</a> and https://redd.it/abc12</p>'
+                        f'<p><img src="{_r109_P}"> t</p>') == "and\n\nt")
 _r109_src = inspect.getsource(v3.build_v3_payload)
 check("r109: build_v3_payload marks the body BEFORE the round-62/66/71/99 choke point and strips "
       "tokens on both legacy branches and the continuation remainder",

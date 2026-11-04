@@ -92,6 +92,23 @@ two, "2 - Gallery" as picture / "and the ability to compare images too" / pictur
 Reddit renders it — the caption as `https://zzz.gachabase.net/timeline` plain text, no trailing
 gallery (every picture is referenced).
 
+### Old-structure route (RSS / redlib HTML) — same card
+
+`clean_rss_body` (the fallback chain's body cleaner) used to delete every redd.it picture link
+and URL outright (round 14), so a post arriving via RSS or a redlib page could only show its
+pictures in the trailing gallery. It now leaves a **position marker** where a picture stood —
+`⁣MEDIA:<file key>⁣` (`_html_media_refs_to_markers`, right after the anchor → markdown step):
+no URL in the body (the round-14 contract and its guards hold), caption labels survive, a
+label that is the picture's own URL does not. `_hoist_media_markers` gives every marker its
+own line so a heading (`<h1>6 - Enemies <a href=…>` → `**6 - Enemies**` + marker) or a bold /
+italic / spoiler wrapper closes cleanly and an emptied wrapper disappears. The card builder
+resolves markers against the gallery (`_mark_inline_gallery_images`, quote-prefixed marker
+lines included), drops a marker with no matching picture, and strips any leftover on every
+exit — so the HTML route renders the identical interleaved card, and the Arctic route (raw
+markdown) already did. `external-preview.redd.it` thumbs, `redd.it/` short links and `<img>`
+tags keep the round-14 removal. `reddit_proxy.clean_proxy_body` (proxy text, used only when the
+base carried no body at all) is unchanged.
+
 ## Guards
 
 `tests/test_smoke.py` `r109`: the live shape (reading order, URL scrub, caption unescape,
@@ -100,6 +117,8 @@ byte-identical for an unreferenced body, round-62 URL-only body, picture-first b
 non-gallery links kept, duplicate references, i.redd.it rendition match, video tile placement,
 >10 trailing pictures, continuation-page pictures, 12/14/20/30-section cap folding, and the
 call-order pin inside `build_v3_payload`.
+`r109b`: the HTML route (marker lines, heading hoist, identical interleaved card, quote-block
+markers, emptied wrappers, unmatched / gallery-less markers removed, round-14 removals kept).
 
 ## Game-Express
 
