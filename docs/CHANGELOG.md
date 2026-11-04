@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — Game-Express hand-off: feature 4 "Servers Live" card + sources (2026-11-04)
+
+Docs only. [`docs/handoffs/GAME_EXPRESS_SERVERS_LIVE.md`](handoffs/GAME_EXPRESS_SERVERS_LIVE.md)
+records the sources behind Game-Express feature 4's third card — the publisher completion notices
+(HoYoLAB / Kuro / X) and the HoYoverse client maintenance gate `getGlobalApplicationMaintenance`
+as run by [seriaati/hoyo-update-notifier](https://github.com/seriaati/hoyo-update-notifier)
+([hun.seria.moe](https://hun.seria.moe/)) and [yeci226/ZZZ](https://github.com/yeci226/ZZZ) —
+together with the complete tested patch
+[`game-express-servers-live.patch`](handoffs/game-express-servers-live.patch) (Game-Express base
+`f2c0cac4`; 13 new offline tests, smoke 610/610). No News-Express engine, card, cache, workflow or
+Devvit change.
+
 ## Unreleased — Devvit SDK/CLI 0.15.1 → 0.15.2 (2026-11-03)
 
 `devvit/gaming-express/package.json` + `package-lock.json` only (`devvit`, `@devvit/web` and the 22
