@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — Round 109: inline image interleaving for self-posts (2026-11-04)
+
+`testing area/reddit_main_v3.py` (`_mark_inline_gallery_images`, `_inline_img_segments`,
+`_pack_v2_containers`, `_count_v2_components`, `_strip_inline_img_tokens`; `build_v3_payload`
+interleaved branch), `tests/test_smoke.py` (`r109`). Live 1xnbsam "Gachabase Update!": a self-post
+that embeds its pictures inside the prose now renders in the post's reading order — each text
+segment is followed by a gallery of the pictures it references, the raw `preview.redd.it` URLs are
+scrubbed from headings and prose, a caption's escaped `\/` is restored, pictures the text never
+mentions stay in a trailing gallery, and sections are packed into ≤10-child containers under the
+40-component cap. Header, stats, buttons, accent, continuation pages and the legacy card for a body
+without inline references are unchanged. [`docs/history/ROUND_109.md`](history/ROUND_109.md).
+
 ## Unreleased — Game-Express hand-off: feature 4 "Servers Live" card + sources (2026-11-04)
 
 Docs only. [`docs/handoffs/GAME_EXPRESS_SERVERS_LIVE.md`](handoffs/GAME_EXPRESS_SERVERS_LIVE.md)
