@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased — Round 109: inline image interleaving for self-posts (2026-11-04)
+
+`testing area/reddit_main_v3.py` (`_mark_inline_gallery_images`, `_inline_img_segments`,
+`_pack_v2_containers`, `_count_v2_components`, `_strip_inline_img_tokens`; `build_v3_payload`
+interleaved branch), `tests/test_smoke.py` (`r109`). Live 1xnbsam "Gachabase Update!": a self-post
+that embeds its pictures inside the prose now renders in the post's reading order — each text
+segment is followed by a gallery of the pictures it references, the raw `preview.redd.it` URLs are
+scrubbed from headings and prose, a caption's escaped `\/` is restored, pictures the text never
+mentions stay in a trailing gallery, and sections are packed into ≤10-child containers under the
+40-component cap. The old-structure RSS / redlib route builds the same card: `clean_rss_body` leaves a
+URL-free position marker where a picture stood (`_html_media_refs_to_markers`, `_hoist_media_markers`)
+instead of deleting the reference. Header, stats, buttons, accent, continuation pages and the legacy card
+for a body without inline references are unchanged. [`docs/history/ROUND_109.md`](history/ROUND_109.md).
+
+## Unreleased — Game-Express hand-off: feature 4 "Servers Live" card + sources (2026-11-04)
+
+Docs only. [`docs/handoffs/GAME_EXPRESS_SERVERS_LIVE.md`](handoffs/GAME_EXPRESS_SERVERS_LIVE.md)
+records the sources behind Game-Express feature 4's third card — the publisher completion notices
+(HoYoLAB / Kuro / X) and the HoYoverse client maintenance gate `getGlobalApplicationMaintenance`
+as run by [seriaati/hoyo-update-notifier](https://github.com/seriaati/hoyo-update-notifier)
+([hun.seria.moe](https://hun.seria.moe/)) and [yeci226/ZZZ](https://github.com/yeci226/ZZZ) —
+together with the complete tested patch
+[`game-express-servers-live.patch`](handoffs/game-express-servers-live.patch) (Game-Express base
+`f2c0cac4`; 13 new offline tests, smoke 610/610). No News-Express engine, card, cache, workflow or
+Devvit change.
+
 ## Unreleased — Devvit SDK/CLI 0.15.1 → 0.15.2 (2026-11-03)
 
 `devvit/gaming-express/package.json` + `package-lock.json` only (`devvit`, `@devvit/web` and the 22

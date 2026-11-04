@@ -125,6 +125,10 @@ leftovers. Never advise deleting the "other" platform's files.
   (spacing, one budgeted retry, strict rows, `after=` always) and
   `archive_listed_after_hold` reopens a hold only off an archive row re-read AFTER the
   hold; keep the four call sites on the helper and the relay-primary path archive-free.
+  `ROUND_109.md` is the card builder's inline-image rule: a self-post that embeds
+  gallery pictures in its prose renders text / its pictures / text … in reading order
+  (`_mark_inline_gallery_images` before the round-62 scrub; tokens never reach Discord;
+  a body without inline references builds the byte-identical legacy card).
 - `devvit/gaming-express/` — the Devvit relay app that runs on Reddit and
   writes one fenced-JSON record per new post into the private Discord intake channel
   (`docs/DEVVIT_SETUP.md`: deploy, settings, owner steps, uninstall). Its
