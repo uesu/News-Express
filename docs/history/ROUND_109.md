@@ -52,6 +52,10 @@ returned byte-identical, so nothing downstream can change for the ordinary post.
 ### `_inline_img_segments(body_out)` — reading order
 
 The budgeted first-page text is split at the token lines into `(text, [pictures])` segments.
+Consecutive picture paragraphs pool into one gallery (Reddit emits every embedded picture as
+its own paragraph — the live "6 - Enemies" section carries three; before this round the round-62
+scrub removed those URL-only lines and the pictures surfaced in the trailing gallery); only prose
+closes a section.
 The interleaved layout is used only when **some picture follows prose** (a token after
 non-blank text). The round-62 case (the body is only the picture URL) and a picture-first
 body with a caption below it keep the legacy layout (text above the gallery), with the inline
@@ -82,9 +86,11 @@ stats line / divider / buttons
   (`tombstone_payload` prepends to the first container) and the 4,000-character text budget
   are untouched; text totals can only shrink.
 
-Result for 1xnbsam: three containers (9 / 10 / 6 children, 31 components), nine sections in
-post order with their own picture, the caption rendered as `https://zzz.gachabase.net/timeline`
-plain text, the three pictures the (truncated) body never mentioned in a trailing gallery.
+Result for 1xnbsam (raw selftext): three containers (9 / 10 / 6 children, 30 components), nine
+sections in post order — "6 - Enemies" with its three pictures, "9 - Raw Stats Hover" with its
+two, "2 - Gallery" as picture / "and the ability to compare images too" / picture exactly as
+Reddit renders it — the caption as `https://zzz.gachabase.net/timeline` plain text, no trailing
+gallery (every picture is referenced).
 
 ## Guards
 

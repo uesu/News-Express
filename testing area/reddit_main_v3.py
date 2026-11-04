@@ -3888,6 +3888,11 @@ def _inline_img_segments(body_out: str) -> tuple[list, list]:
             imgs.append(idx)
             continue
         if imgs:
+            # consecutive picture paragraphs (Reddit emits every embedded
+            # picture as its own paragraph) pool into ONE gallery — only
+            # prose closes the section
+            if not line.strip():
+                continue
             _flush()
         text_lines.append(_INLINE_IMG_STRAY_RE.sub("", line))
     _flush()

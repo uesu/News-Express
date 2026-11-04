@@ -13125,6 +13125,14 @@ check("r109: links to NON-gallery targets stay as written; repeated references t
                                    "stats": None, "body": f"intro {_r109_url(0)}",
                                    "media": [{"kind": "image", "url": "https://i.redd.it/img00abcde.png"}]}))[0][1:3]
       == [(10, "intro"), (12, ["https://i.redd.it/img00abcde.png"])])
+_r109_pool = _r109_shape(_r109_build(_r109_data(
+    f"# 6 - Enemies {_r109_url(0)}\n\n{_r109_url(1)}\n\n{_r109_url(2)}\n\n# 7 - Tutorials {_r109_url(3)}", 4)))
+check("r109: consecutive picture paragraphs (Reddit emits every embedded picture as its own "
+      "paragraph — the live '6 - Enemies' section) pool into ONE gallery under their heading; "
+      "only prose closes a section",
+      _r109_pool == [[_r109_hdr, (10, "# 6 - Enemies"), (12, [_r109_url(0), _r109_url(1), _r109_url(2)]),
+                      (10, "# 7 - Tutorials"), (12, [_r109_url(3)]), _r109_stats, _r109_div, (1, None)]],
+      _r109_pool)
 _r109_vid = _r109_shape(_r109_build(_r109_data(f"intro {_r109_url(0)}\n\nmore {_r109_url(1)}", 2, video=True)))
 check("r109: the round-38c video tile keeps its OWN media block after the sections",
       [t for t, _ in _r109_vid[0]] == [10, 10, 12, 10, 12, 12, 10, 14, 1]
