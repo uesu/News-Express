@@ -30,6 +30,9 @@ on:
 
 permissions:
   contents: read
+  # Only used to leave the probe table as a comment on the pull request that
+  # triggered it (job summaries are not readable through the API).
+  pull-requests: write
 
 jobs:
   probe:
@@ -109,4 +112,14 @@ jobs:
           print("\n" + text)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
               fh.write(text + "\n")
+          with open("/tmp/fleet_probe.md", "w", encoding="utf-8") as fh:
+              fh.write(text + "\n")
           PY
+
+      - name: Leave the table on the pull request (pull_request runs only)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -F body=@/tmp/fleet_probe.md >/dev/null
