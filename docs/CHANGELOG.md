@@ -8,7 +8,7 @@
 (`pbs.twimg.com/card_img/…`) into the media list and it rendered as a second gallery tile. With native
 media present the card artwork is now the thumbnail of a Section holding the header and opening text;
 the gallery keeps the tweet's own photos/videos. Card-only, photo-only and media-less tweets are
-byte-identical. [`docs/history/ROUND_110.md`](history/ROUND_110.md).
+byte-identical. [`docs/history/ROUND_110.md`](history/ROUND_110.md). Game-Express hand-off: [`docs/handoffs/GAME_EXPRESS_CARD_ARTWORK.md`](handoffs/GAME_EXPRESS_CARD_ARTWORK.md) + patch (`_fx_media` drops card artwork when the tweet has native media).
 
 ## Unreleased — Game-Express hand-off: news header, multi-line article titles (2026-11-05)
 
