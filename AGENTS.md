@@ -134,7 +134,9 @@ leftovers. Never advise deleting the "other" platform's files.
   (`docs/DEVVIT_SETUP.md`: deploy, settings, owner steps, uninstall). Its
   record shape (`RelayRecord` v1 in `src/server/relay.ts`) is a contract with
   the engine's `parse_intake_record`; bump `v` on any breaking change.
-- `testing area/twitter_v3.py` — LIVE Twitter engine (cards, media heal).
+- `testing area/twitter_v3.py` — LIVE Twitter engine (cards, media heal). `ROUND_110.md`:
+  FxTwitter card artwork (`pbs.twimg.com/card_img/…`) next to native media is the card's
+  Section thumbnail, never a gallery tile; card-only tweets keep the tile.
 - `testing area/reddit_signals.py` — pure decision logic (gates, tombstones).
 - `testing area/reddit_proxy.py`, `twitter_proxy.py` — proxy-service parsers.
 - `testing area/*_v1.py`, `*_v2*.py`, `video_diag.py` — maintained fallback

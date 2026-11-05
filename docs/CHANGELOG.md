@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — Round 110: Twitter link / app card artwork becomes the thumbnail (2026-11-05)
+
+`testing area/twitter_v3.py` (`is_card_image_url`, `split_card_thumbnail`, `thumbnail_section`;
+`build_v3_payload`, `build_quote_components`), `tests/test_twitter_media.py` (`r110`). Live HonkaiNA
+2118221775108771936 / 2118191579307381245: FxTwitter folds an App Store card's icon
+(`pbs.twimg.com/card_img/…`) into the media list and it rendered as a second gallery tile. With native
+media present the card artwork is now the thumbnail of a Section holding the header and opening text;
+the gallery keeps the tweet's own photos/videos. Card-only, photo-only and media-less tweets are
+byte-identical. [`docs/history/ROUND_110.md`](history/ROUND_110.md).
+
 ## Unreleased — Game-Express hand-off: news header, multi-line article titles (2026-11-05)
 
 Docs only. [`docs/handoffs/GAME_EXPRESS_NEWS_TITLE.md`](handoffs/GAME_EXPRESS_NEWS_TITLE.md) +
