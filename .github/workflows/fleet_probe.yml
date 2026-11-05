@@ -9,9 +9,14 @@ name: X RSS fleet probe (manual, read-only)
 #
 # Dev-only: not in sync_prod.py's SYNC_WORKFLOW_FILES, so it never reaches the
 # production repos. No secrets, no webhooks, no cache writes, no posting. It is
-# never scheduled — dispatch it by hand when reviewing a rotation.
+# never scheduled — dispatch it by hand when reviewing a rotation. It also
+# self-runs on a pull request that edits this file (the defaults below), so a
+# rotation PR carries fresh runner evidence without a manual dispatch.
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/fleet_probe.yml'
   workflow_dispatch:
     inputs:
       instances:
@@ -31,8 +36,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      PROBE_INSTANCES: ${{ inputs.instances }}
-      PROBE_ACCOUNTS: ${{ inputs.accounts }}
+      # On pull_request `inputs` is empty, so the defaults are repeated here.
+      PROBE_INSTANCES: ${{ inputs.instances || 'https://nitter.cf,https://xitter.cf,https://nitter.gq,https://xitter.gq,https://teapaw.org,https://teapawt.net,https://teapawt.org,https://nitter.mizuki.st,https://nitter.meowing.monster' }}
+      PROBE_ACCOUNTS: ${{ inputs.accounts || 'TYPEII_EN,PomPom_HonkaiSR,Wuthering_Waves,HonkaiNA,Ananta_EN,GenshinImpact,honkaistarrail,ZZZ_EN' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
