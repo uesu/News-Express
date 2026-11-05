@@ -46,6 +46,11 @@ the PR. 9 instances × 8 handles (NE + GE union), stdlib only, no secrets, nothi
   while `nitter.cf`, `nitter.gq`, `teapawt.org`, `mizuki.st` and `meowing.monster` served 20. The
   serial chain treats 0 entries as a miss and moves on, so the account is served at seat 1 anyway;
   it also shows the seven teapawt domains are separately cached edges, not one response.
+- Second run eight minutes later (23:53 UTC): **71/72 served**; the only miss was `GenshinImpact` on
+  `teapawt.org` (`200`, 0 entries, 85 ms) while the other eight served — so the 0-entry blips are
+  random per-edge cache misses on the teapawt stack, not tied to an account or a domain. The
+  serial chain absorbs one at the cost of a sub-second extra request; GE's 4-wide wave still gets its
+  quorum unless three of four hot domains blip on the same handle at once (then one extra wave).
 - Latency from the runners: teapawt family 340–880 ms (one 1.5 s outlier on `teapawt.net`);
   `nitter.mizuki.st` 81–325 ms (fastest of all nine); `nitter.meowing.monster` 135–418 ms and 8/8
   today — yesterday's 502/429 (GE #4399) was transient. The operator-directed order stands (the
