@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — Round 111: X RSS fleet re-rank — teapawt family leads, mizuki.st joins, meowing/miningtcup demoted (2026-11-06)
+
+`testing area/twitter_v3.py` (`RSS_INSTANCES` order only, 18 → 19), `tests/test_smoke.py` (`r111`),
+README/AGENTS fleet lines. Operator-directed: the seven `4cuck/teapawt` public instances (live on
+`status.d420.net`, scraping permitted) fill seats 1–7 (`nitter.cf`/`xitter.cf` untouched);
+`nitter.mizuki.st` new at seat 8 (TRIAL, a second domain in front of the meowing backend);
+`nitter.meowing.monster` / `nitter.miningtcup.me` demoted to 9–10 (GE run #4399: meowing 502/429 while
+teapawt answered), not deleted; tail unchanged. [`docs/history/ROUND_111.md`](history/ROUND_111.md).
+Game-Express hand-off (rotation #8 of `DEFAULT_NITTER`, same arrangement):
+[`docs/handoffs/GAME_EXPRESS_NITTER_ROTATION_8.md`](handoffs/GAME_EXPRESS_NITTER_ROTATION_8.md) + patch.
+
 ## Unreleased — Round 110: Twitter link / app card artwork becomes the thumbnail (2026-11-05)
 
 `testing area/twitter_v3.py` (`is_card_image_url`, `split_card_thumbnail`, `thumbnail_section`;

@@ -217,7 +217,10 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 9. **The X RSS fleet (`RSS_INSTANCES` in `twitter_v3.py`) is a serial chain
    ranked by runner evidence.** Seats 1–2 are the operator pair (`nitter.cf`,
    `xitter.cf`, round 40) — never move or remove them without operator
-   sign-off. Round-76 ranking rule: **no instance that blocks GitHub Actions /
+   sign-off. Round 111 (2026-11-06, operator-directed): the seven
+   `4cuck/teapawt` public instances (README list, live on `status.d420.net`,
+   scraping permitted) fill seats 1–7; `nitter.mizuki.st` is the trial seat 8;
+   `meowing.monster` / `miningtcup.me` sit at 9–10. Round-76 ranking rule: **no instance that blocks GitHub Actions /
    Azure datacenter IPs (or datacenter IPs generally) may sit above one that
    doesn't.** A clean feed body read off-runner is a trial ticket, never
    proof — the verdict comes from the GitHub Actions runners (Game-Express,
