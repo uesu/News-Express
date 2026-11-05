@@ -28,9 +28,32 @@ arrangement adapted to its 4-wide parallel batches): `docs/handoffs/GAME_EXPRESS
   clause of its own Round-76 note.
 - News-Express run #13685 (2026-11-05 22:40 UTC): all five accounts `feed OK via https://nitter.cf`
   (17–20 entries) — the serial chain never went past seat 1.
-- Sandbox note: the agent's network reaches GitHub/npm/PyPI only, so no instance was probed from
-  here; the order is built from the operator's screenshots, the teapawt README on GitHub and the two
-  prod logs. The smoke guards pin the order offline, as every round.
+- Sandbox note: the agent's network reaches GitHub/npm/PyPI only, so nothing was probed from the
+  sandbox; the runner probe below supplies the live evidence. The smoke guards pin the order offline,
+  as every round.
+
+## Runner probe (2026-11-05 23:45 UTC, `.github/workflows/fleet_probe.yml`, PR #121)
+
+A new dev-only, read-only workflow (manual `workflow_dispatch`, and it self-runs on a PR that edits
+it) fetches `/<account>/rss` on each instance **from the GitHub Actions runners** and posts the table on
+the PR. 9 instances × 8 handles (NE + GE union), stdlib only, no secrets, nothing written.
+
+- **72/72 requests HTTP 200; 68/72 served entries; 100 % top-id parity** with `nitter.cf` on every
+  account that served. Newest ids match the operator's screenshots (HonkaiNA `2118282179738292577`,
+  honkaistarrail `2118282190802833891`, ZZZ_EN `2118282175502078359`, all 2026-11-05 10:00 UTC).
+- The four misses are one account, `PomPom_HonkaiSR`: `xitter.cf`, `xitter.gq`, `teapaw.org`,
+  `teapawt.net` answered `200` with **0 entries** in ~170–215 ms (an empty cached edge response),
+  while `nitter.cf`, `nitter.gq`, `teapawt.org`, `mizuki.st` and `meowing.monster` served 20. The
+  serial chain treats 0 entries as a miss and moves on, so the account is served at seat 1 anyway;
+  it also shows the seven teapawt domains are separately cached edges, not one response.
+- Latency from the runners: teapawt family 340–880 ms (one 1.5 s outlier on `teapawt.net`);
+  `nitter.mizuki.st` 81–325 ms (fastest of all nine); `nitter.meowing.monster` 135–418 ms and 8/8
+  today — yesterday's 502/429 (GE #4399) was transient. The operator-directed order stands (the
+  teapawt stack is the scraping-permitted one); the two keep their runner-proven standing at 9–10 and
+  mizuki its TRIAL seat with its first runner evidence now on record.
+
+No engine change resulted: the chain's "HTTP 200 with entries wins" rule already handles the only
+anomaly seen.
 
 ## New order (19, was 18)
 

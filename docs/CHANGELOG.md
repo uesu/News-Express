@@ -10,6 +10,9 @@ README/AGENTS fleet lines. Operator-directed: the seven `4cuck/teapawt` public i
 teapawt answered), not deleted; tail unchanged. [`docs/history/ROUND_111.md`](history/ROUND_111.md).
 Game-Express hand-off (rotation #8 of `DEFAULT_NITTER`, same arrangement):
 [`docs/handoffs/GAME_EXPRESS_NITTER_ROTATION_8.md`](handoffs/GAME_EXPRESS_NITTER_ROTATION_8.md) + patch.
+New dev-only `.github/workflows/fleet_probe.yml` (manual, read-only; self-runs on a PR that edits it): probes
+`/<account>/rss` on each instance from the GitHub runners and posts the table on the PR — 2026-11-05 23:45 UTC:
+72/72 HTTP 200, 68/72 with entries (PomPom_HonkaiSR 0-entry edge responses on four teapawt domains), 100 % top-id parity.
 
 ## Unreleased — Round 110: Twitter link / app card artwork becomes the thumbnail (2026-11-05)
 
