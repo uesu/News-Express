@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — Game-Express hand-off: news header, multi-line article titles (2026-11-05)
+
+Docs only. [`docs/handoffs/GAME_EXPRESS_NEWS_TITLE.md`](handoffs/GAME_EXPRESS_NEWS_TITLE.md) +
+[`game-express-news-title.patch`](handoffs/game-express-news-title.patch): HoYoLAB 47327567 (HNA, GE run
+#4297) carried a newline inside its subject, so the GE news header `## [title](url)` spanned two lines and
+Discord showed raw markdown instead of a link; GE `cards._md_link_text` now collapses whitespace runs to one
+space (render only, source title untouched). GE base `959705b1`, smoke 611/611. No News-Express engine
+change.
+
 ## Unreleased — Round 109: inline image interleaving for self-posts (2026-11-04)
 
 `testing area/reddit_main_v3.py` (`_mark_inline_gallery_images`, `_inline_img_segments`,
