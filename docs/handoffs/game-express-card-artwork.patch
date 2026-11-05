@@ -1,0 +1,115 @@
+From 2967894969b939da9e0164795dabf82d909e8d4b Mon Sep 17 00:00:00 2001
+From: arena-agent <arena-agent@users.noreply.github.com>
+Date: Thu, 5 Nov 2026 07:08:02 +0000
+Subject: [PATCH] fix(x): link / app card artwork is not tweet media
+
+FxTwitter folds an X link / app card's artwork (pbs.twimg.com/card_img/...) into
+the photos list; HonkaiNA 2118221775108771936 / 2118191579307381245 listed the App
+Store icon next to the real photo / video. _fx_media now keeps native media only when
+any exists; card-only tweets are unchanged.
+---
+ docs/changelog/CHANGELOG.md   | 11 +++++++++++
+ docs/changelog/README.md      |  4 +++-
+ gamexpress/sources/twitter.py | 12 +++++++++++-
+ tests/test_smoke.py           | 20 ++++++++++++++++++++
+ 4 files changed, 45 insertions(+), 2 deletions(-)
+
+diff --git a/docs/changelog/CHANGELOG.md b/docs/changelog/CHANGELOG.md
+index baeaca9e..0cf07e95 100644
+--- a/docs/changelog/CHANGELOG.md
++++ b/docs/changelog/CHANGELOG.md
+@@ -1,5 +1,16 @@
+ # Changelog — current entries
+ 
++## 2026-11-05 — X: link / app card artwork is not tweet media
++
++- **What changed.** `sources/twitter.py::_fx_media` drops `pbs.twimg.com/card_img/…` entries
++  (X link / app card artwork that FxTwitter folds into `photos`) whenever the tweet has photos
++  or videos of its own; a card-only tweet keeps the artwork as before. HonkaiNA
++  2118221775108771936 / 2118191579307381245 (2026-11-05) listed the App Store card's 512 × 512
++  icon next to the real 1920 × 1080 photo / 1280 × 720 video, so the icon could have reached a
++  schedule or notice card (`item.images[:4]`, `[:1]`). Text, links, timestamps and the Nitter
++  fallback are untouched.
++- **Tests.** `test_fx_media_ignores_card_artwork_when_the_tweet_has_its_own_media`.
++
+ ## 2026-11-05 — News: multi-line article titles render as one link
+ 
+ - **What changed.** `cards._md_link_text` collapses every whitespace run (newlines included) to one
+diff --git a/docs/changelog/README.md b/docs/changelog/README.md
+index c2711660..8ccd1ad7 100644
+--- a/docs/changelog/README.md
++++ b/docs/changelog/README.md
+@@ -1,6 +1,8 @@
+ # Changelog
+ 
+-Latest: [News: multi-line article titles render as one link](CHANGELOG.md#2026-11-05--news-multi-line-article-titles-render-as-one-link).
++Latest: [X: link / app card artwork is not tweet media](CHANGELOG.md#2026-11-05--x-link--app-card-artwork-is-not-tweet-media).
++
++Previous: [News: multi-line article titles render as one link](CHANGELOG.md#2026-11-05--news-multi-line-article-titles-render-as-one-link).
+ 
+ Previous: [Feature 4: third card "Servers Live" + actual End Time on the maintenance card](CHANGELOG.md#2026-11-04--feature-4-third-card-servers-live--actual-end-time-on-the-maintenance-card).
+ 
+diff --git a/gamexpress/sources/twitter.py b/gamexpress/sources/twitter.py
+index 48aa68ed..1ec7e1de 100644
+--- a/gamexpress/sources/twitter.py
++++ b/gamexpress/sources/twitter.py
+@@ -100,6 +100,12 @@ TCO_WRAPPED = re.compile(r"/t\.co/", re.I)   # nitter leaves t.co links unexpand
+ X_UA = "Game-Express"
+ 
+ 
++def _is_card_art(url: str) -> bool:
++    """X link / app card artwork (`pbs.twimg.com/card_img/...`), never a tweet's own photo."""
++    return isinstance(url, str) and url.lower().startswith(("https://pbs.twimg.com/card_img/",
++                                                            "http://pbs.twimg.com/card_img/"))
++
++
+ def _fx_media(t: dict) -> list[str]:
+     media = t.get("media") if isinstance(t.get("media"), dict) else {}
+     out: list[str] = []
+@@ -112,7 +118,11 @@ def _fx_media(t: dict) -> list[str]:
+         url = v.get("url") or v.get("thumbnail_url")
+         if url and url not in out:
+             out.append(url)
+-    return out
++    # FxTwitter folds a link / app card's artwork into `photos` (HonkaiNA 2118221775108771936:
++    # the App Store icon, 512x512, next to the real 1920x1080 photo). Card art is never key art
++    # when the tweet has media of its own; a card-only tweet keeps it as before.
++    native = [u for u in out if not _is_card_art(u)]
++    return native if native else out
+ 
+ 
+ def _from_fx(t: dict, tweet_id: str) -> dict:
+diff --git a/tests/test_smoke.py b/tests/test_smoke.py
+index 8bb43ff8..c8336a57 100644
+--- a/tests/test_smoke.py
++++ b/tests/test_smoke.py
+@@ -6535,6 +6535,26 @@ def test_news_title_with_a_newline_renders_as_one_line_link():
+     assert cards._md_link_text("plain title") == "plain title"
+ 
+ 
++def test_fx_media_ignores_card_artwork_when_the_tweet_has_its_own_media():
++    # HonkaiNA 2118221775108771936 / 2118191579307381245 (2026-11-05): FxTwitter lists the App
++    # Store card's icon (pbs.twimg.com/card_img/..., 512x512) under `photos` next to the real
++    # photo / video, so it could reach a schedule or notice card. Native media wins; a card-only
++    # tweet (link card banner) keeps its artwork exactly as before.
++    from gamexpress.sources import twitter as tw
++    card = "https://pbs.twimg.com/card_img/2117885179226374144/8O4A5wKA?format=png&name=orig"
++    photo = "https://pbs.twimg.com/media/HWS61I-aMAcRkez.jpg?name=orig"
++    video = "https://video.twimg.com/amplify_video/2118020756831612930/vid/avc1/1280x720/x.mp4?tag=14"
++    assert tw._fx_media({"media": {"photos": [{"url": photo, "width": 1920, "height": 1080},
++                                              {"url": card, "width": 512, "height": 512}]}}) == [photo]
++    assert tw._fx_media({"media": {"photos": [{"url": card, "width": 512, "height": 512}],
++                                   "videos": [{"url": video, "width": 1280, "height": 720}]}}) == [video]
++    assert tw._fx_media({"media": {"photos": [{"url": card, "width": 800, "height": 418}]}}) == [card]
++    assert tw._fx_media({"media": {"photos": [{"url": photo}, {"url": card}, {"url": photo + "2"}]}}) == [photo, photo + "2"]
++    assert tw._fx_media({"media": {}}) == [] and tw._fx_media({}) == []
++    assert tw._is_card_art(card) and not tw._is_card_art(photo) and not tw._is_card_art(video)
++    assert not tw._is_card_art("https://evil.example/pbs.twimg.com/card_img/x") and not tw._is_card_art(None)
++
++
+ def test_news_media_count_and_order_not_aspect_ranked_or_truncated():
+     item = news_item()
+     urls = [f"https://example.com/{i}.gif" for i in range(22)]
+-- 
+2.39.5
+

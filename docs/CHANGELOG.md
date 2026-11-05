@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — Round 110: Twitter link / app card artwork becomes the thumbnail (2026-11-05)
+
+`testing area/twitter_v3.py` (`is_card_image_url`, `split_card_thumbnail`, `thumbnail_section`;
+`build_v3_payload`, `build_quote_components`), `tests/test_twitter_media.py` (`r110`). Live HonkaiNA
+2118221775108771936 / 2118191579307381245: FxTwitter folds an App Store card's icon
+(`pbs.twimg.com/card_img/…`) into the media list and it rendered as a second gallery tile. With native
+media present the card artwork is now the thumbnail of a Section holding the header and opening text;
+the gallery keeps the tweet's own photos/videos. Card-only, photo-only and media-less tweets are
+byte-identical. [`docs/history/ROUND_110.md`](history/ROUND_110.md). Game-Express hand-off: [`docs/handoffs/GAME_EXPRESS_CARD_ARTWORK.md`](handoffs/GAME_EXPRESS_CARD_ARTWORK.md) + patch (`_fx_media` drops card artwork when the tweet has native media).
+
+## Unreleased — Game-Express hand-off: news header, multi-line article titles (2026-11-05)
+
+Docs only. [`docs/handoffs/GAME_EXPRESS_NEWS_TITLE.md`](handoffs/GAME_EXPRESS_NEWS_TITLE.md) +
+[`game-express-news-title.patch`](handoffs/game-express-news-title.patch): HoYoLAB 47327567 (HNA, GE run
+#4297) carried a newline inside its subject, so the GE news header `## [title](url)` spanned two lines and
+Discord showed raw markdown instead of a link; GE `cards._md_link_text` now collapses whitespace runs to one
+space (render only, source title untouched). GE base `959705b1`, smoke 611/611. No News-Express engine
+change.
+
 ## Unreleased — Round 109: inline image interleaving for self-posts (2026-11-04)
 
 `testing area/reddit_main_v3.py` (`_mark_inline_gallery_images`, `_inline_img_segments`,
