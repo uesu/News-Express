@@ -275,7 +275,8 @@ The **code** versions below are the repository's numbering (rounds 99–104). Re
 uploads itself: 0.0.1–0.0.4 were uploaded one by one; code 0.0.5–0.0.8 went up together as
 **Reddit 0.0.5** on 2026-11-02 (merge of PR #109, `--copy-paste` login); the readme-only
 code 0.0.9 went up as **Reddit 0.0.6** on 2026-11-03 (same code as 0.0.8, settings and Redis
-memory carried over, no re-bootstrap), live on `r/GamingExpressRelay` since then.
+memory carried over, no re-bootstrap) and code 0.0.10 (devvit 0.15.2) as **Reddit 0.0.7**, live on
+`r/GamingExpressRelay` since then.
 `npx devvit install` / the portal's **Update** button name the Reddit number.
 
 | Version | Date | Change |
@@ -384,8 +385,8 @@ Record: [`docs/history/ROUND_103.md`](history/ROUND_103.md),
 2. ~~**News-Express intake reader**~~ — done in round 101 (§9). Relay 0.0.6 candidates if the
    reader needs them: a heartbeat record (exact staleness), a long-body attachment
    (bodies above the message budget arrive truncated today).
-3. ~~**Game-Express**~~ — delivered in round 102 as a `git am`-able patch plus
-   description: `docs/handoffs/GAME_EXPRESS_INTAKE_READER.md`. `RedditClient._gather_listing()`
+3. ~~**Game-Express**~~ — delivered in round 102 as a `git am`-able patch, merged as
+   [Game-Express #141](https://github.com/uesu/Game-Express/pull/141). `RedditClient._gather_listing()`
    asks the reader first; `u/<account>` listings are served from records whose `author` is
    that account (records carry the real subreddit in `sub`), subreddit listings per `sub`;
    the same two settings activate it in `uesu/8mqzv4k2n7c`.

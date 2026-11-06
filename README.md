@@ -75,7 +75,7 @@ flowchart LR
 | **Translation** | non-English tweets get a *Translated from X* block with the original preserved (via FxTwitter's `/en` endpoint); an identical "translation" (X language mis-detection) is dropped automatically |
 | **Links** | clickable `#hashtags` and `@mentions`, exactly like fxtwitter embeds |
 | **Self-heal** | Twitter V3 inspects Discord's returned message; **only explicitly unresolved** videos (video-only by default) queue up to 4 bounded same-payload edits after posting, so healthy media is posted immediately — no delay, no revalidation, no edit (`MEDIA_HEAL*` Variables) |
-| **Resilient feeds** | an 18-instance nitter fallback fleet (serial — first instance that answers wins), ranked by **runner evidence**: no instance that blocks GitHub Actions / Azure datacenter IPs sits above one that doesn't, and blocked instances are demoted, never deleted (see [Round 76](docs/history/ROUND_76.md) + Rounds 77/78 teapaw/gq/mie.foundation expansion 2026-10-22); optional `NITTER_RSS_TOKEN` unlocks the token-gated instance |
+| **Resilient feeds** | a 19-instance nitter fallback fleet (serial — first instance that answers wins), ranked by **runner evidence**: no instance that blocks GitHub Actions / Azure datacenter IPs sits above one that doesn't, and blocked instances are demoted, never deleted (see [Round 76](docs/history/ROUND_76.md), Rounds 77/78 teapaw/gq/mie.foundation expansion 2026-10-22, [Round 111](docs/history/ROUND_111.md) teapawt-first re-rank 2026-11-06); optional `NITTER_RSS_TOKEN` unlocks the token-gated instance |
 | **Repost attribution** | reposted tweets credit the original author |
 
 ### 📰 Reddit monitor
@@ -147,13 +147,19 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 
 ```
 ├── .github/
-│   ├── dependabot.yml             # Dependabot: weekly pip + actions update PRs (optional)
+│   ├── dependabot.yml             # Dependabot: weekly pip + actions + npm update PRs (optional)
+│   ├── scripts/
+│   │   ├── merge_monitor_caches.py  # 3-way cache merge used by the monitors' commit step
+│   │   └── sync_prod.py           # dev → production mirror (engines, tests, workflows)
 │   └── workflows/
 │       ├── twitter_monitor.yml    # X/Twitter — runs testing area/twitter_v3.py
 │       ├── reddit_monitor.yml     # Reddit — runs testing area/reddit_main_v3.py
 │       ├── ci.yml                 # PR gate: install + compile + offline smoke suites
 │       ├── dependabot_auto_merge.yml  # opt-in auto-merge for Dependabot PRs
-│       └── python_version_bump.yml    # verified CPython patch/minor PR workflow
+│       ├── python_version_bump.yml    # verified CPython patch/minor PR workflow
+│       ├── sync_prod.yml          # dev-only: pushes main to the production repos
+│       └── fleet_probe.yml        # dev-only, manual: X RSS instance probe from the runners
+├── devvit/                        # the Devvit relay (Reddit → Discord intake channel)
 ├── docs/                          # decision records + guides (see Docs index below)
 ├── testing area/                  # the engines (see Testing)
 │   ├── twitter_v1.py · twitter_v2_button_outside.py · twitter_v3.py
@@ -169,7 +175,8 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 │   └── fixtures/posted_cards.py   # production-card replay fixtures
 ├── AGENTS.md                      # onboarding for AI coding agents
 ├── posted_tweets.json · posted_reddit.json · pending_reddit.json · proxy_health.json
-│   · media_heal_carry.json        # auto-committed runtime caches
+│                                  # auto-committed runtime caches (never edit by hand)
+│   · media_heal_carry.json · posted_messages.json   # gitignored here, force-added in production
 ├── PRIVACY_POLICY.md · TERMS_OF_SERVICE.md
 ├── requirements.txt               # feedparser, aiohttp, python-dotenv
 ├── .env.example                   # local testing template + every switch documented

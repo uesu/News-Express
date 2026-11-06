@@ -2,7 +2,8 @@
 
 Scope: `RSS_INSTANCES` in `testing area/twitter_v3.py` — order only. Nothing deleted, no engine logic,
 token mapping, workflow or cache change. Companion Game-Express hand-off (`DEFAULT_NITTER`, same
-arrangement adapted to its 4-wide parallel batches): `docs/handoffs/GAME_EXPRESS_NITTER_ROTATION_8.md`.
+arrangement adapted to its 4-wide parallel batches): full diff + apply steps in
+[PR #121](https://github.com/uesu/News-Express/pull/121#issuecomment-6672004449); the owner opens the GE PR.
 
 ## Operator direction
 
