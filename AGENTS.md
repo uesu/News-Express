@@ -97,7 +97,8 @@ all three offline test suites (`test_smoke.py`, `test_reddit_signals.py`, `test_
 never touching live deduplication/pending/health JSON caches (`posted_reddit.json`,
 `pending_reddit.json`, `proxy_health.json`, `posted_tweets.json`, `posted_messages.json`) and never
 copying development documentation (`docs/`, `README.md`, `AGENTS.md`, `PRIVACY_POLICY.md`,
-`TERMS_OF_SERVICE.md`, `.env.example`, or `sync_prod.yml` itself). Workflow files are merged
+`TERMS_OF_SERVICE.md`, `.env.example`, `devvit/`, or the dev-only workflows `sync_prod.yml` and
+`fleet_probe.yml`). Workflow files are merged
 monotonically (round 91): a `python-version:` pin or SHA-pinned `uses:` that production already
 merged at a newer version is never downgraded by a dev-side sync, and the deployed
 `tests/test_smoke.py` r39 pin is re-aligned to the deployed `ci.yml`. Manual web-UI upload remains a fallback if needed (**engine file first**
@@ -217,7 +218,13 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
 9. **The X RSS fleet (`RSS_INSTANCES` in `twitter_v3.py`) is a serial chain
    ranked by runner evidence.** Seats 1–2 are the operator pair (`nitter.cf`,
    `xitter.cf`, round 40) — never move or remove them without operator
-   sign-off. Round-76 ranking rule: **no instance that blocks GitHub Actions /
+   sign-off. Round 111 (2026-11-06, operator-directed): the seven
+   `4cuck/teapawt` public instances (README list, live on `status.d420.net`,
+   scraping permitted) fill seats 1–7; `nitter.mizuki.st` is the trial seat 8;
+   `meowing.monster` / `miningtcup.me` sit at 9–10. Runner evidence on demand:
+   `.github/workflows/fleet_probe.yml` (dev-only, read-only, manual dispatch;
+   self-runs on a PR that edits it) posts a per-instance × account table on
+   the PR. Round-76 ranking rule: **no instance that blocks GitHub Actions /
    Azure datacenter IPs (or datacenter IPs generally) may sit above one that
    doesn't.** A clean feed body read off-runner is a trial ticket, never
    proof — the verdict comes from the GitHub Actions runners (Game-Express,
@@ -226,7 +233,7 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    answers the runners). The smoke suite pins the exact order, so every
    re-rank updates the guard in the same commit; V1/V2 keep their own,
    separately pinned lists. Reddit's `REDDIT_RSS_INSTANCES` is audited by
-   body too — 25-member fleet as of 2026-10-24 (dual-path + listing-only reserves + tail restores + 6 appended tail mirrors per live #9283; see `testing area/reddit_main_v3.py` for exact order).
+   body too — 28-member fleet as of 2026-10-27 (dual-path + listing-only reserves + tail restores + 6 appended tail mirrors per live #9283 + 3 appended 2026-10-27; see `testing area/reddit_main_v3.py` for exact order).
 
 ## Landmines — things that LOOK like bugs but are deliberate
 

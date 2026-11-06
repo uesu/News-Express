@@ -75,7 +75,7 @@ flowchart LR
 | **Translation** | non-English tweets get a *Translated from X* block with the original preserved (via FxTwitter's `/en` endpoint); an identical "translation" (X language mis-detection) is dropped automatically |
 | **Links** | clickable `#hashtags` and `@mentions`, exactly like fxtwitter embeds |
 | **Self-heal** | Twitter V3 inspects Discord's returned message; **only explicitly unresolved** videos (video-only by default) queue up to 4 bounded same-payload edits after posting, so healthy media is posted immediately — no delay, no revalidation, no edit (`MEDIA_HEAL*` Variables) |
-| **Resilient feeds** | an 18-instance nitter fallback fleet (serial — first instance that answers wins), ranked by **runner evidence**: no instance that blocks GitHub Actions / Azure datacenter IPs sits above one that doesn't, and blocked instances are demoted, never deleted (see [Round 76](docs/history/ROUND_76.md) + Rounds 77/78 teapaw/gq/mie.foundation expansion 2026-10-22); optional `NITTER_RSS_TOKEN` unlocks the token-gated instance |
+| **Resilient feeds** | a 19-instance nitter fallback fleet (serial — first instance that answers wins), ranked by **runner evidence**: no instance that blocks GitHub Actions / Azure datacenter IPs sits above one that doesn't, and blocked instances are demoted, never deleted (see [Round 76](docs/history/ROUND_76.md), Rounds 77/78 teapaw/gq/mie.foundation expansion 2026-10-22, [Round 111](docs/history/ROUND_111.md) teapawt-first re-rank 2026-11-06); optional `NITTER_RSS_TOKEN` unlocks the token-gated instance |
 | **Repost attribution** | reposted tweets credit the original author |
 
 ### 📰 Reddit monitor
@@ -147,13 +147,19 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 
 ```
 ├── .github/
-│   ├── dependabot.yml             # Dependabot: weekly pip + actions update PRs (optional)
+│   ├── dependabot.yml             # Dependabot: weekly pip + actions + npm update PRs (optional)
+│   ├── scripts/
+│   │   ├── merge_monitor_caches.py  # 3-way cache merge used by the monitors' commit step
+│   │   └── sync_prod.py           # dev → production mirror (engines, tests, workflows)
 │   └── workflows/
 │       ├── twitter_monitor.yml    # X/Twitter — runs testing area/twitter_v3.py
 │       ├── reddit_monitor.yml     # Reddit — runs testing area/reddit_main_v3.py
 │       ├── ci.yml                 # PR gate: install + compile + offline smoke suites
 │       ├── dependabot_auto_merge.yml  # opt-in auto-merge for Dependabot PRs
-│       └── python_version_bump.yml    # verified CPython patch/minor PR workflow
+│       ├── python_version_bump.yml    # verified CPython patch/minor PR workflow
+│       ├── sync_prod.yml          # dev-only: pushes main to the production repos
+│       └── fleet_probe.yml        # dev-only, manual: X RSS instance probe from the runners
+├── devvit/                        # the Devvit relay (Reddit → Discord intake channel)
 ├── docs/                          # decision records + guides (see Docs index below)
 ├── testing area/                  # the engines (see Testing)
 │   ├── twitter_v1.py · twitter_v2_button_outside.py · twitter_v3.py
@@ -169,7 +175,8 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 │   └── fixtures/posted_cards.py   # production-card replay fixtures
 ├── AGENTS.md                      # onboarding for AI coding agents
 ├── posted_tweets.json · posted_reddit.json · pending_reddit.json · proxy_health.json
-│   · media_heal_carry.json        # auto-committed runtime caches
+│                                  # auto-committed runtime caches (never edit by hand)
+│   · media_heal_carry.json · posted_messages.json   # gitignored here, force-added in production
 ├── PRIVACY_POLICY.md · TERMS_OF_SERVICE.md
 ├── requirements.txt               # feedparser, aiohttp, python-dotenv
 ├── .env.example                   # local testing template + every switch documented
@@ -654,7 +661,7 @@ services — please support them:
 | Project / Service | What it's used for | Links |
 |---|---|---|
 | **News-Flash-Bot** by [@cold-logic5](https://github.com/cold-logic5) | The original repository this project is based on (RSS → Discord webhook architecture) | [GitHub repo](https://github.com/cold-logic5/News-Flash-Bot) · [Author](https://github.com/cold-logic5) |
-| **Nitter** by [@zedeus](https://github.com/zedeus) | Free & open-source, privacy-focused X/Twitter front-end providing the RSS feeds — active fallback order reviewed 2026-10-22 (rounds 76+77+78, runner evidence + feed-body audit): [nitter.cf](https://nitter.cf/), [xitter.cf](https://xitter.cf/), [nitter.gq](https://nitter.gq/), [xitter.gq](https://xitter.gq/), [nitter.meowing.monster](https://nitter.meowing.monster/), [nitter.miningtcup.me](https://nitter.miningtcup.me/) (RSS token), [teapaw.org](https://teapaw.org/), [teapawt.net](https://teapawt.net/), [teapawt.org](https://teapawt.org/), [nitter.freedit.eu](https://nitter.freedit.eu/), [nitter.gravitywell.xyz](https://nitter.gravitywell.xyz/), [tw.eir-nya.gay](https://tw.eir-nya.gay/) ("kitter", eir's fork based on [Cynosphere's fork](https://gitlab.com/Cynosphere/nitter)), [shitter.thepixora.com](https://shitter.thepixora.com/), [nitter.kareem.one](https://nitter.kareem.one/) (runs [shaquille's fork](https://git.kareem.one/shaquille/nitter)), [xcopy.uk](https://xcopy.uk/), [nitter.mie.foundation](https://nitter.mie.foundation/), then last-resort [nitter.netbub.com](https://nitter.netbub.com/) + [nitter.jaydenha.uk](https://nitter.jaydenha.uk/) | [GitHub](https://github.com/zedeus/nitter) · 💖 [Donations](https://github.com/zedeus/nitter#donations) |
+| **Nitter** by [@zedeus](https://github.com/zedeus) | Free & open-source, privacy-focused X/Twitter front-end providing the RSS feeds — active fallback order reviewed 2026-11-06 (round 111, operator-directed: the seven [4cuck/teapawt](https://github.com/4cuck/teapawt) public instances — live on [status.d420.net](https://status.d420.net/), scraping permitted — lead the chain): [nitter.cf](https://nitter.cf/), [xitter.cf](https://xitter.cf/), [nitter.gq](https://nitter.gq/), [xitter.gq](https://xitter.gq/), [teapaw.org](https://teapaw.org/), [teapawt.net](https://teapawt.net/), [teapawt.org](https://teapawt.org/), [nitter.mizuki.st](https://nitter.mizuki.st/) (trial), [nitter.meowing.monster](https://nitter.meowing.monster/), [nitter.miningtcup.me](https://nitter.miningtcup.me/) (RSS token), [nitter.freedit.eu](https://nitter.freedit.eu/), [nitter.gravitywell.xyz](https://nitter.gravitywell.xyz/), [tw.eir-nya.gay](https://tw.eir-nya.gay/) ("kitter", eir's fork based on [Cynosphere's fork](https://gitlab.com/Cynosphere/nitter)), [shitter.thepixora.com](https://shitter.thepixora.com/), [nitter.kareem.one](https://nitter.kareem.one/) (runs [shaquille's fork](https://git.kareem.one/shaquille/nitter)), [xcopy.uk](https://xcopy.uk/), [nitter.mie.foundation](https://nitter.mie.foundation/), then last-resort [nitter.netbub.com](https://nitter.netbub.com/) + [nitter.jaydenha.uk](https://nitter.jaydenha.uk/) | [GitHub](https://github.com/zedeus/nitter) · 💖 [Donations](https://github.com/zedeus/nitter#donations) |
 | **FxTwitter / FxEmbed** by [@dangered wolf](https://github.com/dangeredwolf) | Rich X/Twitter embeds + the free API — primary tweet-data source (round 11) used for media, stats, translation, GIF re-rendering and the video proxy | [fxtwitter.com](https://fxtwitter.com) · [docs.fxembed.com](https://docs.fxembed.com/) · 💖 [Sponsor](https://github.com/sponsors/dangeredwolf) |
 | **vxtwitter (BetterTwitFix / fixvx)** | Backup tweet-data API (round 11) + its **gifconvert** GIF converter | [vxtwitter.com](https://vxtwitter.com) · [API docs](https://vxtwitter.com/api.md) |
 | **EmbedEZ** | Rich Reddit embeds (redditez.com mirror) + the provider API used by Reddit V2 + last-resort tweet-data source (round 11) | [embedez.com](https://embedez.com/) · [API docs](https://embedez.com/docs) |

@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased — Housekeeping: hand-off folder retired, docs re-synced with the live state (2026-11-06)
+
+Docs + `.github/scripts/sync_prod.py` (dev-only list only); no engine, card, cache or workflow change.
+`docs/handoffs/` (five Game-Express hand-off notes + patches) removed — every hand-off already lives as a
+merged Game-Express PR (#141 intake reader, #145 Servers Live, #146 news title + card artwork) or as the
+full diff on the News-Express PR (rotation #8 on #121); CHANGELOG / round / Devvit docs now point there.
+`fleet_probe.yml` added to `DEV_ONLY_WORKFLOW_FILES` + `EXCLUDED_DEV_PATHS` so it can never reach the
+production repositories. README repository tree lists `.github/scripts/`, `sync_prod.yml`,
+`fleet_probe.yml`, `devvit/` and the gitignored caches; X fleet line 18 → 19 (round 111). Privacy /
+Terms / AGENTS Redlib fleet 25 → **28** members (`r.naa.gg`, `redlib.thepixora.com`, `redlib.r4fo.com`
+appended 2026-10-27 were missing from the policy lists; effective date 2026-11-06). Devvit docs: code
+0.0.10 is the live **Reddit 0.0.7**. The two Actions-sidebar entries `maintenance_review.yml` /
+`freedit_probe.yml` have no file in the tree (old branch runs, 2026-10-15); their runs must be deleted
+from the Actions UI to drop the entries.
+
+## Unreleased — Round 111: X RSS fleet re-rank — teapawt family leads, mizuki.st joins, meowing/miningtcup demoted (2026-11-06)
+
+`testing area/twitter_v3.py` (`RSS_INSTANCES` order only, 18 → 19), `tests/test_smoke.py` (`r111`),
+README/AGENTS fleet lines. Operator-directed: the seven `4cuck/teapawt` public instances (live on
+`status.d420.net`, scraping permitted) fill seats 1–7 (`nitter.cf`/`xitter.cf` untouched);
+`nitter.mizuki.st` new at seat 8 (TRIAL, a second domain in front of the meowing backend);
+`nitter.meowing.monster` / `nitter.miningtcup.me` demoted to 9–10 (GE run #4399: meowing 502/429 while
+teapawt answered), not deleted; tail unchanged. [`docs/history/ROUND_111.md`](history/ROUND_111.md).
+Game-Express hand-off (rotation #8 of `DEFAULT_NITTER`, same arrangement): full diff + apply steps in
+[News-Express PR #121](https://github.com/uesu/News-Express/pull/121#issuecomment-6672004449) (the owner opens the GE PR).
+New dev-only `.github/workflows/fleet_probe.yml` (manual, read-only; self-runs on a PR that edits it): probes
+`/<account>/rss` on each instance from the GitHub runners and posts the table on the PR — 2026-11-05 23:45 UTC:
+72/72 HTTP 200, 68/72 with entries (PomPom_HonkaiSR 0-entry edge responses on four teapawt domains), 100 % top-id parity.
+
 ## Unreleased — Round 110: Twitter link / app card artwork becomes the thumbnail (2026-11-05)
 
 `testing area/twitter_v3.py` (`is_card_image_url`, `split_card_thumbnail`, `thumbnail_section`;
@@ -8,12 +37,12 @@
 (`pbs.twimg.com/card_img/…`) into the media list and it rendered as a second gallery tile. With native
 media present the card artwork is now the thumbnail of a Section holding the header and opening text;
 the gallery keeps the tweet's own photos/videos. Card-only, photo-only and media-less tweets are
-byte-identical. [`docs/history/ROUND_110.md`](history/ROUND_110.md). Game-Express hand-off: [`docs/handoffs/GAME_EXPRESS_CARD_ARTWORK.md`](handoffs/GAME_EXPRESS_CARD_ARTWORK.md) + patch (`_fx_media` drops card artwork when the tweet has native media).
+byte-identical. [`docs/history/ROUND_110.md`](history/ROUND_110.md). Game-Express hand-off: `_fx_media` drops card artwork when the tweet has native media — merged as
+[Game-Express #146](https://github.com/uesu/Game-Express/pull/146).
 
 ## Unreleased — Game-Express hand-off: news header, multi-line article titles (2026-11-05)
 
-Docs only. [`docs/handoffs/GAME_EXPRESS_NEWS_TITLE.md`](handoffs/GAME_EXPRESS_NEWS_TITLE.md) +
-[`game-express-news-title.patch`](handoffs/game-express-news-title.patch): HoYoLAB 47327567 (HNA, GE run
+Docs only (hand-off merged as [Game-Express #146](https://github.com/uesu/Game-Express/pull/146)): HoYoLAB 47327567 (HNA, GE run
 #4297) carried a newline inside its subject, so the GE news header `## [title](url)` spanned two lines and
 Discord showed raw markdown instead of a link; GE `cards._md_link_text` now collapses whitespace runs to one
 space (render only, source title untouched). GE base `959705b1`, smoke 611/611. No News-Express engine
@@ -35,13 +64,12 @@ for a body without inline references are unchanged. [`docs/history/ROUND_109.md`
 
 ## Unreleased — Game-Express hand-off: feature 4 "Servers Live" card + sources (2026-11-04)
 
-Docs only. [`docs/handoffs/GAME_EXPRESS_SERVERS_LIVE.md`](handoffs/GAME_EXPRESS_SERVERS_LIVE.md)
-records the sources behind Game-Express feature 4's third card — the publisher completion notices
+Docs only (hand-off merged as [Game-Express #145](https://github.com/uesu/Game-Express/pull/145)); it
+recorded the sources behind Game-Express feature 4's third card — the publisher completion notices
 (HoYoLAB / Kuro / X) and the HoYoverse client maintenance gate `getGlobalApplicationMaintenance`
 as run by [seriaati/hoyo-update-notifier](https://github.com/seriaati/hoyo-update-notifier)
 ([hun.seria.moe](https://hun.seria.moe/)) and [yeci226/ZZZ](https://github.com/yeci226/ZZZ) —
-together with the complete tested patch
-[`game-express-servers-live.patch`](handoffs/game-express-servers-live.patch) (Game-Express base
+together with the complete tested patch (Game-Express base
 `f2c0cac4`; 13 new offline tests, smoke 610/610). No News-Express engine, card, cache, workflow or
 Devvit change.
 
@@ -216,8 +244,8 @@ Full record: [`docs/history/ROUND_102.md`](history/ROUND_102.md).
   relay webhook points elsewhere".
 - **Devvit relay 0.0.6:** poll `*/2` → `*/5` (owner's choice; 3 requests/min), per-poll send cap
   10 → 15 (per-minute ceiling unchanged), no record change. Uploads as Reddit **0.0.5**.
-- **Game-Express hand-off:** [`docs/handoffs/GAME_EXPRESS_INTAKE_READER.md`](handoffs/GAME_EXPRESS_INTAKE_READER.md)
-  + `git am`-able patch — same reader rules, same two settings, `RedditClient._gather_listing()`
+- **Game-Express hand-off:** merged as [Game-Express #141](https://github.com/uesu/Game-Express/pull/141)
+  (`git am`-able patch) — same reader rules, same two settings, `RedditClient._gather_listing()`
   relay-first with per-target fallback; verified against Game-Express `main` @ `3af83ff`
   (smoke 626/626, new suite 5/5, ruff, production-shape checkout).
 - **Docs audit:** every `#reddit-intake` / "every 2 minutes" / "Game-Express does not read it
