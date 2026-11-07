@@ -1,16 +1,24 @@
 # Changelog
 
-## Unreleased — Game-Express hand-off: WuWa `※ 4 Star Characters:` summary silent while empty (2026-11-07)
+## Unreleased — Game-Express hand-off: WuWa `※ 4 Star Characters:` summary silent while empty + WuWa wiki phase = banner date; dev-only `wiki_probe.yml` (2026-11-07)
 
-Docs only (hand-off delivered as the full diff on the News-Express PR; the owner opens the GE PR).
+Hand-off delivered as the full diff on the News-Express PR (the owner opens the GE PR). Two GE fixes:
 Live WW 3.8 (GE run #4527, 2026-11-06): the wiki knew both phase line-ups but no 4★ yet, and the
 schedule card read `※ 4 Star Characters: TBA` directly above two per-phase `- 4 Star Characters: TBA`
 lines. GE `cards.banners_block` now shows the WW summary only while its roster names a 4★ that no
 per-phase line shows yet (empty roster, explicitly empty roster and a roster already spelled out per
 phase all hide it; the pre-notice phase-2 leak and the "both phases in → hide" rule are unchanged, the
 golden WW 3.7 card is byte-identical). Render only — the next GE run edits the live card and its mirror
-in place. GE base `42bc7b0` (#147), smoke 614/614, pytest 699, ruff clean. No News-Express engine,
-card, cache, workflow or Devvit change.
+in place. **Second:** the WuWa wiki reader's phase rule ("dated page = phase 1, undated = phase 2")
+broke the moment phase 2 went live — the live `Version/3.7` page (runner probe) dates its phase-2
+pages since 2026-10-22, so all six banners read as phase 1 and the 4★ union (6) could never fill
+`phase1_4`; now the phase is the page's date (earliest = 1, next = 2, undated = after the last). GE
+base `42bc7b0` (#147), smoke 615/615, pytest 700, ruff clean. News-Express side: new dev-only
+`.github/workflows/wiki_probe.yml` (manual + self-runs on a PR that edits it; `DEV_ONLY_WORKFLOW_FILES`)
+clones Game-Express and runs its `gachawiki` reader against the live Fandom pages from the runners,
+posting debuts / banner lines with phases / pool fields / `build_lineup` per `game:version` as a PR
+comment — the same vantage-point rule as `fleet_probe.yml`. No News-Express engine, card, cache or Devvit
+change.
 
 ## Unreleased — Housekeeping: hand-off folder retired, docs re-synced with the live state (2026-11-06)
 

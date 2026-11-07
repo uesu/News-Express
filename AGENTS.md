@@ -224,7 +224,10 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    `meowing.monster` / `miningtcup.me` sit at 9–10. Runner evidence on demand:
    `.github/workflows/fleet_probe.yml` (dev-only, read-only, manual dispatch;
    self-runs on a PR that edits it) posts a per-instance × account table on
-   the PR. Round-76 ranking rule: **no instance that blocks GitHub Actions /
+   the PR. Its sibling `wiki_probe.yml` does the same for the Game-Express
+   banner-wiki reader (clones GE, reads the live Fandom pages per
+   `game:version`, posts what `build_lineup` sees) — the evidence to attach to
+   any GE banner hand-off. Round-76 ranking rule: **no instance that blocks GitHub Actions /
    Azure datacenter IPs (or datacenter IPs generally) may sit above one that
    doesn't.** A clean feed body read off-runner is a trial ticket, never
    proof — the verdict comes from the GitHub Actions runners (Game-Express,
