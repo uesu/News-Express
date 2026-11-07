@@ -30,23 +30,23 @@ on:
       targets:
         description: 'wiki: comma-separated game:version pairs read in full'
         required: false
-        default: 'wuwa:3.8,wuwa:3.7,genshin:7.2,starrail:4.7,zzz:3.3'
+        default: 'wuwa:3.8,wuwa:3.5,wuwa:3.4,starrail:4.4,genshin:7.0'
       history:
         description: 'wiki: comma-separated game:version pairs, banner section lines only'
         required: false
-        default: 'wuwa:3.0,wuwa:3.1,wuwa:3.2,wuwa:3.3,wuwa:3.4,wuwa:3.5,wuwa:3.6,genshin:6.0,genshin:6.1,genshin:7.0,genshin:7.1,starrail:4.3,starrail:4.4,starrail:4.5,starrail:4.6,zzz:3.0,zzz:3.1,zzz:3.2'
+        default: 'wuwa:3.7,wuwa:3.6,genshin:7.2,starrail:4.7,zzz:3.3'
       official:
         description: 'official: comma-separated game:version pairs for banner_search.find'
         required: false
-        default: 'wuwa:3.8,wuwa:3.7,wuwa:3.6,wuwa:3.5,genshin:7.2,genshin:7.1,starrail:4.7,starrail:4.6,zzz:3.3,zzz:3.2'
+        default: 'wuwa:3.7,wuwa:3.4,starrail:4.4'
       kuro_ids:
         description: 'official: comma-separated Kuro article ids to read in full'
         required: false
-        default: '5689'
+        default: '5689,5065,5668,5039,5047,4852'
       kuro_title_regex:
         description: 'official: regex over every Kuro menu title (case-insensitive)'
         required: false
-        default: 'reverb|convene'
+        default: 'reverb|collab'
       ge_ref:
         description: 'Game-Express ref to run the readers from'
         required: false
@@ -60,11 +60,11 @@ permissions:
 
 env:
   # On pull_request `inputs` is empty, so the defaults are repeated here.
-  PROBE_TARGETS: ${{ inputs.targets || 'wuwa:3.8,wuwa:3.7,genshin:7.2,starrail:4.7,zzz:3.3' }}
-  PROBE_HISTORY: ${{ inputs.history || 'wuwa:3.0,wuwa:3.1,wuwa:3.2,wuwa:3.3,wuwa:3.4,wuwa:3.5,wuwa:3.6,genshin:6.0,genshin:6.1,genshin:7.0,genshin:7.1,starrail:4.3,starrail:4.4,starrail:4.5,starrail:4.6,zzz:3.0,zzz:3.1,zzz:3.2' }}
-  PROBE_OFFICIAL: ${{ inputs.official || 'wuwa:3.8,wuwa:3.7,wuwa:3.6,wuwa:3.5,genshin:7.2,genshin:7.1,starrail:4.7,starrail:4.6,zzz:3.3,zzz:3.2' }}
-  PROBE_KURO_IDS: ${{ inputs.kuro_ids || '5689' }}
-  PROBE_KURO_TITLE_RE: ${{ inputs.kuro_title_regex || 'reverb|convene' }}
+  PROBE_TARGETS: ${{ inputs.targets || 'wuwa:3.8,wuwa:3.5,wuwa:3.4,starrail:4.4,genshin:7.0' }}
+  PROBE_HISTORY: ${{ inputs.history || 'wuwa:3.7,wuwa:3.6,genshin:7.2,starrail:4.7,zzz:3.3' }}
+  PROBE_OFFICIAL: ${{ inputs.official || 'wuwa:3.7,wuwa:3.4,starrail:4.4' }}
+  PROBE_KURO_IDS: ${{ inputs.kuro_ids || '5689,5065,5668,5039,5047,4852' }}
+  PROBE_KURO_TITLE_RE: ${{ inputs.kuro_title_regex || 'reverb|collab' }}
   GE_REF: ${{ inputs.ge_ref || 'main' }}
 
 jobs:
@@ -298,7 +298,8 @@ jobs:
                           title = (detail or {}).get("articleTitle") or (a or {}).get("articleTitle") or ""
                           ts = parse_kuro_time((detail or {}).get("createTime") or (a or {}).get("createTime") or "") or 0
                           text, links, imgs = html_to_text(body)
-                          out += [f"#### Kuro article {aid}: {title}", ""]
+                          out += [f"#### Kuro article {aid}: {title}", "",
+                                  "- detail JSON fields: " + ", ".join(f"`{k}`={len(str(v))}ch" for k, v in sorted((detail or {}).items())), ""]
                           it = Item(source="kuro", game="wuwa", id=str(aid), url=kuro.LINK.format(aid), title=title,
                                     text=text, published_ts=ts, images=imgs, links=links)
                           if wuwa is not None:
