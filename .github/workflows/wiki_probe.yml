@@ -14,6 +14,14 @@ name: Banner source probe (manual, read-only)
 #               notices: HoYoLAB search / Kuro article menu) + `schedule.extract_banner`
 #               for every `game:version`, plus any Kuro article ids given, plus
 #               every Kuro menu title matching a regex (the Reverb/Convene survey).
+#   features  — feature 3's character-reveal classifier (`reveal_ping`) on the
+#               HoYoLAB articles given + every official article of the last N
+#               hours, and feature 4's inputs (HoYoPlay branches / backgrounds /
+#               maintenance gate, Kuro launcher index + background + website
+#               video, the prod schedule + maintenance state) run through
+#               `maintenance.resolve_version_plans` / `resolve_launch_media` /
+#               `cards.maintenance_payload` for the games given — a dry run of
+#               the next Pre-Load / Maintenance Started cards, nothing posted.
 #
 # Dev-only: in sync_prod.py's DEV_ONLY_WORKFLOW_FILES, so it never reaches the
 # production repos. No secrets, no webhooks, no cache writes, no posting. It is
@@ -47,6 +55,18 @@ on:
         description: 'official: regex over every Kuro menu title (case-insensitive)'
         required: false
         default: 'chronicled|collab'
+      reveal_ids:
+        description: 'features: comma-separated game:hoyolab_article_id pairs for the reveal classifier'
+        required: false
+        default: 'genshin:47339559,genshin:47351623'
+      reveal_hours:
+        description: 'features: classify every official article of the last N hours'
+        required: false
+        default: '72'
+      maint_games:
+        description: 'features: comma-separated game keys for the feature-4 dry run'
+        required: false
+        default: 'starrail,wuwa,hna'
       ge_ref:
         description: 'Game-Express ref to run the readers from'
         required: false
@@ -66,6 +86,9 @@ env:
   PROBE_KURO_IDS: ${{ inputs.kuro_ids || '5065' }}
   PROBE_KURO_TITLE_RE: ${{ inputs.kuro_title_regex || 'chronicled|collab' }}
   PROBE_HOYOLAB_SEARCH: ${{ inputs.hoyolab_search || 'genshin:Chronicled Wish,starrail:Collaboration Warp,zzz:Signal Search Rescreening' }}
+  PROBE_REVEAL_IDS: ${{ inputs.reveal_ids || 'genshin:47339559,genshin:47351623' }}
+  PROBE_REVEAL_HOURS: ${{ inputs.reveal_hours || '72' }}
+  PROBE_MAINT_GAMES: ${{ inputs.maint_games || 'starrail,wuwa,hna' }}
   GE_REF: ${{ inputs.ge_ref || 'main' }}
 
 jobs:
@@ -370,4 +393,331 @@ jobs:
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -F body=@/tmp/official_probe.md >/dev/null
           else
             gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -F body=@/tmp/official_probe.md >/dev/null
+          fi
+
+  features:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Fetch the Game-Express readers (public, read-only)
+        run: |
+          git clone -q --depth 1 --branch "$GE_REF" https://github.com/uesu/Game-Express /tmp/ge
+          git -C /tmp/ge log -1 --format='Game-Express %h %s' | tee /tmp/ge_head.txt
+          python3 -m pip install -q -r /tmp/ge/requirements.txt
+
+      - name: Dry-run feature 3's reveal classifier and feature 4's plans/media (nothing is written or posted)
+        run: |
+          python3 - <<'PY'
+          import asyncio, copy, json, os, re, sys, time, traceback, urllib.request
+          from types import SimpleNamespace
+          sys.path.insert(0, "/tmp/ge")
+          import aiohttp
+          from pathlib import Path
+          from gamexpress import cards, maintenance, reveal_ping, schedule
+          from gamexpress.config import load_games
+          from gamexpress.http import Fetcher, Probe
+          from gamexpress.sources import hoyolab, kuro, launcher
+          from gamexpress.textutil import find_version
+          games = load_games(Path("/tmp/ge/config/games.json"))
+          NOW = int(time.time())
+          out = ["## Feature 3 / 4 probe (from the GitHub Actions runners)", "",
+                 f"{open('/tmp/ge_head.txt').read().strip()} · {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(NOW))}", ""]
+          def when(ts):
+              if not ts: return "—"
+              ts = int(ts)
+              return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(ts)) + " / " + time.strftime("%m-%d %H:%M UTC+8", time.gmtime(ts + 8 * 3600))
+          def payload_text(p):
+              found = []
+              def walk(x):
+                  if isinstance(x, dict):
+                      if isinstance(x.get("content"), str): found.append(x["content"])
+                      for v in x.values(): walk(v)
+                  elif isinstance(x, list):
+                      for v in x: walk(v)
+              walk(p); return found
+          async def head(session, url):
+              try:
+                  async with session.head(url, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=20)) as r:
+                      return r.status, r.headers.get("Content-Length"), r.headers.get("Content-Type"), r.headers.get("ETag") or r.headers.get("Last-Modified")
+              except Exception as e:
+                  return f"{type(e).__name__}", None, None, None
+          async def section_feature3(f):
+              global out
+              out += ["### Feature 3 — character reveal classifier (`reveal_ping.classify_character_reveal`)", ""]
+              ids = [p.strip() for p in os.environ.get("PROBE_REVEAL_IDS", "").split(",") if ":" in p]
+              for pair in ids:
+                  gk, aid = pair.split(":", 1)
+                  g = games.get(gk)
+                  if g is None or not g.hoyolab_gid:
+                      out.append(f"- `{pair}`: no HoYoLAB game"); continue
+                  try:
+                      full = await hoyolab._full_post(f, g.hoyolab_gid, aid)
+                      post = (full or {}).get("post") or {}
+                      row = {"id": aid, "ts": int(post.get("created_at") or 0), "title": post.get("subject") or ""}
+                      it = await hoyolab.news_article(f, g, row)
+                  except Exception as e:
+                      out.append(f"- `{pair}`: fetch failed {type(e).__name__}: {e}"); continue
+                  if it is None:
+                      out.append(f"- `{pair}`: `news_article` → None (post {json.dumps(post)[:200]})"); continue
+                  body, n_img, has_video = reveal_ping._article_body_and_counts(it)
+                  ub = reveal_ping.unmark_lines(body)
+                  kvs = reveal_ping._DIAMOND_KV_RE.findall(ub)
+                  m = reveal_ping.classify_character_reveal(g.key, it)
+                  excl = reveal_ping._TITLE_EXCLUDE_RE.search(it.title or "")
+                  out.append(f"- **{it.title}** — {hoyolab.ARTICLE_URL.format(aid)} · published {when(it.published_ts)} · author `{it.author}` official={it.official}")
+                  out.append(f"  - images={n_img} video={has_video} title_excluded={excl.group(0) if excl else None} body_chars={len(body)} diamond_kvs={kvs[:8]}")
+                  out.append(f"  - **classify → {m!r}**")
+                  if m:
+                      ok, why = reveal_ping.evaluate_reveal_ping_decision({}, m, published_ts=int(it.published_ts or 0))
+                      out.append(f"  - `evaluate_reveal_ping_decision` on an empty record → {ok} ({why}); canonical key `{m.canonical_key}`")
+                  out += ["", "  <details><summary>body (marker-free, first 900 chars)</summary>", "", "  ```"]
+                  out += ["  " + ln for ln in ub[:900].split("\n")]
+                  out += ["  ```", "", "  </details>", ""]
+              # survey: every news article of the last N hours, all news games
+              hours = int(os.environ.get("PROBE_REVEAL_HOURS", "72") or 72)
+              out += [f"#### Survey: every official article of the last {hours} h, classified", ""]
+              out += ["| game | id | published | title | classify |", "|---|---|---|---|---|"]
+              for gk in ("genshin", "starrail", "zzz", "hna", "wuwa"):
+                  g = games.get(gk)
+                  if g is None: continue
+                  src = hoyolab if g.hoyolab_gid else (kuro if g.kuro_news else None)
+                  if src is None: continue
+                  try:
+                      rows = await src.discover_news(f, g, NOW - hours * 3600)
+                  except Exception as e:
+                      out.append(f"| {gk} | — | — | discovery failed {type(e).__name__} | — |"); continue
+                  if rows is None:
+                      out.append(f"| {gk} | — | — | discovery unavailable | — |"); continue
+                  for row in sorted(rows, key=lambda r: -r["ts"])[:14]:
+                      try:
+                          it = await src.news_article(f, g, row)
+                          m = reveal_ping.classify_character_reveal(g.key, it) if it else None
+                          extra = ""
+                          if it:
+                              _, n_img, has_video = reveal_ping._article_body_and_counts(it)
+                              extra = f" (img {n_img}{', video' if has_video else ''})"
+                          res = (f"**{m.character}** `{m.rule}`" if m else "—") + extra
+                      except Exception as e:
+                          res = f"error {type(e).__name__}"
+                      title = str(row.get("title") or "").replace("|", "\\|")[:70]
+                      out.append(f"| {gk} | `{row['id']}` | {time.strftime('%m-%d %H:%M', time.gmtime(row['ts']))} | {title} | {res} |")
+              out.append("")
+          def load_prod_state():
+              for url in ("https://raw.githubusercontent.com/uesu/8mqzv4k2n7c/main/state/state.json",):
+                  try:
+                      with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "probe"}), timeout=20) as r:
+                          return json.loads(r.read().decode("utf-8")), url
+                  except Exception as e:
+                      note = f"{type(e).__name__}"
+              return json.load(open("/tmp/ge/state/state.json", encoding="utf-8")), f"/tmp/ge/state/state.json (prod state unreachable: {note})"
+          async def section_feature4(f, session):
+              global out
+              out += ["### Feature 4 — pre-load / maintenance / servers live", ""]
+              state, state_src = load_prod_state()
+              out.append(f"schedule + maintenance state read from `{state_src}`")
+              out.append("")
+              # --- launchers ---
+              hyp, binfo, kr, kmedia = {}, {}, {}, {}
+              try:
+                  hyp = await launcher.hoyoplay_versions(f)
+              except Exception as e:
+                  out.append(f"- HoYoPlay getGameBranches: **{type(e).__name__}: {e}**")
+              try:
+                  binfo = await launcher.hoyoplay_basic_info(f)
+              except Exception as e:
+                  out.append(f"- HoYoPlay getAllGameBasicInfo: **{type(e).__name__}: {e}**")
+              games_list = []
+              try:
+                  gj = await f.get_json("https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getGames?launcher_id=VYTpXlbWo8&language=en-us", source="hoyoplay-games", retries=1)
+                  for gi in (((gj or {}).get("data") or {}).get("games") or []):
+                      games_list.append((gi.get("id"), gi.get("biz"), ((gi.get("display") or {}).get("name"))))
+              except Exception as e:
+                  out.append(f"- HoYoPlay getGames: {type(e).__name__}: {e}")
+              out += ["#### HoYoPlay (global launcher `VYTpXlbWo8`)", ""]
+              out.append("- `getGames`: " + ", ".join(f"`{i}` {b} **{n}**" for i, b, n in games_list))
+              out.append("- `getGameBranches` → " + json.dumps({k: {kk: vv for kk, vv in v.items() if kk in ('live', 'pre', 'live_tag', 'pre_tag')} for k, v in hyp.items()}))
+              for gk in ("starrail", "genshin", "zzz", "hna"):
+                  g = games[gk]; gid = str(g.launcher.get("game_id") or "")
+                  hna_id = next((i for i, b, n in games_list if n and "nexus" in n.lower()), None)
+                  if gk == "hna" and not gid:
+                      out.append(f"- **HNA**: `config/games.json` has `launcher: {{}}` (no HoYoPlay `game_id`), `cadence: null`, HoYoLAB gid {g.hoyolab_gid} — getGames lists it as `{hna_id}`" if hna_id else
+                                 f"- **HNA**: `config/games.json` has `launcher: {{}}` (no HoYoPlay `game_id`), `cadence: null`, HoYoLAB gid {g.hoyolab_gid} — **not listed by getGames** (not on the global HoYoPlay yet)")
+                      gid = hna_id or ""
+                      if not gid: continue
+                  entries = binfo.get(gid) or []
+                  out.append(f"- **{g.short}** `{gid}` basic_info backgrounds: {len(entries)}")
+                  for e in entries[:8]:
+                      lv = [find_version(u) for u in (e.get('links') or []) if find_version(u)]
+                      out.append(f"  - id `{e.get('id')}` type {e.get('type')} link-versions {lv} video `{e.get('video') or '—'}` (upload {when(maintenance._asset_upload_ts(e.get('video') or ''))}) art `{(e.get('background') or '—')[-60:]}` (upload {when(maintenance._asset_upload_ts(e.get('background') or ''))})")
+                  if gid in launcher.MAINT_STATUS:
+                      try:
+                          tag = str((hyp.get(gid) or {}).get("live_tag") or (hyp.get(gid) or {}).get("live") or "")
+                          st = await launcher.hoyoplay_maintenance_status(f, gid, tag)
+                          out.append(f"  - maintenance gate `getGlobalApplicationMaintenance` → {st} (True = in maintenance; None = unreadable)")
+                      except Exception as e:
+                          out.append(f"  - maintenance gate: {type(e).__name__}: {e}")
+                  elif gk == "hna":
+                      out.append("  - no `MAINT_STATUS` gateway configured for HNA (Servers Live would rely on the completion notice only)")
+              out.append("")
+              # --- Kuro ---
+              out += ["#### Kuro launcher + website (Wuthering Waves)", ""]
+              try:
+                  raw_index = await f.get_json(kuro.LAUNCHER_INDEX, source="kuro-launcher", retries=1)
+                  kr = kuro.parse_launcher_index(raw_index) if raw_index else {}
+                  out.append(f"- `index.json` → live `{kr.get('live')}` pre `{kr.get('pre')}` pre_media={json.dumps(kr.get('pre_media'))} live_media={json.dumps(kr.get('live_media'))}")
+                  def urls_in(x, acc):
+                      if isinstance(x, dict):
+                          for k, v in x.items():
+                              if isinstance(v, str) and re.search(r"\.(mp4|webm|webp|png|jpg)(\?|$)", v, re.I): acc.append((k, v))
+                              else: urls_in(v, acc)
+                      elif isinstance(x, list):
+                          for v in x: urls_in(v, acc)
+                  acc = []; urls_in(raw_index, acc)
+                  out.append(f"  - top-level keys {list((raw_index or {}).keys())[:20]}; media-looking values: " + (", ".join(f"`{k}`={v[:110]}" for k, v in acc[:10]) or "none"))
+              except Exception as e:
+                  out.append(f"- Kuro index.json: **{type(e).__name__}: {e}**")
+              try:
+                  cfg = await f.get_json(kuro.LAUNCHER_CONFIG, source="kuro-launcher-bg", retries=1)
+                  func = (cfg or {}).get("functionCode") if isinstance(cfg, dict) else {}
+                  bg_hash = str((func or {}).get("background") or "")
+                  bg = await f.get_json(kuro.LAUNCHER_BACKGROUND.format(bg_hash), source="kuro-launcher-bg", retries=1) if bg_hash else None
+                  kmedia = kuro.parse_launcher_background(bg, bg_hash=bg_hash) if bg else {}
+                  out.append(f"- launcher background: hash `{bg_hash}` → {json.dumps({k: v for k, v in (bg or {}).items() if k in ('backgroundFile', 'firstFrameImage', 'slogan', 'backgroundFileType', 'functionSwitch')})}")
+                  if kmedia.get("video"):
+                      st = await head(session, kmedia["video"])
+                      out.append(f"  - video HEAD → {st} · auth_key expiry {when(maintenance._auth_key_expiry(kmedia['video']))}")
+                  if kmedia.get("artwork"):
+                      st = await head(session, kmedia["artwork"]); out.append(f"  - artwork HEAD → {st}")
+              except Exception as e:
+                  out.append(f"- Kuro launcher background: **{type(e).__name__}: {e}**")
+              site_videos = []
+              try:
+                  async with session.get("https://wutheringwaves.kurogames.com/en/", headers={"User-Agent": "Mozilla/5.0"}, timeout=aiohttp.ClientTimeout(total=25)) as r:
+                      html = await r.text()
+                  found = re.findall(r"https?://[^\s\"'<>]+?\.(?:mp4|webm|m3u8)[^\s\"'<>]*", html)
+                  site_videos = list(dict.fromkeys(found))
+                  out.append(f"- website `wutheringwaves.kurogames.com/en/` HTTP {r.status}, {len(html)} chars; video URLs in HTML: {len(site_videos)}")
+                  for u in site_videos[:6]:
+                      st = await head(session, u)
+                      out.append(f"  - `{u[:140]}` HEAD → {st} · auth_key expiry {when(maintenance._auth_key_expiry(u))}")
+                  if not site_videos:
+                      scripts = re.findall(r"<script[^>]+src=\"([^\"]+\.js[^\"]*)\"", html)
+                      out.append(f"  - no video URL in the HTML (SPA?); script bundles: {scripts[:5]}")
+                      for s in scripts[:3]:
+                          su = s if s.startswith("http") else "https://wutheringwaves.kurogames.com" + (s if s.startswith("/") else "/" + s)
+                          try:
+                              async with session.get(su, timeout=aiohttp.ClientTimeout(total=25)) as rr:
+                                  js = await rr.text()
+                              hits = list(dict.fromkeys(re.findall(r"[^\s\"'`]*(?:bg-video|website-preface)[^\s\"'`]*", js)))
+                              if hits: out.append(f"  - `{su[-60:]}` mentions: {hits[:4]}")
+                          except Exception as e:
+                              out.append(f"  - bundle {su[-50:]}: {type(e).__name__}")
+              except Exception as e:
+                  out.append(f"- website: **{type(e).__name__}: {e}**")
+              out.append("")
+              # --- plans + media per game ---
+              out += ["#### Timing plans (`maintenance.resolve_version_plans`) and launch media (`resolve_launch_media`)", ""]
+              want_games = [p.strip() for p in os.environ.get("PROBE_MAINT_GAMES", "starrail,wuwa,hna").split(",") if p.strip()]
+              for gk in want_games:
+                  g = games.get(gk)
+                  if g is None: continue
+                  sched = (state.get("schedule") or {}).get(gk) or {}
+                  mrec = (state.get("maintenance") or {}).get(gk) or {}
+                  mvers = copy.deepcopy(mrec.get("versions") or {})
+                  vinfo = {}
+                  if g.launcher.get("type") == "hoyoplay":
+                      vinfo = hyp.get(str(g.launcher.get("game_id"))) or {}
+                  elif g.launcher.get("type") == "kuro":
+                      vinfo = kr
+                  probe = Probe(f)
+                  try:
+                      parts = await asyncio.gather(hoyolab.fetch_items(probe, g, schedule.wants(g), NOW - 14 * 86400),
+                                                   kuro.fetch_items(probe, g, schedule.wants(g), NOW - 14 * 86400))
+                      items = [it for part in parts for it in part]
+                  except Exception as e:
+                      items = []; out.append(f"- {g.short}: item collection failed {type(e).__name__}: {e}")
+                  out.append(f"- **{g.short}** — launcher {vinfo.get('live')!r}/{vinfo.get('pre')!r}; {len(items)} official items (14 d); prod maintenance record: {'present, seeded_at ' + str(mrec.get('seeded_at')) if mrec else '**none (game not in MAINTENANCE_GAMES)**'}; schedule versions {list(sched.keys())}")
+                  for it in items:
+                      k = schedule.classify(g, it)
+                      if k in ("maintenance", "preinstall", "program", "banner", "completion"):
+                          ex = schedule.extract(g, it)
+                          fields = {kk: (when(vv) if kk.endswith('_ts') and isinstance(vv, int) else vv) for kk, vv in ((ex.fields if ex else {}) or {}).items() if kk in ('preinstall_ts', 'maint_start_ts', 'maint_end_ts', 'maint_completed_ts', 'maint_postponed')}
+                          out.append(f"  - {k}: **{(it.title or '')[:80]}** `{it.source}/{it.id}` {time.strftime('%m-%d %H:%M', time.gmtime(it.published_ts or 0))} → version {ex.version if ex else None} {fields}")
+                  try:
+                      plans = maintenance.resolve_version_plans(g, sched, items, vinfo, {}, NOW, maintenance_versions=mvers)
+                  except Exception:
+                      out += ["  - resolve_version_plans **crashed**", "```", traceback.format_exc()[-1500:], "```"]; continue
+                  for ver, p in sorted(plans.items(), key=lambda kv: kv[0]):
+                      out.append(f"  - plan **{ver}**: pre-load {when(p.get('preinstall_ts'))} [{p.get('preinstall_provenance')}{' est:' + p.get('preinstall_source') if p.get('preinstall_estimated') else ''}] · maintenance {when(p.get('maint_start_ts'))} → {when(p.get('maint_end_ts'))} [{p.get('maint_provenance')}{' est:' + p.get('maint_source') if p.get('maint_estimated') else ''}] · live_ts {when(p.get('live_ts'))} · notice {p.get('timing_notice')} · images {len(p.get('schedule_images') or [])}")
+                      st = mvers.get(ver) or {}
+                      if st:
+                          out.append(f"    - prod state: " + ", ".join(f"{k}={ (v.get('status') if isinstance(v, dict) else v) }" for k, v in st.items() if k in ('preload', 'maintenance', 'live', 'observed_preinstall_ts')))
+                  # media dry run for the next version (the first plan whose maintenance start is in the future or within 24h)
+                  upcoming = [v for v, p in plans.items() if p.get("maint_start_ts") and p["maint_start_ts"] > NOW - 86400]
+                  for ver in sorted(upcoming)[:2]:
+                      p = plans[ver]
+                      for label, now_sim, vinfo_sim in (("now", NOW, dict(vinfo)),
+                                                        ("at pre-load (launcher pre = version)", int(p.get("preinstall_ts") or NOW), {**vinfo, "pre": ver}),
+                                                        ("at maintenance start (launcher live still previous)", int(p.get("maint_start_ts") or NOW) + 60, {**vinfo, "pre": ver}),
+                                                        ("after servers live (launcher live = version)", int(p.get("maint_start_ts") or NOW) + 6 * 3600, {**vinfo, "live": ver, "pre": None})):
+                          ctx = SimpleNamespace(now=now_sim, fetcher=f, versions={gk: vinfo_sim}, x=None, games=list(games.values()))
+                          vs_copy = copy.deepcopy(mvers)
+                          vstate = {}
+                          try:
+                              tier, url = await maintenance.resolve_launch_media(ctx, g, ver, p, vstate, basic_info=binfo, program_pins=maintenance._program_pins(),
+                                                                                 kuro_media=kmedia, versions_state=vs_copy, verified_cache={})
+                              seen_note = {v: s.get("seen_media") for v, s in vs_copy.items() if isinstance(s, dict) and s.get("seen_media") and s.get("seen_media") != (mvers.get(v) or {}).get("seen_media")}
+                              out.append(f"  - media for **{ver}** ({label}): **tier {tier}** `{(url or '—')[:150]}`" + (f" · seen_media written: {json.dumps(seen_note)[:300]}" if seen_note else ""))
+                          except Exception as e:
+                              out.append(f"  - media for **{ver}** ({label}): **crashed** {type(e).__name__}: {e}")
+                      try:
+                          for kind in ("preload", "maintenance"):
+                              ts0 = p.get("preinstall_ts") if kind == "preload" else p.get("maint_start_ts")
+                              if not ts0: continue
+                              pl = cards.maintenance_payload(g, ver, kind, start_ts=int(ts0), end_ts=int(p["maint_end_ts"]) if kind == "maintenance" and p.get("maint_end_ts") else None,
+                                                             ping=None, media_url=None, estimated=bool(p.get("preinstall_estimated") if kind == "preload" else p.get("maint_estimated")),
+                                                             estimate_source=p.get("preinstall_source") if kind == "preload" else p.get("maint_source"), observed=bool(p.get("preinstall_observed")))
+                              out.append(f"  - card `{kind}` text: " + " ⏎ ".join(t.replace("\n", " ⏎ ") for t in payload_text(pl))[:400])
+                      except Exception as e:
+                          out.append(f"  - maintenance_payload crashed: {type(e).__name__}: {e}")
+                  out.append("")
+              out += ["", f"sources: {f.summary()}"]
+          async def main():
+              global out
+              async with aiohttp.ClientSession() as session:
+                  f = Fetcher(session, timeout=20)
+                  for fn in (lambda: section_feature3(f), lambda: section_feature4(f, session)):
+                      try:
+                          await fn()
+                      except Exception:
+                          out += ["", "**section crashed**", "```", traceback.format_exc(), "```"]
+          try:
+              asyncio.run(main())
+          except Exception:
+              out += ["", "**probe crashed**", "```", traceback.format_exc(), "```"]
+          text = "\n".join(out)
+          if len(text) > 64000:
+              text = text[:63800] + "\n\n_… truncated to fit the comment limit_"
+          print(text)
+          with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null"), "a", encoding="utf-8") as fh:
+              fh.write(text + "\n")
+          with open("/tmp/features_probe.md", "w", encoding="utf-8") as fh:
+              fh.write("<!-- features-probe -->\n" + text + "\n")
+          PY
+
+      - name: Leave the report on the pull request (pull_request runs only)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+            -q '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- features-probe -->")))] | last | .id // empty')
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -F body=@/tmp/features_probe.md >/dev/null
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -F body=@/tmp/features_probe.md >/dev/null
           fi
