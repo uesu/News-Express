@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased — Game-Express hand-off: the Kuro launcher background belongs to the version it appeared for; feature 3 / 4 probe round (2026-11-08)
+
+`wiki_probe.yml` gained the `features` job (inputs `reveal_ids`, `reveal_hours`, `maint_games`): it
+classifies named HoYoLAB/Kuro articles with GE's reveal classifier, surveys every official article of
+the last 72 h, reads HoYoPlay `getGames` / `getGameBranches` / `getAllGameBasicInfo` / the maintenance
+gate and Kuro's `index.json` / launcher config / `background/<hash>/en.json` (with CDN headers) / the
+website, then dry-runs `resolve_version_plans` + `resolve_launch_media` at four simulated stages, once
+stateless and once with the state carried forward. Findings (PR #124 comment): the two 7.3 reveals
+classify as intended (`47339559` → Anastasya, `47351623` → Danica, both `diamond_dossier`, both ping
+on an empty record; no false positive in 32 surveyed posts; Kuro `5710` → Lily); HSR 4.7 runs on the
+cadence estimate (pre-install 11-09 14:00, maintenance 11-11 06:00–11:00 UTC+8) with tier-3 program
+art until HoYoPlay uploads the 4.7 assets; WW 3.8 is official from Kuro `5705` (pre-install 11-10
+10:00, maintenance 11-12 04:00–11:00 UTC+8). The WW defect: Kuro's launcher background is one shared
+slot without version or date (its hash rotates while the URLs stay; `Last-Modified` of the current
+`fbp4pj51dfnw2uyyzt.mp4` is 2026-09-30 04:37 UTC — 3.7's launch day), and GE read it as the live
+version's, so a 3.8 video swapped in before `live` flips would have been filed under 3.7 and barred
+from 3.8 (the carried-state simulation stayed at tier 3 after live). Hand-off patch on GE `502840d`:
+attribution by observation (`kuro_background` memo — first seen with no pre-download → live version;
+changed → launcher `pre` / the version whose −11 d…+7 d launch window holds now / live) plus the CDN
+`Last-Modified` as the upload date for undated paths (`Fetcher.media_dates`, same preflight, no
+extra request); the background is polled only inside a launch window, idle polls stay at zero
+requests. The 3.8 site `bg-video.mp4?auth_key=…` is not in the HTML or the bundles — not a usable
+source. HNA: HoYoPlay lists it as `yneO4yGc4x` (no branch yet, launch Spring 2027, Final Closed Beta
+11-25); the id went into the `games.json` note for launch day rather than the config, since a wired
+id without a branch adds a `getGameBranches` re-fetch to every run. GE smoke 618/618, pytest 703, ruff
+clean. No News-Express engine, card, cache or Devvit change.
+
 ## Unreleased — Game-Express hand-off: a passing "Chronicled Wish" mention never makes a phase notice special (2026-11-07)
 
 Review finding on GE PR #148 (the Game-Express side): `schedule.SPECIAL_NOTICE` was searched over
