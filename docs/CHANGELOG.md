@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased — Game-Express hand-off: banners outside the phases (`※ Starpath Reverbs II: …`, Chronicled Wish, Collaboration); `wiki_probe.yml` round 3 (2026-11-07)
+
+Hand-off delivered as three patches on the News-Express PR, on top of GE #148 + its fixup. Live WW 3.8
+listed `Starpath Reverbs II` (Camellya, Roccia, Phoebe, Brant — a Reverb Convene) as the second half
+and never saw the real one (Yangyang: Xuanling, Suisui, Hiyuki — undated series pages); live GI 7.2 had
+the literal words "Chronicled Wish" as a third phase-2 name. The runner probes (24 wiki version pages
+across the four games, Kuro's 712-article menu, HoYoLAB keyword search) showed the pattern everywhere:
+GI `(Chronicled Wish)` + `*** Characters:` sub-line, HSR `- Collaboration` tags, WuWa Reverb/Collab
+convenes, ZZZ `* Starting in the second half:`, Kuro notice titles with `Ⅰ`/`Ⅱ` (U+2160) that the title
+search never matched. GE now reads the kind (bracket, trailing tag, infobox `type`), keeps such banners
+out of the phases and renders one `※ <label>: names` line per banner above `✦ First Half/Phase`
+(`banners["special"]`, wiki-owned at priority 6, official Reverb/Chronicled notices at 50, overrides
+at 100); `banner_search.canon` folds NFKC. Both live cards self-heal on the next wiki read. GE smoke
+617/617, pytest 702, ruff clean. News-Express side: `wiki_probe.yml` gained the `official` job (Kuro
+menu + HoYoLAB search, `PROBE_KURO_TITLE_RE` / `PROBE_HOYOLAB_SEARCH`), older version pages, and a
+crash guard that puts the traceback into the PR comment (Actions logs are unreachable from here). No
+News-Express engine, card, cache or Devvit change.
+
+## Unreleased — Game-Express hand-off: WuWa `※ 4 Star Characters:` summary silent while empty + WuWa wiki phase = banner date; dev-only `wiki_probe.yml` (2026-11-07)
+
+Hand-off delivered as the full diff on the News-Express PR (the owner opens the GE PR). Two GE fixes:
+Live WW 3.8 (GE run #4527, 2026-11-06): the wiki knew both phase line-ups but no 4★ yet, and the
+schedule card read `※ 4 Star Characters: TBA` directly above two per-phase `- 4 Star Characters: TBA`
+lines. GE `cards.banners_block` now shows the WW summary only while its roster names a 4★ that no
+per-phase line shows yet (empty roster, explicitly empty roster and a roster already spelled out per
+phase all hide it; the pre-notice phase-2 leak and the "both phases in → hide" rule are unchanged, the
+golden WW 3.7 card is byte-identical). Render only — the next GE run edits the live card and its mirror
+in place. **Second:** the WuWa wiki reader's phase rule ("dated page = phase 1, undated = phase 2")
+broke the moment phase 2 went live — the live `Version/3.7` page (runner probe) dates its phase-2
+pages since 2026-10-22, so all six banners read as phase 1 and the 4★ union (6) could never fill
+`phase1_4`; now the phase is the page's date (earliest = 1, next = 2, undated = after the last). GE
+base `42bc7b0` (#147), smoke 615/615, pytest 700, ruff clean. News-Express side: new dev-only
+`.github/workflows/wiki_probe.yml` (manual + self-runs on a PR that edits it; `DEV_ONLY_WORKFLOW_FILES`)
+clones Game-Express and runs its `gachawiki` reader against the live Fandom pages from the runners,
+posting debuts / banner lines with phases / pool fields / `build_lineup` per `game:version` as a PR
+comment — the same vantage-point rule as `fleet_probe.yml`. No News-Express engine, card, cache or Devvit
+change.
+
 ## Unreleased — Housekeeping: hand-off folder retired, docs re-synced with the live state (2026-11-06)
 
 Docs + `.github/scripts/sync_prod.py` (dev-only list only); no engine, card, cache or workflow change.
