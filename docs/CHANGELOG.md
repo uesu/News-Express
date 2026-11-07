@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — Game-Express hand-off: banners outside the phases (`※ Starpath Reverbs II: …`, Chronicled Wish, Collaboration); `wiki_probe.yml` round 3 (2026-11-07)
+
+Hand-off delivered as three patches on the News-Express PR, on top of GE #148 + its fixup. Live WW 3.8
+listed `Starpath Reverbs II` (Camellya, Roccia, Phoebe, Brant — a Reverb Convene) as the second half
+and never saw the real one (Yangyang: Xuanling, Suisui, Hiyuki — undated series pages); live GI 7.2 had
+the literal words "Chronicled Wish" as a third phase-2 name. The runner probes (24 wiki version pages
+across the four games, Kuro's 712-article menu, HoYoLAB keyword search) showed the pattern everywhere:
+GI `(Chronicled Wish)` + `*** Characters:` sub-line, HSR `- Collaboration` tags, WuWa Reverb/Collab
+convenes, ZZZ `* Starting in the second half:`, Kuro notice titles with `Ⅰ`/`Ⅱ` (U+2160) that the title
+search never matched. GE now reads the kind (bracket, trailing tag, infobox `type`), keeps such banners
+out of the phases and renders one `※ <label>: names` line per banner above `✦ First Half/Phase`
+(`banners["special"]`, wiki-owned at priority 6, official Reverb/Chronicled notices at 50, overrides
+at 100); `banner_search.canon` folds NFKC. Both live cards self-heal on the next wiki read. GE smoke
+617/617, pytest 702, ruff clean. News-Express side: `wiki_probe.yml` gained the `official` job (Kuro
+menu + HoYoLAB search, `PROBE_KURO_TITLE_RE` / `PROBE_HOYOLAB_SEARCH`), older version pages, and a
+crash guard that puts the traceback into the PR comment (Actions logs are unreachable from here). No
+News-Express engine, card, cache or Devvit change.
+
 ## Unreleased — Game-Express hand-off: WuWa `※ 4 Star Characters:` summary silent while empty + WuWa wiki phase = banner date; dev-only `wiki_probe.yml` (2026-11-07)
 
 Hand-off delivered as the full diff on the News-Express PR (the owner opens the GE PR). Two GE fixes:
