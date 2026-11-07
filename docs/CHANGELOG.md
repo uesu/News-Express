@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — Game-Express hand-off: WuWa `※ 4 Star Characters:` summary silent while empty (2026-11-07)
+
+Docs only (hand-off delivered as the full diff on the News-Express PR; the owner opens the GE PR).
+Live WW 3.8 (GE run #4527, 2026-11-06): the wiki knew both phase line-ups but no 4★ yet, and the
+schedule card read `※ 4 Star Characters: TBA` directly above two per-phase `- 4 Star Characters: TBA`
+lines. GE `cards.banners_block` now shows the WW summary only while its roster names a 4★ that no
+per-phase line shows yet (empty roster, explicitly empty roster and a roster already spelled out per
+phase all hide it; the pre-notice phase-2 leak and the "both phases in → hide" rule are unchanged, the
+golden WW 3.7 card is byte-identical). Render only — the next GE run edits the live card and its mirror
+in place. GE base `42bc7b0` (#147), smoke 614/614, pytest 699, ruff clean. No News-Express engine,
+card, cache, workflow or Devvit change.
+
 ## Unreleased — Housekeeping: hand-off folder retired, docs re-synced with the live state (2026-11-06)
 
 Docs + `.github/scripts/sync_prod.py` (dev-only list only); no engine, card, cache or workflow change.
