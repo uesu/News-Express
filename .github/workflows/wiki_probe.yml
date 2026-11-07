@@ -65,6 +65,7 @@ env:
   PROBE_OFFICIAL: ${{ inputs.official || 'wuwa:3.3' }}
   PROBE_KURO_IDS: ${{ inputs.kuro_ids || '5065' }}
   PROBE_KURO_TITLE_RE: ${{ inputs.kuro_title_regex || 'chronicled|collab' }}
+  PROBE_HOYOLAB_SEARCH: ${{ inputs.hoyolab_search || 'genshin:Chronicled Wish,starrail:Collaboration Warp,zzz:Signal Search Rescreening' }}
   GE_REF: ${{ inputs.ge_ref || 'main' }}
 
 jobs:
