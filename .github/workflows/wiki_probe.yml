@@ -441,9 +441,14 @@ jobs:
           async def head(session, url):
               try:
                   async with session.head(url, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=20)) as r:
-                      return r.status, r.headers.get("Content-Length"), r.headers.get("Content-Type"), r.headers.get("ETag") or r.headers.get("Last-Modified")
+                      keep = {}
+                      for k, v in r.headers.items():
+                          kl = k.lower()
+                          if kl in ("content-length", "content-type", "etag", "last-modified", "date", "age", "x-cache", "server", "cache-control", "expires") or kl.startswith(("x-obs-", "x-cos-", "x-amz-", "x-oss-")):
+                              keep[k] = v[:80]
+                      return r.status, keep
               except Exception as e:
-                  return f"{type(e).__name__}", None, None, None
+                  return f"{type(e).__name__}", {}
           async def section_feature3(f):
               global out
               out += ["### Feature 3 — character reveal classifier (`reveal_ping.classify_character_reveal`)", ""]
@@ -502,7 +507,7 @@ jobs:
                           res = (f"**{m.character}** `{m.rule}`" if m else "—") + extra
                       except Exception as e:
                           res = f"error {type(e).__name__}"
-                      title = str(row.get("title") or "").replace("|", "\\|")[:70]
+                      title = str(row.get("title") or (it.title if it else "") or "").replace("|", "\\|")[:70]
                       out.append(f"| {gk} | `{row['id']}` | {time.strftime('%m-%d %H:%M', time.gmtime(row['ts']))} | {title} | {res} |")
               out.append("")
           def load_prod_state():
@@ -565,6 +570,7 @@ jobs:
               # --- Kuro ---
               out += ["#### Kuro launcher + website (Wuthering Waves)", ""]
               try:
+                  raw_index = None
                   raw_index = await f.get_json(kuro.LAUNCHER_INDEX, source="kuro-launcher", retries=1)
                   kr = kuro.parse_launcher_index(raw_index) if raw_index else {}
                   out.append(f"- `index.json` → live `{kr.get('live')}` pre `{kr.get('pre')}` pre_media={json.dumps(kr.get('pre_media'))} live_media={json.dumps(kr.get('live_media'))}")
@@ -591,6 +597,12 @@ jobs:
                       out.append(f"  - video HEAD → {st} · auth_key expiry {when(maintenance._auth_key_expiry(kmedia['video']))}")
                   if kmedia.get("artwork"):
                       st = await head(session, kmedia["artwork"]); out.append(f"  - artwork HEAD → {st}")
+                  if isinstance(bg, dict) and bg.get("slogan"):
+                      st = await head(session, str(bg["slogan"])); out.append(f"  - slogan HEAD → {st}")
+                  if isinstance(cfg, dict):
+                      out.append(f"  - launcher config keys {list(cfg.keys())[:20]}; functionCode {json.dumps(func)[:400]}")
+                  if isinstance(raw_index, dict):
+                      out.append(f"  - index.json `default` keys {list((raw_index.get('default') or {}).keys())[:20]}; `predownloadSwitch`={raw_index.get('predownloadSwitch')!r}; `predownload`={json.dumps(raw_index.get('predownload'))[:300]}")
               except Exception as e:
                   out.append(f"- Kuro launcher background: **{type(e).__name__}: {e}**")
               site_videos = []
@@ -658,22 +670,25 @@ jobs:
                   # media dry run for the next version (the first plan whose maintenance start is in the future or within 24h)
                   upcoming = [v for v, p in plans.items() if p.get("maint_start_ts") and p["maint_start_ts"] > NOW - 86400]
                   for ver in sorted(upcoming)[:2]:
-                      p = plans[ver]
+                    p = plans[ver]
+                    for mode in ("independent", "sequential"):
+                      vs_carry = copy.deepcopy(mvers)
                       for label, now_sim, vinfo_sim in (("now", NOW, dict(vinfo)),
                                                         ("at pre-load (launcher pre = version)", int(p.get("preinstall_ts") or NOW), {**vinfo, "pre": ver}),
                                                         ("at maintenance start (launcher live still previous)", int(p.get("maint_start_ts") or NOW) + 60, {**vinfo, "pre": ver}),
                                                         ("after servers live (launcher live = version)", int(p.get("maint_start_ts") or NOW) + 6 * 3600, {**vinfo, "live": ver, "pre": None})):
                           ctx = SimpleNamespace(now=now_sim, fetcher=f, versions={gk: vinfo_sim}, x=None, games=list(games.values()))
-                          vs_copy = copy.deepcopy(mvers)
-                          vstate = {}
+                          vs_copy = copy.deepcopy(mvers) if mode == "independent" else vs_carry
+                          vstate = vs_copy.setdefault(ver, {}) if mode == "sequential" else {}
                           try:
                               tier, url = await maintenance.resolve_launch_media(ctx, g, ver, p, vstate, basic_info=binfo, program_pins=maintenance._program_pins(),
                                                                                  kuro_media=kmedia, versions_state=vs_copy, verified_cache={})
                               seen_note = {v: s.get("seen_media") for v, s in vs_copy.items() if isinstance(s, dict) and s.get("seen_media") and s.get("seen_media") != (mvers.get(v) or {}).get("seen_media")}
-                              out.append(f"  - media for **{ver}** ({label}): **tier {tier}** `{(url or '—')[:150]}`" + (f" · seen_media written: {json.dumps(seen_note)[:300]}" if seen_note else ""))
+                              lock_note = {k: (v if not isinstance(v, dict) else "{…}") for k, v in (vstate.get("launch_media") or {}).items()} if mode == "sequential" else {}
+                              out.append(f"  - [{mode}] media for **{ver}** ({label}): **tier {tier}** `{(url or '—')[:150]}`" + (f" · seen_media written: {json.dumps(seen_note)[:300]}" if seen_note else "") + (f" · lock {json.dumps(lock_note)[:200]}" if lock_note else ""))
                           except Exception as e:
-                              out.append(f"  - media for **{ver}** ({label}): **crashed** {type(e).__name__}: {e}")
-                      try:
+                              out.append(f"  - [{mode}] media for **{ver}** ({label}): **crashed** {type(e).__name__}: {e}")
+                    try:
                           for kind in ("preload", "maintenance"):
                               ts0 = p.get("preinstall_ts") if kind == "preload" else p.get("maint_start_ts")
                               if not ts0: continue
@@ -681,7 +696,7 @@ jobs:
                                                              ping=None, media_url=None, estimated=bool(p.get("preinstall_estimated") if kind == "preload" else p.get("maint_estimated")),
                                                              estimate_source=p.get("preinstall_source") if kind == "preload" else p.get("maint_source"), observed=bool(p.get("preinstall_observed")))
                               out.append(f"  - card `{kind}` text: " + " ⏎ ".join(t.replace("\n", " ⏎ ") for t in payload_text(pl))[:400])
-                      except Exception as e:
+                    except Exception as e:
                           out.append(f"  - maintenance_payload crashed: {type(e).__name__}: {e}")
                   out.append("")
               out += ["", f"sources: {f.summary()}"]
