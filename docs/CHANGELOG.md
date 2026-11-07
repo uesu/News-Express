@@ -13,8 +13,12 @@ post that states no Phase I/II and no ordinary kind (`ORDINARY_NOTICE`: Event Wi
 Resonator/Weapon Convene, Character Event) in that same opening; `TIER_STOP` also ends a name run
 at the Chronicled wording "can be chosen as your designated 5-star character" (the last name was
 lost). Kuro 5065 / `[Starpath Reverbs II]` titles and the Chronicled Wish's own notice still
-classify as special. GE smoke 617/617, pytest 702, ruff clean. No News-Express engine, card,
-cache or Devvit change.
+classify as special. Second patch (on #148 head `28c026a`, closing the two edge cases the GE-side
+review listed): the special banner is the **first kind** the opening sentence names — "Chronicled
+Wish "X" is now available in Phase II!" is about the Chronicled Wish, "Version 7.2 Phase II is
+here with the Chronicled Wish" is a phase notice — and an untitled WuWa post that says "<Name> is a
+Reverb Resonator Convene" carries that name as its label (NFKC, so `Ⅱ` meets the wiki's `II`).
+GE smoke 617/617, pytest 702, ruff clean. No News-Express engine, card, cache or Devvit change.
 
 ## Unreleased — Game-Express hand-off: banners outside the phases (`※ Starpath Reverbs II: …`, Chronicled Wish, Collaboration); `wiki_probe.yml` round 3 (2026-11-07)
 
