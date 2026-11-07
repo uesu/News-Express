@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — Game-Express hand-off: a passing "Chronicled Wish" mention never makes a phase notice special (2026-11-07)
+
+Review finding on GE PR #148 (the Game-Express side): `schedule.SPECIAL_NOTICE` was searched over
+the title plus the first 400 characters of the body, so an "Event Wishes Notice - Phase II" whose
+lead adds "The Chronicled Wish will also be available", an X post announcing the Event Wishes and
+the Chronicled Wish together, or a Special Program recap line ("Second Half/Phase: Zibai, Linnea,
+Chronicled Wish") would have been read as the special banner — their 5★ moved from the phase line
+to the `※` line and the phase dropped. Hand-off patch (on top of #148 head `fa2fe6e`): the special
+banner must be what the notice is about — named in the **title**, or in the first sentence of a
+post that states no Phase I/II and no ordinary kind (`ORDINARY_NOTICE`: Event Wish, Featured
+Resonator/Weapon Convene, Character Event) in that same opening; `TIER_STOP` also ends a name run
+at the Chronicled wording "can be chosen as your designated 5-star character" (the last name was
+lost). Kuro 5065 / `[Starpath Reverbs II]` titles and the Chronicled Wish's own notice still
+classify as special. Second patch (on #148 head `28c026a`, closing the two edge cases the GE-side
+review listed): the special banner is the **first kind** the opening sentence names — "Chronicled
+Wish "X" is now available in Phase II!" is about the Chronicled Wish, "Version 7.2 Phase II is
+here with the Chronicled Wish" is a phase notice — and an untitled WuWa post that says "<Name> is a
+Reverb Resonator Convene" carries that name as its label (NFKC, so `Ⅱ` meets the wiki's `II`).
+GE smoke 617/617, pytest 702, ruff clean. No News-Express engine, card, cache or Devvit change.
+
 ## Unreleased — Game-Express hand-off: banners outside the phases (`※ Starpath Reverbs II: …`, Chronicled Wish, Collaboration); `wiki_probe.yml` round 3 (2026-11-07)
 
 Hand-off delivered as three patches on the News-Express PR, on top of GE #148 + its fixup. Live WW 3.8
