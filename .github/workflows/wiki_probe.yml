@@ -222,14 +222,14 @@ jobs:
       - name: Read the official banner notices with the Game-Express readers (nothing is written)
         run: |
           python3 - <<'PY'
-          import asyncio, json, os, re, sys, time
+          import asyncio, json, os, re, sys, time, traceback
           sys.path.insert(0, "/tmp/ge")
           import aiohttp
           from pathlib import Path
           from gamexpress.config import load_games
           from gamexpress.http import Fetcher
           from gamexpress.models import Item
-          from gamexpress.sources import banner_search, kuro
+          from gamexpress.sources import banner_search, hoyolab, kuro
           from gamexpress.textutil import html_to_text
           from gamexpress.timeparse import parse_kuro_time
           from gamexpress import schedule
@@ -251,6 +251,31 @@ jobs:
               out += ["", "  <details><summary>body lines mentioning a banner word</summary>", "", "  ```"]
               out += ["  " + ln for ln in excerpt(it.text).split("\n")]
               out += ["  ```", "", "  </details>", ""]
+          async def hoyolab_search(f, g, gk, kw):
+              global out
+              data = await f.get_json(banner_search.SEARCH_API, source="hoyolab", headers=hoyolab.HEADERS,
+                                      params={"keyword": kw, "gids": g.hoyolab_gid, "page": 1, "size": 20})
+              hits = ((data or {}).get("data") or {}).get("list") or [] if isinstance(data, dict) else []
+              rows = []
+              for hit in hits:
+                  post, user = hit.get("post") or {}, hit.get("user") or {}
+                  if str(user.get("uid") or post.get("uid") or "") == str(g.official_uid):
+                      rows.append(post)
+              out.append(f"{len(hits)} hit(s), {len(rows)} by the official account")
+              out.append("")
+              for post in sorted(rows, key=lambda p: int(p.get("created_at") or 0), reverse=True)[:4]:
+                  pid = str(post.get("post_id") or "")
+                  full = await hoyolab._full_post(f, g.hoyolab_gid, pid)
+                  text, links, imgs = hoyolab._post_text((full or {}).get("post") or {}) if full else ((post.get("content") or ""), [], [])
+                  it = Item(source="hoyolab", game=gk, id=pid, url=hoyolab.ARTICLE_URL.format(pid),
+                            title=re.sub(r"<[^>]+>", "", post.get("subject") or ""), text=text,
+                            published_ts=int(post.get("created_at") or 0), images=imgs, links=links)
+                  out.append(f"- `classify` → {schedule.classify(g, it)!r}")
+                  item_report(it)
+                  out += ["  <details><summary>full text (first 2500 chars)</summary>", "", "  ```"]
+                  out += ["  " + ln for ln in text[:2500].split("\n")]
+                  out += ["  ```", "", "  </details>", ""]
+
           async def main():
               global out
               async with aiohttp.ClientSession() as session:
@@ -271,35 +296,17 @@ jobs:
                           out += ["_no notice found_", ""]
                       for it in items:
                           item_report(it)
-                  from gamexpress.sources import hoyolab
                   for t in [t.strip() for t in os.environ["PROBE_HOYOLAB_SEARCH"].split(",") if t.strip()]:
                       gk, _, kw = t.partition(":")
                       g = games.get(gk)
                       out += [f"### {gk} — HoYoLAB search `{kw}` (official account only, newest 4)", ""]
                       if g is None or not g.hoyolab_gid:
                           out += ["_not a HoYoLAB game_", ""]; continue
-                      data = await f.get_json(banner_search.SEARCH_API, source="hoyolab", headers=hoyolab.HEADERS,
-                                              params={"keyword": kw, "gids": g.hoyolab_gid, "page": 1, "size": 20})
-                      hits = ((data or {}).get("data") or {}).get("list") or [] if isinstance(data, dict) else []
-                      rows = []
-                      for hit in hits:
-                          post, user = hit.get("post") or {}, hit.get("user") or {}
-                          if str(user.get("uid") or post.get("uid") or "") == str(g.official_uid):
-                              rows.append(post)
-                      out.append(f"{len(hits)} hit(s), {len(rows)} by the official account")
-                      out.append("")
-                      for post in sorted(rows, key=lambda p: int(p.get("created_at") or 0), reverse=True)[:4]:
-                          pid = str(post.get("post_id") or "")
-                          full = await hoyolab._full_post(f, g.hoyolab_gid, pid)
-                          text, links, imgs = hoyolab._post_text((full or {}).get("post") or {}) if full else ((post.get("content") or ""), [], [])
-                          it = Item(source="hoyolab", game=gk, id=pid, url=hoyolab.ARTICLE_URL.format(pid),
-                                    title=re.sub(r"<[^>]+>", "", post.get("subject") or ""), text=text,
-                                    published_ts=int(post.get("created_at") or 0), images=imgs, links=links)
-                          out.append(f"- `classify` → {schedule.classify(g, it)!r}")
-                          item_report(it)
-                          out += ["  <details><summary>full text (first 2500 chars)</summary>", "", "  ```"]
-                          out += ["  " + ln for ln in text[:2500].split("\n")]
-                          out += ["  ```", "", "  </details>", ""]
+                      try:
+                          await hoyolab_search(f, g, gk, kw)
+                      except Exception:
+                          out += ["```", traceback.format_exc(), "```", ""]
+                  ids = [i.strip() for i in os.environ["PROBE_KURO_IDS"].split(",") if i.strip()]
                   ids = [i.strip() for i in os.environ["PROBE_KURO_IDS"].split(",") if i.strip()]
                   rx = os.environ["PROBE_KURO_TITLE_RE"].strip()
                   if ids or rx:
@@ -336,7 +343,10 @@ jobs:
                           item_report(it)
                           out += ["<details><summary>full text (first 6000 chars)</summary>", "", "```", text[:6000], "```", "", "</details>", ""]
                   out += ["", f"sources: {f.summary()}"]
-          asyncio.run(main())
+          try:
+              asyncio.run(main())
+          except Exception:
+              out += ["", "**probe crashed**", "```", traceback.format_exc(), "```"]
           text = "\n".join(out)
           if len(text) > 64000:
               text = text[:63800] + "\n\n_… truncated to fit the comment limit_"
