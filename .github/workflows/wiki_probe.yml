@@ -1,19 +1,25 @@
-name: Banner wiki probe (manual, read-only)
+name: Banner source probe (manual, read-only)
 
-# 2026-11-07: a manual, read-only probe of the Fandom banner wikis FROM THE
-# GITHUB ACTIONS RUNNERS, run through Game-Express's own reader
-# (`gamexpress/sources/gachawiki.py`, cloned at main). For every `game:version`
-# it fetches the Version page and the dated banner pages exactly as the monitor
-# does (two MediaWiki API requests), then prints what the reader sees: the debut
-# roster, the banner lines with the phase the dialect assigns them, each pool
-# template's 5★/4★ fields, and the schedule-ready line-up `build_lineup` returns.
-# That is the evidence behind "the names on the card are right" — and the first
-# place a wiki layout change shows up.
+# 2026-11-07: a manual, read-only probe of the BANNER SOURCES from the GitHub
+# Actions runners, run through Game-Express's own readers (cloned at main):
+#
+#   wiki      — `gamexpress/sources/gachawiki.py`: for every `game:version` the
+#               Version page and EVERY banner page it lists (dated pages exactly
+#               as the monitor fetches them, plus the undated series pages the
+#               monitor skips), printing debuts, banner lines with the phase the
+#               dialect assigns, each page's infobox/pool fields, and the
+#               schedule-ready `build_lineup`. `history` targets print only the
+#               banner section lines — the layout survey across past versions.
+#   official  — `gamexpress/sources/banner_search.py` (feature 3's official
+#               notices: HoYoLAB search / Kuro article menu) + `schedule.extract_banner`
+#               for every `game:version`, plus any Kuro article ids given, plus
+#               every Kuro menu title matching a regex (the Reverb/Convene survey).
 #
 # Dev-only: in sync_prod.py's DEV_ONLY_WORKFLOW_FILES, so it never reaches the
 # production repos. No secrets, no webhooks, no cache writes, no posting. It is
 # never scheduled — dispatch it by hand, or let it self-run on a pull request
-# that edits this file (the defaults below cover the four live schedule cards).
+# that edits this file (the defaults below). Each job leaves one comment on the
+# PR, refreshed in place.
 
 on:
   pull_request:
@@ -22,29 +28,49 @@ on:
   workflow_dispatch:
     inputs:
       targets:
-        description: 'Comma-separated game:version pairs (default: the four live cards + the WuWa version before them)'
+        description: 'wiki: comma-separated game:version pairs read in full'
         required: false
         default: 'wuwa:3.8,wuwa:3.7,genshin:7.2,starrail:4.7,zzz:3.3'
+      history:
+        description: 'wiki: comma-separated game:version pairs, banner section lines only'
+        required: false
+        default: 'wuwa:3.0,wuwa:3.1,wuwa:3.2,wuwa:3.3,wuwa:3.4,wuwa:3.5,wuwa:3.6,genshin:6.0,genshin:6.1,genshin:7.0,genshin:7.1,starrail:4.3,starrail:4.4,starrail:4.5,starrail:4.6,zzz:3.0,zzz:3.1,zzz:3.2'
+      official:
+        description: 'official: comma-separated game:version pairs for banner_search.find'
+        required: false
+        default: 'wuwa:3.8,wuwa:3.7,wuwa:3.6,wuwa:3.5,genshin:7.2,genshin:7.1,starrail:4.7,starrail:4.6,zzz:3.3,zzz:3.2'
+      kuro_ids:
+        description: 'official: comma-separated Kuro article ids to read in full'
+        required: false
+        default: '5689'
+      kuro_title_regex:
+        description: 'official: regex over every Kuro menu title (case-insensitive)'
+        required: false
+        default: 'reverb|convene'
       ge_ref:
-        description: 'Game-Express ref to run the reader from'
+        description: 'Game-Express ref to run the readers from'
         required: false
         default: 'main'
 
 permissions:
   contents: read
-  # Only used to leave the report as a comment on the pull request that
-  # triggered it (job summaries are not readable through the API).
+  # Only used to leave the reports as comments on the pull request that
+  # triggered them (job summaries are not readable through the API).
   pull-requests: write
 
+env:
+  # On pull_request `inputs` is empty, so the defaults are repeated here.
+  PROBE_TARGETS: ${{ inputs.targets || 'wuwa:3.8,wuwa:3.7,genshin:7.2,starrail:4.7,zzz:3.3' }}
+  PROBE_HISTORY: ${{ inputs.history || 'wuwa:3.0,wuwa:3.1,wuwa:3.2,wuwa:3.3,wuwa:3.4,wuwa:3.5,wuwa:3.6,genshin:6.0,genshin:6.1,genshin:7.0,genshin:7.1,starrail:4.3,starrail:4.4,starrail:4.5,starrail:4.6,zzz:3.0,zzz:3.1,zzz:3.2' }}
+  PROBE_OFFICIAL: ${{ inputs.official || 'wuwa:3.8,wuwa:3.7,wuwa:3.6,wuwa:3.5,genshin:7.2,genshin:7.1,starrail:4.7,starrail:4.6,zzz:3.3,zzz:3.2' }}
+  PROBE_KURO_IDS: ${{ inputs.kuro_ids || '5689' }}
+  PROBE_KURO_TITLE_RE: ${{ inputs.kuro_title_regex || 'reverb|convene' }}
+  GE_REF: ${{ inputs.ge_ref || 'main' }}
+
 jobs:
-  probe:
+  wiki:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      # On pull_request `inputs` is empty, so the defaults are repeated here.
-      PROBE_TARGETS: ${{ inputs.targets || 'wuwa:3.8,wuwa:3.7,genshin:7.2,starrail:4.7,zzz:3.3' }}
-      GE_REF: ${{ inputs.ge_ref || 'main' }}
-
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -68,59 +94,96 @@ jobs:
               with urllib.request.urlopen(req, timeout=20) as r:
                   body = r.read(); code = r.status
               return code, int((time.monotonic() - t0) * 1000), json.loads(body.decode("utf-8", "replace"))
+          TEMPLATE = re.compile(r"\{\{([^{}|\n]+)\n(.*?)\n\}\}", re.S)
+          def infobox(text):
+              """Every multi-line template on the page: name -> {field: value} (first 12 fields)."""
+              out = []
+              for m in TEMPLATE.finditer(text or ""):
+                  fields = {}
+                  for ln in m.group(2).split("\n"):
+                      if ln.startswith("|") and "=" in ln:
+                          k, _, v = ln[1:].partition("=")
+                          fields[k.strip()] = v.strip()
+                  out.append((m.group(1).strip(), dict(list(fields.items())[:12])))
+              return out
+          def fetch_pages(game, titles):
+              pages = {}
+              for i in range(0, len(titles), gw.MAX_TITLES_PER_CALL):
+                  code, ms, payload = get_json(gw.revisions_url(game, titles[i:i + gw.MAX_TITLES_PER_CALL]))
+                  pages.update(gw._revisions_of(payload))
+              return pages
           out = ["## Banner wiki probe (from the GitHub Actions runners)", "",
                  f"{open('/tmp/ge_head.txt').read().strip()} · {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}", ""]
-          for target in [t.strip() for t in os.environ["PROBE_TARGETS"].split(",") if t.strip()]:
-              game, _, ver = target.partition(":")
+          def version(game, ver, full):
+              global out
               g = cfg.get(game) or {}
               count = g.get("four_star_count")
               summary = bool(((g.get("card") or {}).get("four_star_summary")))
-              out += [f"### {game} {ver}", ""]
+              out.append(f"### {game} {ver}" if full else f"#### {game} {ver}")
+              out.append("")
               if game not in gw.WIKIS:
-                  out += ["_no wiki dialect for this game_", ""]; continue
+                  out += ["_no wiki dialect for this game_", ""]; return
               d = gw.WIKIS[game]
               try:
                   code, ms, payload = get_json(gw.version_page_url(game, ver))
               except urllib.error.HTTPError as e:
-                  out += [f"Version page: HTTP {e.code}", ""]; continue
+                  out += [f"Version page: HTTP {e.code}", ""]; return
               except Exception as e:
-                  out += [f"Version page: {type(e).__name__}: {e}", ""]; continue
+                  out += [f"Version page: {type(e).__name__}: {e}", ""]; return
               wikitext = gw._wikitext_of(payload)
-              out.append(f"Version page `{d.host}` → HTTP {code}, {ms} ms, {len(wikitext)} chars"
-                         + ("" if wikitext else " — **no wikitext** (page missing?)"))
               if not wikitext:
-                  out.append(""); continue
+                  out += [f"Version page → HTTP {code}, **no wikitext** (page missing?)", ""]; return
               vp = gw.parse_version_page(game, wikitext)
+              raw = [ln for ln in gw._section_lines(wikitext, d.banner_section, d.section_stop) if ln.strip()]
+              if not full:
+                  out += ["```"] + raw[:30] + ["```",
+                          f"→ debuts: {', '.join(vp.debuts) or '—'} · " + " · ".join(
+                              f"phase {b.phase}: {', '.join(b.names) or '?'}" + (" [undated]" if not (b.page and gw._DATED.search(b.page)) else "")
+                              for b in vp.banners), ""]
+                  return
+              out.append(f"Version page `{d.host}` → HTTP {code}, {ms} ms, {len(wikitext)} chars")
               out += ["", f"- debuts (`{d.debut_section}`): {', '.join(vp.debuts) or '—'}",
                       f"- banner lines (`{d.banner_section}`), phase as the dialect assigns it:"]
               for b in vp.banners:
                   out.append(f"  - phase {b.phase}: `{b.page}` ({', '.join(b.names) or 'no names in brackets'})")
               if not vp.banners:
                   out.append("  - _none_ (early tier)")
-              raw = gw._section_lines(wikitext, d.banner_section, d.section_stop)
-              raw = [ln for ln in raw if ln.strip()]
               out += ["", "<details><summary>raw section lines</summary>", "", "```"] + raw[:40] + ["```", "", "</details>", ""]
-              titles = [b.page for b in vp.banners if b.page and gw._DATED.search(b.page)]
+              dated = [b.page for b in vp.banners if b.page and gw._DATED.search(b.page)]
+              undated = [b.page for b in vp.banners if b.page and not gw._DATED.search(b.page)]
+              # every bracketed page on the section, even ones the dialect filed outside phase 1/2
+              names = {n for b in vp.banners for n in b.names}
+              extra = [t for t in dict.fromkeys(l[0].strip() for ln in raw for l in gw._LINK.findall(ln))
+                       if t not in dated and t not in undated and t not in names and not t.lower().startswith("file:")]
               pages = {}
-              if titles:
-                  try:
-                      code, ms, payload = get_json(gw.revisions_url(game, titles))
-                      pages = gw._revisions_of(payload)
-                      out.append(f"Banner pages ({len(titles)} dated title(s)) → HTTP {code}, {ms} ms, {len(pages)} page(s) returned")
-                  except Exception as e:
-                      out.append(f"Banner pages: {type(e).__name__}: {e}")
-              else:
-                  out.append("Banner pages: none dated → not fetched (the monitor does the same)")
-              for title in titles:
+              try:
+                  pages = fetch_pages(game, dated + undated + extra)
+                  out.append(f"Banner pages: {len(dated)} dated (the monitor fetches these), {len(undated)} undated + {len(extra)} other (probe only) → {len(pages)} returned")
+              except Exception as e:
+                  out.append(f"Banner pages: {type(e).__name__}: {e}")
+              for title in dated + undated + extra:
                   text = pages.get(title, "")
-                  pool = gw.parse_banner_page(game, text) if text else {}
-                  fields = gw.template_fields(text, d.pool_template) if text else {}
-                  out.append(f"- `{title}`: " + (f"{d.five_field}=`{fields.get(d.five_field, '')}` {d.four_field}=`{fields.get(d.four_field, '')}` → five={pool.get('five')} four={pool.get('four')}" if text else "**not returned**"))
-              lineup = gw.build_lineup(game, wikitext, pages, four_star_count=count, four_star_summary=summary)
-              out += ["", f"`build_lineup` (four_star_count={count}, four_star_summary={summary}):", "", "```json",
-                      json.dumps(lineup, ensure_ascii=False, indent=1), "```", ""]
-              time.sleep(0.5)
+                  tag = "dated" if title in dated else ("undated" if title in undated else "other")
+                  if not text:
+                      out.append(f"- `{title}` ({tag}): **not returned**"); continue
+                  pool = gw.parse_banner_page(game, text)
+                  boxes = infobox(text)
+                  shown = "; ".join(f"`{{{{{name}}}}}` " + ", ".join(f"{k}=`{v}`" for k, v in f.items()) for name, f in boxes[:3])
+                  out.append(f"- `{title}` ({tag}): {shown or 'no template'} → five={pool.get('five')} four={pool.get('four')}")
+              lineup = gw.build_lineup(game, wikitext, {t: pages[t] for t in dated if t in pages},
+                                       four_star_count=count, four_star_summary=summary)
+              out += ["", f"`build_lineup` (what the monitor stores; four_star_count={count}, four_star_summary={summary}):", "",
+                      "```json", json.dumps(lineup, ensure_ascii=False), "```", ""]
+          for t in [t.strip() for t in os.environ["PROBE_TARGETS"].split(",") if t.strip()]:
+              g, _, v = t.partition(":"); version(g, v, True); time.sleep(0.4)
+          hist = [t.strip() for t in os.environ["PROBE_HISTORY"].split(",") if t.strip()]
+          if hist:
+              out += ["### History — banner section lines only", ""]
+              for t in hist:
+                  g, _, v = t.partition(":"); version(g, v, False); time.sleep(0.4)
           text = "\n".join(out)
+          if len(text) > 64000:
+              text = text[:63800] + "\n\n_… truncated to fit the comment limit_"
           print(text)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
               fh.write(text + "\n")
@@ -141,4 +204,129 @@ jobs:
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -F body=@/tmp/wiki_probe.md >/dev/null
           else
             gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -F body=@/tmp/wiki_probe.md >/dev/null
+          fi
+
+  official:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Fetch the Game-Express readers (public, read-only)
+        run: |
+          git clone -q --depth 1 --branch "$GE_REF" https://github.com/uesu/Game-Express /tmp/ge
+          git -C /tmp/ge log -1 --format='Game-Express %h %s' | tee /tmp/ge_head.txt
+          python3 -m pip install -q -r /tmp/ge/requirements.txt
+
+      - name: Read the official banner notices with the Game-Express readers (nothing is written)
+        run: |
+          python3 - <<'PY'
+          import asyncio, json, os, re, sys, time
+          sys.path.insert(0, "/tmp/ge")
+          import aiohttp
+          from pathlib import Path
+          from gamexpress.config import load_games
+          from gamexpress.http import Fetcher
+          from gamexpress.models import Item
+          from gamexpress.sources import banner_search, kuro
+          from gamexpress.textutil import html_to_text
+          from gamexpress.timeparse import parse_kuro_time
+          from gamexpress import schedule
+          games = load_games(Path("/tmp/ge/config/games.json"))
+          out = ["## Official banner-notice probe (from the GitHub Actions runners)", "",
+                 f"{open('/tmp/ge_head.txt').read().strip()} · {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}", ""]
+          KEY = re.compile(r"reverb|convene|wish|warp|channel|phase", re.I)
+          def excerpt(text, n=700):
+              lines = [ln.strip() for ln in (text or "").split("\n") if ln.strip()]
+              keep = [ln for ln in lines if KEY.search(ln)][:14]
+              s = "\n".join(keep or lines[:10])
+              return s[:n] + ("…" if len(s) > n else "")
+          def item_report(it):
+              global out
+              ex = schedule.extract_banner(it)
+              when = time.strftime("%Y-%m-%d", time.gmtime(it.published_ts)) if it.published_ts else "?"
+              out.append(f"- **{it.title or '(no title)'}** — {it.source} `{it.id}` {when} · {it.url}")
+              out.append(f"  - `extract_banner` → five={ex.get('banner_five')} four={ex.get('banner_four')} unsure={ex.get('banner_four_unsure')} phase={ex.get('banner_phase')}")
+              out += ["", "  <details><summary>body lines mentioning a banner word</summary>", "", "  ```"]
+              out += ["  " + ln for ln in excerpt(it.text).split("\n")]
+              out += ["  ```", "", "  </details>", ""]
+          async def main():
+              global out
+              async with aiohttp.ClientSession() as session:
+                  f = Fetcher(session, timeout=20)
+                  for t in [t.strip() for t in os.environ["PROBE_OFFICIAL"].split(",") if t.strip()]:
+                      gk, _, ver = t.partition(":")
+                      g = games.get(gk)
+                      out += [f"### {gk} {ver} — `banner_search.find`", ""]
+                      if g is None or not g.banner_titles:
+                          out += ["_no banner title template for this game_", ""]; continue
+                      out.append(f"templates: {g.banner_titles}")
+                      out.append("")
+                      try:
+                          items = await banner_search.find(f, g, ver)
+                      except Exception as e:
+                          out += [f"find failed: {type(e).__name__}: {e}", ""]; continue
+                      if not items:
+                          out += ["_no notice found_", ""]
+                      for it in items:
+                          item_report(it)
+                  ids = [i.strip() for i in os.environ["PROBE_KURO_IDS"].split(",") if i.strip()]
+                  rx = os.environ["PROBE_KURO_TITLE_RE"].strip()
+                  if ids or rx:
+                      out += ["### Kuro article menu", ""]
+                      try:
+                          menu = await kuro.menu_articles(f)
+                      except Exception as e:
+                          menu = {}; out.append(f"menu failed: {type(e).__name__}: {e}")
+                      out.append(f"{len(menu)} article(s) in the English menus")
+                      if rx:
+                          crx = re.compile(rx, re.I)
+                          rows = sorted(((aid, a) for aid, a in menu.items() if crx.search(a.get("articleTitle") or "")), reverse=True)
+                          out += ["", f"Titles matching `/{rx}/i` (newest first, up to 60):", ""]
+                          for aid, a in rows[:60]:
+                              out.append(f"- `{aid}` {a.get('createTime') or ''} — {a.get('articleTitle') or ''}")
+                          out.append("")
+                      wuwa = games.get("wuwa")
+                      for aid in ids:
+                          try:
+                              detail = await f.get_json(kuro.DETAIL.format(aid), source="kuro", retries=1)
+                          except Exception as e:
+                              out.append(f"- `{aid}`: {type(e).__name__}: {e}"); continue
+                          a = menu.get(int(aid)) if aid.isdigit() else None
+                          body = (detail or {}).get("articleContent") or ((a or {}).get("articleContent")) or ""
+                          title = (detail or {}).get("articleTitle") or (a or {}).get("articleTitle") or ""
+                          ts = parse_kuro_time((detail or {}).get("createTime") or (a or {}).get("createTime") or "") or 0
+                          text, links, imgs = html_to_text(body)
+                          out += [f"#### Kuro article {aid}: {title}", ""]
+                          it = Item(source="kuro", game="wuwa", id=str(aid), url=kuro.LINK.format(aid), title=title,
+                                    text=text, published_ts=ts, images=imgs, links=links)
+                          if wuwa is not None:
+                              out.append(f"- `classify` → {schedule.classify(wuwa, it)!r}")
+                          item_report(it)
+                          out += ["<details><summary>full text (first 6000 chars)</summary>", "", "```", text[:6000], "```", "", "</details>", ""]
+                  out += ["", f"sources: {f.summary()}"]
+          asyncio.run(main())
+          text = "\n".join(out)
+          if len(text) > 64000:
+              text = text[:63800] + "\n\n_… truncated to fit the comment limit_"
+          print(text)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+              fh.write(text + "\n")
+          with open("/tmp/official_probe.md", "w", encoding="utf-8") as fh:
+              fh.write("<!-- official-probe -->\n" + text + "\n")
+          PY
+
+      - name: Leave the report on the pull request (pull_request runs only)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+            -q '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- official-probe -->")))] | last | .id // empty')
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -F body=@/tmp/official_probe.md >/dev/null
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -F body=@/tmp/official_probe.md >/dev/null
           fi
