@@ -1,0 +1,144 @@
+name: Banner wiki probe (manual, read-only)
+
+# 2026-11-07: a manual, read-only probe of the Fandom banner wikis FROM THE
+# GITHUB ACTIONS RUNNERS, run through Game-Express's own reader
+# (`gamexpress/sources/gachawiki.py`, cloned at main). For every `game:version`
+# it fetches the Version page and the dated banner pages exactly as the monitor
+# does (two MediaWiki API requests), then prints what the reader sees: the debut
+# roster, the banner lines with the phase the dialect assigns them, each pool
+# template's 5★/4★ fields, and the schedule-ready line-up `build_lineup` returns.
+# That is the evidence behind "the names on the card are right" — and the first
+# place a wiki layout change shows up.
+#
+# Dev-only: in sync_prod.py's DEV_ONLY_WORKFLOW_FILES, so it never reaches the
+# production repos. No secrets, no webhooks, no cache writes, no posting. It is
+# never scheduled — dispatch it by hand, or let it self-run on a pull request
+# that edits this file (the defaults below cover the four live schedule cards).
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/wiki_probe.yml'
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'Comma-separated game:version pairs (default: the four live cards + the WuWa version before them)'
+        required: false
+        default: 'wuwa:3.8,wuwa:3.7,genshin:7.2,starrail:4.7,zzz:3.3'
+      ge_ref:
+        description: 'Game-Express ref to run the reader from'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+  # Only used to leave the report as a comment on the pull request that
+  # triggered it (job summaries are not readable through the API).
+  pull-requests: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # On pull_request `inputs` is empty, so the defaults are repeated here.
+      PROBE_TARGETS: ${{ inputs.targets || 'wuwa:3.8,wuwa:3.7,genshin:7.2,starrail:4.7,zzz:3.3' }}
+      GE_REF: ${{ inputs.ge_ref || 'main' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Fetch the Game-Express reader (public, read-only)
+        run: |
+          git clone -q --depth 1 --branch "$GE_REF" https://github.com/uesu/Game-Express /tmp/ge
+          git -C /tmp/ge log -1 --format='Game-Express %h %s' | tee /tmp/ge_head.txt
+
+      - name: Read every wiki with the Game-Express reader (stdlib only; nothing is written)
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys, time, urllib.request, urllib.error
+          sys.path.insert(0, "/tmp/ge")
+          from gamexpress.sources import gachawiki as gw
+          games = json.load(open("/tmp/ge/config/games.json", encoding="utf-8"))
+          cfg = {k: v for k, v in (games.get("games") or games).items() if isinstance(v, dict)}
+          def get_json(url):
+              req = urllib.request.Request(url, headers={"User-Agent": gw.WIKI_UA})
+              t0 = time.monotonic()
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  body = r.read(); code = r.status
+              return code, int((time.monotonic() - t0) * 1000), json.loads(body.decode("utf-8", "replace"))
+          out = ["## Banner wiki probe (from the GitHub Actions runners)", "",
+                 f"{open('/tmp/ge_head.txt').read().strip()} · {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}", ""]
+          for target in [t.strip() for t in os.environ["PROBE_TARGETS"].split(",") if t.strip()]:
+              game, _, ver = target.partition(":")
+              g = cfg.get(game) or {}
+              count = g.get("four_star_count")
+              summary = bool(((g.get("card") or {}).get("four_star_summary")))
+              out += [f"### {game} {ver}", ""]
+              if game not in gw.WIKIS:
+                  out += ["_no wiki dialect for this game_", ""]; continue
+              d = gw.WIKIS[game]
+              try:
+                  code, ms, payload = get_json(gw.version_page_url(game, ver))
+              except urllib.error.HTTPError as e:
+                  out += [f"Version page: HTTP {e.code}", ""]; continue
+              except Exception as e:
+                  out += [f"Version page: {type(e).__name__}: {e}", ""]; continue
+              wikitext = gw._wikitext_of(payload)
+              out.append(f"Version page `{d.host}` → HTTP {code}, {ms} ms, {len(wikitext)} chars"
+                         + ("" if wikitext else " — **no wikitext** (page missing?)"))
+              if not wikitext:
+                  out.append(""); continue
+              vp = gw.parse_version_page(game, wikitext)
+              out += ["", f"- debuts (`{d.debut_section}`): {', '.join(vp.debuts) or '—'}",
+                      f"- banner lines (`{d.banner_section}`), phase as the dialect assigns it:"]
+              for b in vp.banners:
+                  out.append(f"  - phase {b.phase}: `{b.page}` ({', '.join(b.names) or 'no names in brackets'})")
+              if not vp.banners:
+                  out.append("  - _none_ (early tier)")
+              raw = gw._section_lines(wikitext, d.banner_section, d.section_stop)
+              raw = [ln for ln in raw if ln.strip()]
+              out += ["", "<details><summary>raw section lines</summary>", "", "```"] + raw[:40] + ["```", "", "</details>", ""]
+              titles = [b.page for b in vp.banners if b.page and gw._DATED.search(b.page)]
+              pages = {}
+              if titles:
+                  try:
+                      code, ms, payload = get_json(gw.revisions_url(game, titles))
+                      pages = gw._revisions_of(payload)
+                      out.append(f"Banner pages ({len(titles)} dated title(s)) → HTTP {code}, {ms} ms, {len(pages)} page(s) returned")
+                  except Exception as e:
+                      out.append(f"Banner pages: {type(e).__name__}: {e}")
+              else:
+                  out.append("Banner pages: none dated → not fetched (the monitor does the same)")
+              for title in titles:
+                  text = pages.get(title, "")
+                  pool = gw.parse_banner_page(game, text) if text else {}
+                  fields = gw.template_fields(text, d.pool_template) if text else {}
+                  out.append(f"- `{title}`: " + (f"{d.five_field}=`{fields.get(d.five_field, '')}` {d.four_field}=`{fields.get(d.four_field, '')}` → five={pool.get('five')} four={pool.get('four')}" if text else "**not returned**"))
+              lineup = gw.build_lineup(game, wikitext, pages, four_star_count=count, four_star_summary=summary)
+              out += ["", f"`build_lineup` (four_star_count={count}, four_star_summary={summary}):", "", "```json",
+                      json.dumps(lineup, ensure_ascii=False, indent=1), "```", ""]
+              time.sleep(0.5)
+          text = "\n".join(out)
+          print(text)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+              fh.write(text + "\n")
+          with open("/tmp/wiki_probe.md", "w", encoding="utf-8") as fh:
+              fh.write("<!-- wiki-probe -->\n" + text + "\n")
+          PY
+
+      - name: Leave the report on the pull request (pull_request runs only)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # One comment per PR, refreshed in place on later runs.
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+            -q '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- wiki-probe -->")))] | last | .id // empty')
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -F body=@/tmp/wiki_probe.md >/dev/null
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -F body=@/tmp/wiki_probe.md >/dev/null
+          fi
