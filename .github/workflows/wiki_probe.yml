@@ -30,23 +30,23 @@ on:
       targets:
         description: 'wiki: comma-separated game:version pairs read in full'
         required: false
-        default: 'wuwa:3.8,wuwa:3.5,wuwa:3.4,starrail:4.4,genshin:7.0'
+        default: 'wuwa:3.8,genshin:7.2'
       history:
         description: 'wiki: comma-separated game:version pairs, banner section lines only'
         required: false
-        default: 'wuwa:3.7,wuwa:3.6,genshin:7.2,starrail:4.7,zzz:3.3'
+        default: 'genshin:5.0,genshin:5.5,genshin:6.2,starrail:3.4,zzz:2.0,zzz:2.5'
       official:
         description: 'official: comma-separated game:version pairs for banner_search.find'
         required: false
-        default: 'wuwa:3.7,wuwa:3.4,starrail:4.4'
+        default: 'wuwa:3.3'
       kuro_ids:
         description: 'official: comma-separated Kuro article ids to read in full'
         required: false
-        default: '5689,5065,5668,5039,5047,4852'
+        default: '5065'
       kuro_title_regex:
         description: 'official: regex over every Kuro menu title (case-insensitive)'
         required: false
-        default: 'reverb|collab'
+        default: 'chronicled|collab'
       ge_ref:
         description: 'Game-Express ref to run the readers from'
         required: false
@@ -60,11 +60,11 @@ permissions:
 
 env:
   # On pull_request `inputs` is empty, so the defaults are repeated here.
-  PROBE_TARGETS: ${{ inputs.targets || 'wuwa:3.8,wuwa:3.5,wuwa:3.4,starrail:4.4,genshin:7.0' }}
-  PROBE_HISTORY: ${{ inputs.history || 'wuwa:3.7,wuwa:3.6,genshin:7.2,starrail:4.7,zzz:3.3' }}
-  PROBE_OFFICIAL: ${{ inputs.official || 'wuwa:3.7,wuwa:3.4,starrail:4.4' }}
-  PROBE_KURO_IDS: ${{ inputs.kuro_ids || '5689,5065,5668,5039,5047,4852' }}
-  PROBE_KURO_TITLE_RE: ${{ inputs.kuro_title_regex || 'reverb|collab' }}
+  PROBE_TARGETS: ${{ inputs.targets || 'wuwa:3.8,genshin:7.2' }}
+  PROBE_HISTORY: ${{ inputs.history || 'genshin:5.0,genshin:5.5,genshin:6.2,starrail:3.4,zzz:2.0,zzz:2.5' }}
+  PROBE_OFFICIAL: ${{ inputs.official || 'wuwa:3.3' }}
+  PROBE_KURO_IDS: ${{ inputs.kuro_ids || '5065' }}
+  PROBE_KURO_TITLE_RE: ${{ inputs.kuro_title_regex || 'chronicled|collab' }}
   GE_REF: ${{ inputs.ge_ref || 'main' }}
 
 jobs:
@@ -271,6 +271,35 @@ jobs:
                           out += ["_no notice found_", ""]
                       for it in items:
                           item_report(it)
+                  from gamexpress.sources import hoyolab
+                  for t in [t.strip() for t in os.environ["PROBE_HOYOLAB_SEARCH"].split(",") if t.strip()]:
+                      gk, _, kw = t.partition(":")
+                      g = games.get(gk)
+                      out += [f"### {gk} — HoYoLAB search `{kw}` (official account only, newest 4)", ""]
+                      if g is None or not g.hoyolab_gid:
+                          out += ["_not a HoYoLAB game_", ""]; continue
+                      data = await f.get_json(banner_search.SEARCH_API, source="hoyolab", headers=hoyolab.HEADERS,
+                                              params={"keyword": kw, "gids": g.hoyolab_gid, "page": 1, "size": 20})
+                      hits = ((data or {}).get("data") or {}).get("list") or [] if isinstance(data, dict) else []
+                      rows = []
+                      for hit in hits:
+                          post, user = hit.get("post") or {}, hit.get("user") or {}
+                          if str(user.get("uid") or post.get("uid") or "") == str(g.official_uid):
+                              rows.append(post)
+                      out.append(f"{len(hits)} hit(s), {len(rows)} by the official account")
+                      out.append("")
+                      for post in sorted(rows, key=lambda p: int(p.get("created_at") or 0), reverse=True)[:4]:
+                          pid = str(post.get("post_id") or "")
+                          full = await hoyolab._full_post(f, g.hoyolab_gid, pid)
+                          text, links, imgs = hoyolab._post_text((full or {}).get("post") or {}) if full else ((post.get("content") or ""), [], [])
+                          it = Item(source="hoyolab", game=gk, id=pid, url=hoyolab.ARTICLE_URL.format(pid),
+                                    title=re.sub(r"<[^>]+>", "", post.get("subject") or ""), text=text,
+                                    published_ts=int(post.get("created_at") or 0), images=imgs, links=links)
+                          out.append(f"- `classify` → {schedule.classify(g, it)!r}")
+                          item_report(it)
+                          out += ["  <details><summary>full text (first 2500 chars)</summary>", "", "  ```"]
+                          out += ["  " + ln for ln in text[:2500].split("\n")]
+                          out += ["  ```", "", "  </details>", ""]
                   ids = [i.strip() for i in os.environ["PROBE_KURO_IDS"].split(",") if i.strip()]
                   rx = os.environ["PROBE_KURO_TITLE_RE"].strip()
                   if ids or rx:
