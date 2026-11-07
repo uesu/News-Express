@@ -86,7 +86,7 @@ env:
   PROBE_KURO_IDS: ${{ inputs.kuro_ids || '5065' }}
   PROBE_KURO_TITLE_RE: ${{ inputs.kuro_title_regex || 'chronicled|collab' }}
   PROBE_HOYOLAB_SEARCH: ${{ inputs.hoyolab_search || 'genshin:Chronicled Wish,starrail:Collaboration Warp,zzz:Signal Search Rescreening' }}
-  PROBE_REVEAL_IDS: ${{ inputs.reveal_ids || 'genshin:47339559,genshin:47351623' }}
+  PROBE_REVEAL_IDS: ${{ inputs.reveal_ids || 'genshin:47339559,genshin:47351623,hna:47339557' }}
   PROBE_REVEAL_HOURS: ${{ inputs.reveal_hours || '72' }}
   PROBE_MAINT_GAMES: ${{ inputs.maint_games || 'starrail,wuwa,hna' }}
   GE_REF: ${{ inputs.ge_ref || 'main' }}
