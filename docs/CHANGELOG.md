@@ -24,8 +24,11 @@ extra request); the background is polled only inside a launch window, idle polls
 requests. The 3.8 site `bg-video.mp4?auth_key=…` is not in the HTML or the bundles — not a usable
 source. HNA: HoYoPlay lists it as `yneO4yGc4x` (no branch yet, launch Spring 2027, Final Closed Beta
 11-25); the id went into the `games.json` note for launch day rather than the config, since a wired
-id without a branch adds a `getGameBranches` re-fetch to every run. GE smoke 618/618, pytest 703, ruff
-clean. No News-Express engine, card, cache or Devvit change.
+id without a branch adds a `getGameBranches` re-fetch to every run. Hand-off v2 (owner decision on
+the HNA question): `Nexus Meet | <name>` is HNA's character introduction and now classifies
+(`hna_nexus_meet`, HNA feed only — `47339557` → Juelle); `Anidex | <name>` cards are anima, not
+characters, and are excluded by title. GE smoke 618/618, pytest 703, ruff clean. No News-Express
+engine, card, cache or Devvit change.
 
 ## Unreleased — Game-Express hand-off: a passing "Chronicled Wish" mention never makes a phase notice special (2026-11-07)
 
