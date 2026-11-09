@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — Devvit SDK/CLI 0.15.2 → 0.15.3 (2026-11-10)
+
+`devvit/gaming-express/package.json` + `package-lock.json` only (`devvit`, `@devvit/web` and the 21
+`@devvit/*` transitive packages, every lockfile integrity verified against the npm registry).
+0.15.3 (published 2026-11-09 20:24 UTC) compared tarball by tarball against 0.15.2: the
+`@devvit/shared-types` fetch polyfill wraps the response body as `Uint8Array`,
+`@devvit/reddit` `getCurrentUsername()` reads `context.username` instead of calling the API,
+new dev-portal-only proto fields; `scheduler` / `settings` / `redis` / `cache` / `server` /
+`shared` differ in source maps only. Nothing the relay uses changes. Same-day bump at the owner's
+request (the portal's App Versions tab flagged 0.15.2). `npm ci` + `npm test` (tsc, biome, 25 unit
+tests, esbuild) green. Ships to Reddit with the usual `upload --copy-paste` + `install` as Reddit
+0.0.8; `docs/DEVVIT_SETUP.md` §8 row 0.0.11. No engine, card, cache, workflow or prod-sync change
+(the devvit folder is dev-only; sync #48 for #127 correctly synced 0 files).
+
 ## Unreleased — Game-Express hand-off: feature 3 media heal for a tile Discord left unresolved (WW 3.8 "Update Content", Monitor #4909) (2026-11-09)
 
 Live check of GE feature 3: the WW 3.8 "Update Content" card (2026-11-09 18:30 UTC+8, run

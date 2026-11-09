@@ -275,8 +275,8 @@ The **code** versions below are the repository's numbering (rounds 99–104). Re
 uploads itself: 0.0.1–0.0.4 were uploaded one by one; code 0.0.5–0.0.8 went up together as
 **Reddit 0.0.5** on 2026-11-02 (merge of PR #109, `--copy-paste` login); the readme-only
 code 0.0.9 went up as **Reddit 0.0.6** on 2026-11-03 (same code as 0.0.8, settings and Redis
-memory carried over, no re-bootstrap) and code 0.0.10 (devvit 0.15.2) as **Reddit 0.0.7**, live on
-`r/GamingExpressRelay` since then.
+memory carried over, no re-bootstrap), code 0.0.10 (devvit 0.15.2) as **Reddit 0.0.7** and code
+0.0.11 (devvit 0.15.3) as **Reddit 0.0.8**, live on `r/GamingExpressRelay` since then.
 `npx devvit install` / the portal's **Update** button name the Reddit number.
 
 | Version | Date | Change |
@@ -291,6 +291,7 @@ memory carried over, no re-bootstrap) and code 0.0.10 (devvit 0.15.2) as **Reddi
 | 0.0.8 | 2026-11-02 | **1:1 with the old chain** (round 104). (a) Re-check stages ~**5 min** / 30 min / 2 h / 6 h / **24 h** (the first look is the next poll after delivery; late approvals and late publisher comments are caught by the 24 h look). (b) A post first seen filtered/removed and later live (**approval**) is re-sent complete (`resent: "approved"`, `revision` ≥ 2; reasons join with `+`) so a reader whose 6 h window lost the first record still has the whole post. (c) Record keeps `v: 1`; `RECHECK_WINDOW` 24 h + 30 min. A publisher-comment follow-up was prototyped the same day and dropped at the owner's request before upload (neither engine shows OP comments). Uploads as Reddit **`0.0.7`**. |
 | 0.0.9 | 2026-11-03 | Directory readme rewritten as a full product readme (how it works, delivery semantics, setup, settings, inbox contract with `v:1` / `v:2` examples, permissions, Devvit/Discord sources, toolchain). No code change. Vaguer second pass the same day (#116: no exact numbers, keys, schema or command sequence). Uploaded as Reddit **`0.0.6`** on 2026-11-03 10:16 PHT and installed in place. |
 | 0.0.10 | 2026-11-03 | `devvit` / `@devvit/web` 0.15.1 → **0.15.2** (release notes: Community Engagement Playbook docs + `media.upload` attribution — nothing the relay uses; the portal's App Versions tab flagged 0.15.1 with "a new version of Devvit is available"). No code change; 25 unit tests, build and schema check green. Uploads as Reddit **`0.0.7`**. |
+| 0.0.11 | 2026-11-10 | `devvit` / `@devvit/web` 0.15.2 → **0.15.3** (tarball diff: `@devvit/shared-types` fetch polyfill wraps the response body as `Uint8Array`; `@devvit/reddit` `getCurrentUsername()` reads `context.username`; dev-portal proto fields; the other packages differ in source maps only — nothing the relay uses). No code change; 25 unit tests, build and lint green. Uploads as Reddit **`0.0.8`**. |
 
 ## 9. News-Express reader (round 101 — the relay as the primary listing)
 
