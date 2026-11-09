@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — Game-Express hand-off: feature 3 media heal for a tile Discord left unresolved (WW 3.8 "Update Content", Monitor #4909) (2026-11-09)
+
+Live check of GE feature 3: the WW 3.8 "Update Content" card (2026-11-09 18:30 UTC+8, run
+`#4909`) delivered four Kuro strips; Discord's create response typed three of them
+(`1080 × 4001 / 13871 / 7721`, `image/png`) and returned the third with only `url` + `proxy_url`,
+which the client rendered as "Image not found" until the owner re-sent the identical message from
+Discohook. This is the same transient the News-Express Reddit/Twitter engines already repair
+("MEDIA-HEAL": response evidence → delayed re-read → one identical edit only if still cold).
+Hand-off patch on GE `2d7a0e2` (PR comment): `SendResult.message` keeps Discord's returned JSON;
+`discord.unresolved_media_urls()` is the pure inspector (proxy attempted but no dimensions/content
+type, or explicit `0 × 0`; sparse metadata without a proxy attempt is unknown; `attachment://`
+never inspected); `run_news` queues delivered/edited pages whose response carried one of the card's
+own cold tiles, waits once per game (`NEWS_MEDIA_HEAL_DELAY`, default 6 s), re-reads the message
+(`WebhookClient.fetch`) and issues one identical same-message PATCH (`WebhookClient.heal_media`)
+only if the tile is still cold; outcome reported as `🩹 … media heal …`. Nothing persisted; dry-run
+and `NEWS_MEDIA_HEAL=0` never edit; a heal never fails a delivered card. GE smoke 620/620,
+pytest 705, ruff clean. No News-Express engine, card, cache or Devvit change.
+
 ## Unreleased — Game-Express hand-off: a dated launcher asset belongs to the launch it is dated for (HSR 4.7 Pre-Load at tier 3) (2026-11-09)
 
 Live check of GE feature 4 after the HSR 4.7 Pre-Load card (posted 2026-11-09 14:00 UTC+8 on the
