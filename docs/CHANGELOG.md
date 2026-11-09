@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — Game-Express hand-off: a dated launcher asset belongs to the launch it is dated for (HSR 4.7 Pre-Load at tier 3) (2026-11-09)
+
+Live check of GE feature 4 after the HSR 4.7 Pre-Load card (posted 2026-11-09 14:00 UTC+8 on the
+official timing, run `#4881`, GE `45f3b2a`): the card carried the Special Program key art (tier 3)
+while HoYoPlay already showed the 4.7 launcher video. Prod state explained it — the 4.7 assets
+(`fastcdn…/2026/11/06/…webm` + two wallpapers) were filed under **4.6 `seen_media`**, because
+`resolve_launch_media` reads un-linked HoYoPlay backgrounds as the live version's whenever the
+branch has no `pre_download`, and at 14:00:37 the branch had not flipped yet; from then on
+`_url_used_by_prior_version` would have barred the video from every 4.7 card. Same class as the
+11-08 Kuro fix. Hand-off patch on GE `c62bab5` (PR comment): dated evidence beats an observation —
+an asset dated inside the launch's −11 d…+7 d window is never filed under an earlier version, and an
+earlier version's bare `seen_media` hit no longer blocks it (a `launch_media` lock still does; 4.6's
+`2026/09/23` launch assets and Phase II swaps stay blocked). Self-healing: the posted Pre-Load card
+is silently edited to the webm if the patch lands inside its 6 h window (until 20:00 UTC+8 on 11-09);
+the Maintenance (11-11 06:00) and Servers Live cards post at tier 1 either way. GE smoke 619/619,
+pytest 704, ruff clean. No News-Express engine, card, cache or Devvit change.
+
 ## Unreleased — Game-Express hand-off: the Kuro launcher background belongs to the version it appeared for; feature 3 / 4 probe round (2026-11-08)
 
 `wiki_probe.yml` gained the `features` job (inputs `reveal_ids`, `reveal_hours`, `maint_games`): it
