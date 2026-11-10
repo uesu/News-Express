@@ -158,7 +158,8 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 │       ├── dependabot_auto_merge.yml  # opt-in auto-merge for Dependabot PRs
 │       ├── python_version_bump.yml    # verified CPython patch/minor PR workflow
 │       ├── sync_prod.yml          # dev-only: pushes main to the production repos
-│       └── fleet_probe.yml        # dev-only, manual: X RSS instance probe from the runners
+│       ├── fleet_probe.yml        # dev-only, manual: X RSS instance probe from the runners
+│       └── kuro_probe.yml         # dev-only, manual: WuWa launcher endpoints (GE feature 4) from the runners
 ├── devvit/                        # the Devvit relay (Reddit → Discord intake channel)
 ├── docs/                          # decision records + guides (see Docs index below)
 ├── testing area/                  # the engines (see Testing)

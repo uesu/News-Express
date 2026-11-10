@@ -1,0 +1,249 @@
+name: Kuro launcher source probe (manual, read-only)
+
+# 2026-11-11: a manual, read-only probe of the Wuthering Waves LAUNCHER SOURCES
+# from the GitHub Actions runners, for Game-Express feature 4 (Pre-Load /
+# Maintenance / Servers Live media). The sandbox that prepares hand-offs cannot
+# reach kurogame.com, so the runners are the vantage point.
+#
+# It reads, side by side, the endpoint Game-Express uses today and the ones a
+# GitHub survey of Kuro launcher projects (McKuro, Haiyu, Arietta, Tideward,
+# nadare, Vedaru/kuro, 555me/game-CDN-List) found in 2026-10/11:
+#
+#   legacy global  — launcher/game/G153/<old key>/index.json (live / pre-download
+#                    versions), launcher/launcher/<old key>/G153/index.json
+#                    (functionCode.background) and the background en.json it
+#                    points at: the video, its first frame, the slogan PNG.
+#   new global     — the "Kuro Launcher" protocol: launcher/app/<new key>/index.json,
+#                    launcher/game/<new key>/G153/official/index.json
+#                    (config.functionCode.background, predownload, resourcePacks
+#                    versions) and official/background/<code>/en.json.
+#   information    — the launcher carousel (slideshow url + jumpUrl) and the
+#                    notice / news / activity lists, legacy and new paths.
+#   CN twins       — the same four readings on the CN hosts (zh-Hans): art only,
+#                    never text, so a CN video that lands earlier can be judged.
+#
+# For every media URL it also does a HEAD (Last-Modified, Content-Length,
+# Content-Type) and flags a dated path (/assets/background/YYYYMMDD/), which is
+# what lets the HoYoPlay dated-evidence rule apply to Kuro.
+#
+# Dev-only: in sync_prod.py's DEV_ONLY_WORKFLOW_FILES, so it never reaches the
+# production repos. No secrets, no webhooks, no cache writes, no posting. It is
+# never scheduled — dispatch it by hand, or let it self-run on a pull request
+# that edits this file. The report is left as one comment on the PR, refreshed
+# in place (job summaries are not readable through the API).
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/kuro_probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Only used to leave the report as a comment on the pull request that
+  # triggered it.
+  pull-requests: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Read every launcher endpoint (stdlib only; nothing is written)
+        run: |
+          python3 - <<'PY'
+          import gzip, json, os, re, time, urllib.request, urllib.error, zlib
+          G = "https://prod-alicdn-gamestarter.kurogame.com"
+          GV = "https://prod-volcdn-gamestarter.kurogame.net"
+          CN = "https://prod-cn-alicdn-gamestarter.kurogame.com"
+          CNV = "https://prod-volcdn-gamestarter.kurogame.xyz"
+          OLD, NEW = "50004_obOHXFrFanqsaIEOmuKroCcbZkQRBC7c", "50004_P7xcUZnEr1AXIGON25E6KjpOgTlVrg6e"
+          CN_OLD, CN_NEW = "10003_Y8xXrXk65DqFHEDgApn3cpK5lfczpFx5", "10003_oLNgHF1CESo51DGHN2odtp40e3oI1HfZ"
+          UA = {"User-Agent": "Mozilla/5.0 (probe; read-only)"}
+          DATED = re.compile(r"/(20\d{6})/")
+          CODE = re.compile(r"^[A-Za-z0-9]{8,64}$")
+          raw = {}
+
+          def get_json(name, url):
+              t0 = time.monotonic()
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(f"{url}?_t={int(time.time())}", headers=UA), timeout=20) as r:
+                      body, code, lm = r.read(), r.status, r.headers.get("Last-Modified", "")
+              except urllib.error.HTTPError as e:
+                  return {"name": name, "url": url, "code": e.code, "ms": int((time.monotonic() - t0) * 1000), "data": None, "lm": ""}
+              except Exception as e:
+                  return {"name": name, "url": url, "code": 0, "ms": int((time.monotonic() - t0) * 1000), "data": None, "lm": type(e).__name__}
+              ms = int((time.monotonic() - t0) * 1000)
+              # The CDN gzips every JSON whatever the request says; urllib does not inflate.
+              if body[:2] == b"\x1f\x8b":
+                  try:
+                      body = gzip.decompress(body)
+                  except Exception:
+                      body = zlib.decompress(body, 47)
+              try:
+                  data = json.loads(body.decode("utf-8-sig"))
+              except Exception:
+                  data = {"_not_json": body[:200].decode("utf-8", "replace")}
+              raw[name] = data
+              return {"name": name, "url": url, "code": code, "ms": ms, "data": data, "lm": lm}
+
+          def head(url):
+              try:
+                  req = urllib.request.Request(url, headers=UA, method="HEAD")
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      h = r.headers
+                      return {"code": r.status, "lm": h.get("Last-Modified", ""), "len": h.get("Content-Length", ""), "type": h.get("Content-Type", "")}
+              except urllib.error.HTTPError as e:
+                  return {"code": e.code, "lm": "", "len": "", "type": ""}
+              except Exception as e:
+                  return {"code": 0, "lm": type(e).__name__, "len": "", "type": ""}
+
+          rows, media, notes = [], [], []
+          def row(r, summary):
+              rows.append(f"| {r['name']} | {r['code']} | {r['ms']} | {r['lm'] or '-'} | {summary} |")
+
+          def bg_fields(d):
+              if not isinstance(d, dict):
+                  return {}
+              return {k: d.get(k) for k in ("functionSwitch", "backgroundFileType", "backgroundFile", "firstFrameImage", "slogan") if k in d}
+
+          def media_rows(tag, d):
+              for key in ("backgroundFile", "firstFrameImage", "slogan"):
+                  u = str((d or {}).get(key) or "")
+                  if not u:
+                      continue
+                  h = head(u)
+                  m = DATED.search(u)
+                  media.append(f"| {tag} | {key} | {h['code']} | {h['lm'] or '-'} | {h['len'] or '-'} | {h['type'] or '-'} | {m.group(1) if m else '-'} | {u} |")
+
+          def fc_code(d, *path):
+              cur = d
+              for p in path:
+                  cur = cur.get(p) if isinstance(cur, dict) else None
+              return str(cur or "").strip()
+
+          def info_summary(d):
+              if not isinstance(d, dict):
+                  return "not a dict"
+              slides = d.get("slideshow") or []
+              gd = d.get("guidance") or {}
+              parts = [f"slideshow={len(slides)}"]
+              for k in ("activity", "notice", "news"):
+                  v = gd.get(k) if isinstance(gd, dict) else None
+                  if isinstance(v, dict):
+                      v = v.get("contents") or v.get("list") or []
+                  parts.append(f"{k}={len(v) if isinstance(v, list) else '?'}")
+              return " ".join(parts)
+
+          def info_detail(tag, d):
+              out = []
+              if not isinstance(d, dict):
+                  return out
+              for s in (d.get("slideshow") or [])[:8]:
+                  if isinstance(s, dict):
+                      out.append(f"| {tag} | slide | {s.get('url', '')} | {s.get('jumpUrl', '')} | {s.get('time', '') or s.get('startTime', '')} |")
+              gd = d.get("guidance") or {}
+              for k in ("activity", "notice", "news"):
+                  v = gd.get(k) if isinstance(gd, dict) else None
+                  if isinstance(v, dict):
+                      v = v.get("contents") or v.get("list") or []
+                  for it in (v or [])[:4]:
+                      if isinstance(it, dict):
+                          out.append(f"| {tag} | {k} | {str(it.get('content') or it.get('title') or '')[:80]} | {it.get('jumpUrl', '')} | {it.get('time', '')} |")
+              return out
+
+          infos = []
+
+          def legacy(tag, host, key, game, lang):
+              r = get_json(f"{tag} game index", f"{host}/launcher/game/{game}/{key}/index.json")
+              d = r["data"] if isinstance(r["data"], dict) else {}
+              dflt = d.get("default") or {}
+              pre = d.get("predownload") or {}
+              row(r, f"keys={sorted(d)[:8]} live={dflt.get('version') or (dflt.get('config') or {}).get('version')} pre={pre.get('version') or (pre.get('config') or {}).get('version') if pre else None}")
+              r = get_json(f"{tag} launcher index", f"{host}/launcher/launcher/{key}/{game}/index.json")
+              d = r["data"] if isinstance(r["data"], dict) else {}
+              code = fc_code(d, "functionCode", "background")
+              row(r, f"functionCode={d.get('functionCode')}")
+              if CODE.match(code):
+                  r = get_json(f"{tag} background", f"{host}/launcher/{key}/{game}/background/{code}/{lang}.json")
+                  f = bg_fields(r["data"])
+                  row(r, f"switch={f.get('functionSwitch')} type={f.get('backgroundFileType')} video={'yes' if str(f.get('backgroundFile', '')).lower().endswith(('.mp4', '.webm', '.mov')) else 'no'}")
+                  media_rows(f"{tag}", f)
+              r = get_json(f"{tag} information", f"{host}/launcher/{key}/{game}/information/{lang}.json")
+              row(r, info_summary(r["data"]))
+              infos.extend(info_detail(tag, r["data"]))
+
+          def newer(tag, host, key, game, lang):
+              r = get_json(f"{tag} app index", f"{host}/launcher/app/{key}/index.json")
+              d = r["data"] if isinstance(r["data"], dict) else {}
+              row(r, f"keys={sorted(d)[:10]}")
+              r = get_json(f"{tag} game index", f"{host}/launcher/game/{key}/{game}/official/index.json")
+              d = r["data"] if isinstance(r["data"], dict) else {}
+              packs = d.get("resourcePacks") or {}
+              vers = sorted({str((v or {}).get("version")) for v in packs.values() if isinstance(v, dict)}) if isinstance(packs, dict) else []
+              pre = d.get("predownload")
+              pre_v = None
+              if isinstance(pre, dict):
+                  pp = pre.get("resourcePacks") or {}
+                  pre_v = sorted({str((v or {}).get("version")) for v in pp.values() if isinstance(v, dict)}) if isinstance(pp, dict) else sorted(pre)[:6]
+              code = fc_code(d, "config", "functionCode", "background")
+              row(r, f"keys={sorted(d)[:8]} live={vers} predownload={pre_v if pre is not None else None} functionCode={(d.get('config') or {}).get('functionCode')}")
+              if CODE.match(code):
+                  r = get_json(f"{tag} background", f"{host}/launcher/game/{key}/{game}/official/background/{code}/{lang}.json")
+                  f = bg_fields(r["data"])
+                  row(r, f"switch={f.get('functionSwitch')} type={f.get('backgroundFileType')} video={'yes' if str(f.get('backgroundFile', '')).lower().endswith(('.mp4', '.webm', '.mov')) else 'no'}")
+                  media_rows(f"{tag}", f)
+              r = get_json(f"{tag} information", f"{host}/launcher/app/{key}/{game}/official/information/{lang}.json")
+              row(r, info_summary(r["data"]))
+              infos.extend(info_detail(tag, r["data"]))
+
+          legacy("global legacy", G, OLD, "G153", "en")
+          newer("global new", G, NEW, "G153", "en")
+          legacy("CN legacy", CN, CN_OLD, "G152", "zh-Hans")
+          newer("CN new", CN, CN_NEW, "G152", "zh-Hans")
+          for name, url in (("global new (backup host volcdn.net)", f"{GV}/launcher/game/{NEW}/G153/official/index.json"),
+                            ("CN new (backup host volcdn.xyz)", f"{CNV}/launcher/game/{CN_NEW}/G152/official/index.json")):
+              r = get_json(name, url)
+              row(r, f"keys={sorted(r['data'])[:6] if isinstance(r['data'], dict) else '-'}")
+
+          out = ["## Kuro launcher source probe (from the GitHub Actions runners)", "",
+                 f"{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())} · read-only · stdlib", "",
+                 "### Endpoints", "", "| endpoint | HTTP | ms | Last-Modified | reading |", "|---|---:|---:|---|---|", *rows, "",
+                 "### Media (HEAD)", "", "| source | field | HTTP | Last-Modified | bytes | type | dated path | url |", "|---|---|---:|---|---:|---|---|---|", *media, "",
+                 "### Information (carousel + lists, first rows)", "", "| source | kind | content / image | jumpUrl | time |", "|---|---|---|---|---|", *infos, "",
+                 "<details><summary>Raw JSON (background + information + new game index config, truncated)</summary>", "", "```json"]
+          keep = {}
+          for k, v in raw.items():
+              if "background" in k or "information" in k:
+                  keep[k] = v
+              elif "game index" in k and isinstance(v, dict):
+                  keep[k] = {kk: v.get(kk) for kk in ("default", "predownload", "config") if kk in v}
+                  if isinstance(keep[k].get("config"), dict):
+                      keep[k]["config"] = {kk: vv for kk, vv in keep[k]["config"].items() if kk in ("functionCode", "predownloadSwitch", "version")}
+          txt = json.dumps(keep, ensure_ascii=False, indent=1)
+          out += [txt[:45000], "```", "</details>"]
+          text = "\n".join(out)
+          print("\n" + text)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+              fh.write(text + "\n")
+          with open("/tmp/kuro_probe.md", "w", encoding="utf-8") as fh:
+              fh.write("<!-- kuro-probe -->\n" + text + "\n")
+          PY
+
+      - name: Leave the report on the pull request (pull_request runs only)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # One comment per PR, refreshed in place on later runs.
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+            -q '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- kuro-probe -->")))] | last | .id // empty')
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -F body=@/tmp/kuro_probe.md >/dev/null
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -F body=@/tmp/kuro_probe.md >/dev/null
+          fi
