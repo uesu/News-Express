@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — Devvit relay: biome schema pinned to the installed package (2026-11-10)
+
+`devvit/gaming-express/biome.jsonc` only. After #127 (biome 2.6.4 → 2.6.6) `npm run lint` printed
+one info — *configuration schema version does not match the CLI version 2.6.6 (Expected 2.6.6,
+Found 2.6.4)* — because Dependabot bumps the package but cannot touch the `$schema` URL. The URL
+now points at `./node_modules/@biomejs/biome/configuration_schema.json`, the schema shipped with
+whatever biome version is installed, so the two can never drift again. Lint: `Checked 11 files.
+No fixes applied.` with no info line; 25/25 unit tests. Lint-only config: not part of the uploaded
+bundle, no re-upload (Reddit 0.0.8 on 0.15.3 stays as is).
+
 ## Unreleased — Devvit SDK/CLI 0.15.2 → 0.15.3 (2026-11-10)
 
 `devvit/gaming-express/package.json` + `package-lock.json` only (`devvit`, `@devvit/web` and the 21
