@@ -55,7 +55,7 @@ jobs:
       - name: Read every launcher endpoint (stdlib only; nothing is written)
         run: |
           python3 - <<'PY'
-          import json, os, re, time, urllib.request, urllib.error
+          import gzip, json, os, re, time, urllib.request, urllib.error, zlib
           G = "https://prod-alicdn-gamestarter.kurogame.com"
           GV = "https://prod-volcdn-gamestarter.kurogame.net"
           CN = "https://prod-cn-alicdn-gamestarter.kurogame.com"
@@ -77,6 +77,12 @@ jobs:
               except Exception as e:
                   return {"name": name, "url": url, "code": 0, "ms": int((time.monotonic() - t0) * 1000), "data": None, "lm": type(e).__name__}
               ms = int((time.monotonic() - t0) * 1000)
+              # The CDN gzips every JSON whatever the request says; urllib does not inflate.
+              if body[:2] == b"\x1f\x8b":
+                  try:
+                      body = gzip.decompress(body)
+                  except Exception:
+                      body = zlib.decompress(body, 47)
               try:
                   data = json.loads(body.decode("utf-8-sig"))
               except Exception:
