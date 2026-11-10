@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — dev-only `kuro_probe.yml`: Wuthering Waves launcher sources for GE feature 4, read from the runners (2026-11-11)
+
+Research round for GE feature 4 (WuWa Pre-Load / Maintenance / Servers Live media): a GitHub survey of
+every project that reads Kuro's launcher CDN (McKuro, Haiyu, Arietta, Tideward, nadare, Vedaru/kuro,
+TwintailTeam manifests, 555me/game-CDN-List, the `wuthering-waves` topic) found, next to the legacy
+global endpoint GE reads today, the new-protocol "Kuro Launcher" paths (`launcher/app/<key>/index.json`,
+`launcher/game/<key>/G153/official/index.json` → `config.functionCode.background` →
+`official/background/<code>/en.json`, same JSON shape; CN twin serves **dated** asset paths
+`/assets/background/YYYYMMDD/`), the launcher carousel `information/<lang>.json` (slideshow `url` +
+`jumpUrl` to the website article, notice / news / activity lists) and the CN hosts. The sandbox cannot
+reach kurogame.com, so `.github/workflows/kuro_probe.yml` (manual + self-runs on a PR that edits it;
+`DEV_ONLY_WORKFLOW_FILES`, never synced) reads all of them side by side — legacy and new, global (`en`)
+and CN (`zh-Hans`), backup hosts, a HEAD on every media URL with Last-Modified / size / type and the
+dated-path flag — and leaves the report as one PR comment. Read-only, stdlib only, no secrets, nothing
+posted. No News-Express engine, card, cache or Devvit change.
+
 ## Unreleased — Game-Express hand-off: a star or a level tag inside a name is still a name (HSR 4.7 phase 1, Monitor #5008) (2026-11-10)
 
 Live check of GE feature 1 after the HSR 4.7 Phase I warp notice (HoYoLAB 47385253 / X
