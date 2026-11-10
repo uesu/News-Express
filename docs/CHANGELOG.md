@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — Game-Express hand-off: a star or a level tag inside a name is still a name (HSR 4.7 phase 1, Monitor #5008) (2026-11-10)
+
+Live check of GE feature 1 after the HSR 4.7 Phase I warp notice (HoYoLAB 47385253 / X
+2119988418708955289, read by prod run #5008 at 2026-11-10 03:00 UTC): the schedule card's phase 1
+was rewritten to `Sparxie, Yao Guang` — official, locked — while the calendar and the wiki had
+`Aeon ★ Aha` (4.7's debut, whole-version warp) and `Silver Wolf LV.999` on that phase too. Two of
+four 5★ on the card. Root cause reproduced on the GE tree: `plausible_name()` refused both names
+(`★` outside `_NAME_CHARS`; the 3+ digit rule meant for years and post ids hit `999`), so the
+official reading shrank and outranked the full one.
+
+Hand-off patch on GE `e3d913e` (PR comment): `NAME_WORDS`/`_NAME_CHARS` accept `★`/`☆` between
+words; `_long_number()` cuts a level tag before the digit test (a bare tag is never a name);
+`EPITHET_NAME` reads `"Epithet" Aeon ★ Aha` whole. No override needed: the same X post that wrote
+the short list is re-read by the corrected reader inside the 72 h window (GE's existing same-post
+heal), verified against the real prod record. "Indelible Coterie" is HSR's recurring warp title,
+not a banner outside the phases — no `※` line. GE smoke 621/621, pytest 706, ruff clean.
+
 ## Unreleased — Devvit relay: biome schema pinned to the installed package (2026-11-10)
 
 `devvit/gaming-express/biome.jsonc` only. After #127 (biome 2.6.4 → 2.6.6) `npm run lint` printed
