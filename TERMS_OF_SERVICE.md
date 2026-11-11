@@ -73,8 +73,7 @@ Embeddit (embeddit.deltandy.me) / vxReddit (vxreddit.com) Reddit-embed mirrors (
 Reddit V3 proxy-media sources fetched directly for public post data),
 reddit.com RSS and Reddit's own media CDNs (i.redd.it / preview.redd.it / v.redd.it), the
 proxy.embedez.com / vxreddit.com video-muxing fallbacks (Reddit V3, used only when Reddit's own
-video files are unavailable), seaof.glass (optional YouTube playback, off by default),
-i.ytimg.com (YouTube thumbnails), discohook.app (optional per-card share-link preview, on by
+video files are unavailable), i.ytimg.com (YouTube thumbnails), discohook.app (optional per-card share-link preview, on by
 default, keyless public API), GitHub Actions,
 cron-job.org, and Discord webhooks. **Availability is not
 guaranteed**: mirrors rotate or shut down, APIs change (EmbedEZ explicitly warns of breaking

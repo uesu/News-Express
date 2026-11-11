@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — the unused YouTube mp4 playback path is removed for good (2026-11-11)
+
+`testing area/reddit_main_v3.py`, docs and config only; no card or pipeline change. Live cards for
+YouTube posts have always been **thumbnail image tile + animated button + one bare link message**, and
+the optional `seaof.glass` mp4 probe behind `YOUTUBE_MEDIA_EMBED=1` never shipped enabled because no
+candidate transcoder was reliable. Removed outright: the switch, `YOUTUBE_MP4_TEMPLATE`, the probe and
+its retry/log lines, the video-tile branch it fed, the now-pointless `is_live` parameter of
+`resolve_youtube_media`, the `.env.example` block, the `reddit_monitor.yml` Variable mapping, the
+README feature + Variable rows, and the `seaof.glass` rows in the Terms and Privacy docs.
+`tests/test_reddit_signals.py` drops it from the round-52 Variable list (101 checks). Round 114 (see
+`docs/history/ROUND_114.md`); smoke `r114a–d`; rounds 112/113 unchanged and still green.
+
 ## Unreleased — Reddit relay cards: mobile/music YouTube links, Reddit's `\>` escape, scheme-less x.com links (2026-11-11)
 
 `testing area/reddit_main_v3.py`, reading path only. Three live cards fixed, no structure or

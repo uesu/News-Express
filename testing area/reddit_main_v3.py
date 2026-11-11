@@ -59,11 +59,11 @@
 #   • signed preview.redd.it URLs MUST be used verbatim — changing ANY query
 #     param (even width) breaks the signature (403, verified).
 #   • YouTube: i.ytimg.com thumbnail (no sig) + official oembed title +
-#     "YouTube" button with the starwardspark3 animated emoji; when
-#     YOUTUBE_MEDIA_EMBED is True it also tries seaof.glass/yt/<id>.mp4
-#     (playable mp4, verified 206 with Discordbot UA; 502 on cold start once —
-#     handled by range-check + 1 retry, else thumb+button). youtube.com/live
-#     links → thumb+button only.
+#     "YouTube" button with the starwardspark3 animated emoji, plus one bare
+#     link message so Discord renders the official player. A YouTube post is
+#     NEVER a video tile: no third-party transcoder is reliable enough, so the
+#     card never points Discord at a YouTube mp4 (round 114 removed the old
+#     seaof.glass attempt and its YOUTUBE_MEDIA_EMBED switch for good).
 #   • redgifs link posts: media.redgifs.com/<name>.mp4 (open, verified).
 #
 # ■ DISCORD COMPONENTS-V2 LIMITS (verified against Discord docs, 2026-09-15):
@@ -89,9 +89,8 @@
 #      proxy, no signature, no expiry — before the embedez/vxreddit CMAF
 #      muxing proxies. (The signed packaged-media.redd.it DASH master links
 #      expire within hours — the e=… query param — so they are NOT used.)
-#   6. YouTube: default is now thumbnail + the animated starwardspark3
-#      button (deterministic, no third-party transcoder in the hot path).
-#      Set YOUTUBE_MEDIA_EMBED=1 to also try seaof.glass playback.
+#   6. YouTube: thumbnail + the animated starwardspark3 button only
+#      (deterministic, no third-party transcoder anywhere in the path).
 #   7. (Removed in round 104 at the owner's request: the "💬 OP comment"
 #      card line / REDDIT_OP_COMMENT — it never appeared on live cards.)
 #   8. Discohook: after each successful post a keyless share-link preview of
@@ -1387,12 +1386,10 @@ VIDEO_RUN_BUDGET_SECONDS = 180.0
 VIDEO_PROBE_BYTES = 64 * 1024
 
 
-# YouTube: default = thumbnail + animated starwardspark3 button (deterministic,
-# no third-party transcoder in the hot path). Set YOUTUBE_MEDIA_EMBED=1 to ALSO
-# try to play the video via seaof.glass (quartz) — range-checked with 1 retry,
-# degrades to thumbnail + button automatically.
-YOUTUBE_MEDIA_EMBED = _env_flag("YOUTUBE_MEDIA_EMBED", "0")
-YOUTUBE_MP4_TEMPLATE = "https://seaof.glass/yt/{video_id}.mp4"
+# YouTube: thumbnail + animated starwardspark3 button, always (deterministic,
+# no third-party transcoder in the hot path). Round 114: the old optional
+# seaof.glass mp4 playback attempt and its YOUTUBE_MEDIA_EMBED switch are gone
+# for good — no candidate transcoder proved reliable.
 
 # FULL MODE only: include the OP's (stickied first, else first top-level)
 # comment in the card.
@@ -7110,24 +7107,17 @@ async def enrich_gallery_redlib(session: aiohttp.ClientSession, path: str,
     return []
 
 
-async def resolve_youtube_media(session: aiohttp.ClientSession, vid: str, is_live: bool):
+async def resolve_youtube_media(session: aiohttp.ClientSession, vid: str):
+    """Returns the card's thumbnail URL for one YouTube video id.
+
+    Round 114: this used to also return a playable mp4 URL from a third-party
+    transcoder behind a playback switch — never reliable, never used, now gone
+    (the `is_live` parameter existed only for that mp4 gate). A video id
+    therefore only ever yields an IMAGE tile (thumbnail) + the button + the
+    bare link message.
+
+    maxresdefault 404s for videos without 4K; hqdefault always exists.
     """
-    Returns (media_url_or_None, thumb_url). YOUTUBE_MEDIA_EMBED tries
-    seaof.glass .mp4 (1 retry for cold start). Thumbs: maxres -> hqdefault.
-    """
-    media_url = None
-    if YOUTUBE_MEDIA_EMBED and not is_live:
-        mp4 = YOUTUBE_MP4_TEMPLATE.format(video_id=vid)
-        for attempt in (1, 2):
-            ok, size = await media_url_ok(session, mp4, timeout=90, video=True)
-            if ok:
-                media_url = mp4
-                logging.info(f"YouTube mp4 OK via seaof.glass ({size} bytes).")
-                break
-            if attempt == 1:
-                logging.info("YouTube mp4 check failed — retrying once (cold transcode?).")
-                await asyncio.sleep(5)
-    # maxresdefault 404s for videos without 4K; hqdefault always exists.
     thumb = None
     for name in ("maxresdefault", "hqdefault", "mqdefault"):
         cand = f"https://i.ytimg.com/vi/{vid}/{name}.jpg"
@@ -7137,7 +7127,7 @@ async def resolve_youtube_media(session: aiohttp.ClientSession, vid: str, is_liv
             break
     if thumb is None:
         thumb = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
-    return media_url, thumb
+    return thumb
 
 
 async def fetch_yt_oembed(session: aiohttp.ClientSession, yt_url: str) -> dict | None:
@@ -7942,13 +7932,13 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
     # youtube tile / thumbnail (both modes)
     yt_vid, yt_live = extract_youtube_id(yt_url)
     if yt_vid:
-        yt_media_url, yt_thumb = await resolve_youtube_media(session, yt_vid, yt_live)
-        if yt_media_url and not any(x["kind"] == "video" for x in media):
-            media.append({"kind": "video", "url": yt_media_url})
-            media_provider = media_provider or "youtube"
+        # Round 114: thumbnail only — a YouTube post never becomes a VIDEO
+        # tile (the old seaof.glass mp4 attempt is removed), so the card's
+        # YouTube face is always this image + the button + the link message.
+        yt_thumb = await resolve_youtube_media(session, yt_vid)
         if not any(x["kind"] == "video" for x in media):
-            # thumbnail + button (round-12 default): the YT thumb is the
-            # canonical preview — replace external screenshots, add if absent
+            # the YT thumb is the canonical preview — replace external
+            # screenshots, add if absent
             media = [x for x in media if not _is_external_preview(x["url"])]
             if not any(x["kind"] == "image" for x in media):
                 media.append({"kind": "image", "url": yt_thumb})

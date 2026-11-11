@@ -4790,8 +4790,9 @@ check("r60: native RSS base feeds the destination-first selection downstream",
 _r60_saved_resolve_youtube = v3.resolve_youtube_media
 
 
-async def _r60_resolve_youtube(_session, video_id, _is_live):
-    return None, f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+async def _r60_resolve_youtube(_session, video_id):
+    # round 114: thumbnail only — the resolver no longer returns a media URL.
+    return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
 
 try:
@@ -13382,6 +13383,38 @@ check("r113c: a scheme-less x.com / twitter.com status URL is linked; every othe
       and v3._clean_plain_body("x.com/a/status/1") == "x.com/a/status/1"
       and v3._clean_plain_body("abx.com/a/status/123456789") == "abx.com/a/status/123456789"
       and v3._clean_plain_body("[read](x.com/a/status/123456789)") == "[read](x.com/a/status/123456789)")
+
+# ---- round 114 (2026-11-11): the unused YouTube mp4 playback path is GONE ----
+# The old optional seaof.glass attempt (`YOUTUBE_MEDIA_EMBED=1`) never produced a
+# reliable video and was never enabled in production. The read paths are: the
+# thumbnail image tile + the YouTube button + the bare link message. These guards
+# pin the removal — the switch, the template, the third-party host, the mp4 probe
+# and the "YouTube video tile" branch must not come back without a new decision.
+_r114_engine = inspect.getsource(v3)
+_r114_wf = open(os.path.join(ROOT, ".github/workflows/reddit_monitor.yml"), encoding="utf-8").read()
+_r114_env = ""
+_r114_env_path = os.path.join(ROOT, ".env.example")
+if os.path.isfile(_r114_env_path):
+    _r114_env = open(_r114_env_path, encoding="utf-8").read()
+check("r114a: no YouTube playback switch, template or third-party transcoder host survives in the engine",
+      "YOUTUBE_MEDIA_EMBED" not in _r114_engine.split("round 114")[0]
+      and not hasattr(v3, "YOUTUBE_MEDIA_EMBED")
+      and not hasattr(v3, "YOUTUBE_MP4_TEMPLATE")
+      and "seaof.glass/yt" not in _r114_engine)
+_r114_res_src = inspect.getsource(v3.resolve_youtube_media)
+check("r114b: resolve_youtube_media returns the thumbnail only (no video URL, no live gate)",
+      inspect.signature(v3.resolve_youtube_media).parameters.keys() == {"session", "vid"}
+      and _r114_res_src.rstrip().endswith("return thumb")
+      and "media_url =" not in _r114_res_src
+      and "seaof" not in _r114_res_src)
+check("r114c: a YouTube post's card carries an IMAGE tile, never a video-kind tile",
+      v3.build_v3_payload("Sub", {"title": "T", "author": "a", "crosspost": None, "youtube_url": None,
+                                  "stats": None, "body": "",
+                                  "media": [{"kind": "image", "url": "https://i.ytimg.com/vi/hXE0oHPFWAM/hqdefault.jpg"}]},
+                          "https://www.reddit.com/r/Sub/comments/x/", 1)["components"][0]["components"][2]["items"][0]["media"]["url"]
+      == "https://i.ytimg.com/vi/hXE0oHPFWAM/hqdefault.jpg")
+check("r114d: the workflow and the env template no longer map/document the removed switch",
+      "YOUTUBE_MEDIA_EMBED" not in _r114_wf and "YOUTUBE_MEDIA_EMBED" not in _r114_env)
 
 # ---- Round 89: no GitHub Actions annotation may leak out of this suite ----
 # Restore the real stdout first, then judge what the suite actually emitted.
