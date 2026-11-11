@@ -1567,8 +1567,13 @@ STATIC_BUTTONS = [
 # ■ URL PATTERNS
 # ---------------------------------------------------------------------------
 # watch / shorts / youtu.be / live (live = no mp4 possible -> thumb+button)
+# Round 113: the MOBILE and MUSIC hosts (m.youtube.com, music.youtube.com) are
+# the same watch/playlist/shorts/live pages — `extract_youtube_id` already read
+# an `m.`/`music.` URL's video id, so the URL selector now agrees with it
+# instead of returning None and dropping the YouTube button and the separate
+# link message (live post 1xquvvi, 2026-11-11).
 YOUTUBE_RE = re.compile(
-    r"""https?://(?:www\.)?(?:youtube\.com/(?:watch\?[^"'<>)\]\s]*v=|shorts/|live/)[^"'<>)\]\s]*"""
+    r"""https?://(?:www\.|m\.|music\.)?(?:youtube\.com/(?:watch\?[^"'<>)\]\s]*v=|shorts/|live/)[^"'<>)\]\s]*"""
     r"""|youtu\.be/[^"'<>)\]\s]+)""",
     re.IGNORECASE,
 )
@@ -3684,6 +3689,26 @@ def _unescape_markdown_in_urls(text: str) -> str:
 _HTML_TAG_RE = re.compile(r"(?i)</?[a-z][a-z0-9]*(?:\s[^<>]*)?/?>")
 
 
+# Round 113 (2026-11-11, live 1xt22os): Reddit markdown escapes a literal ">" as
+# `\>`; the author wrote `\>> Check here` and Reddit renders the plain text
+# `>> Check here`. Discord has no such escape, so the card showed the backslash.
+# Only the DOUBLED form (`\>`, then another `>`) is unescaped: a lone `\> text`
+# must never become a Discord quote line, and the round-99 author-escaped
+# spoiler opener (`\>!text!<`) is already restored to `>!` before this stage.
+_REDDIT_ESCAPED_GT_RE = re.compile(r"\\(?=>)")
+
+# Round 113 (2026-11-11, live 1xsunnc): an X/Twitter post URL written WITHOUT a
+# scheme (`x.com/<user>/status/<id>`) is auto-linked on Reddit but stays dead
+# text on Discord, so the card carried a link nobody could click. Only
+# well-formed status URLs of those two hosts are given `https://`; prose,
+# markdown link targets that already carry a scheme and every other host are
+# left exactly as written.
+_SCHEMELESS_X_STATUS_RE = re.compile(
+    r"(?<![\w./@-])(?<!]\()(?:www\.)?(?:x|twitter)\.com/[A-Za-z0-9_]{1,30}/status/\d{5,25}",
+    re.IGNORECASE,
+)
+
+
 def _clean_selftext(value: str | None) -> str:
     """Clean Reddit JSON `selftext` while preserving paragraphs and Markdown.
 
@@ -5268,6 +5293,12 @@ def _line_stage(lines: list) -> list:
         line = re.sub(r"\[[^\]]*\]\(https?://v\.redd\.it/[^\s)]*\)", "", line)
         line = re.sub(r"https?://v\.redd\.it/[^\s<>\])]*", "", line)
         line = re.sub(r"[ \t]{2,}", " ", line).strip()
+        # Round 113: Reddit's own escapes that Discord keeps on screen.
+        line = _REDDIT_ESCAPED_GT_RE.sub("", line)
+        # Round 113: a bare `x.com/<user>/status/<id>` gets its scheme so
+        # Discord auto-links it (a markdown target `](x.com/…)` is exact and
+        # never matched here, so link text stays byte-identical).
+        line = _SCHEMELESS_X_STATUS_RE.sub(lambda m: "https://" + m.group(0), line)
         # round 21: a bare URL line stays RAW — Discord auto-links it in
         # the component v2 container (no markdown wrapping).
         kept.append(line)

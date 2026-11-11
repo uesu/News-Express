@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — Reddit relay cards: mobile/music YouTube links, Reddit's `\>` escape, scheme-less x.com links (2026-11-11)
+
+`testing area/reddit_main_v3.py`, reading path only. Three live cards fixed, no structure or
+component change:
+
+- **`m.youtube.com` / `music.youtube.com`** — `YOUTUBE_RE` now accepts the mobile and music hosts (the
+  video-id reader always did). Live `1xquvvi` (`[3.4.3] M0W1 Kafka … 65K Kill`) is a mobile YouTube
+  link post, so the card shipped without the YouTube button and without the separate bare-link
+  message while the sibling `www.youtube.com` card kept both.
+- **Reddit's `\>` escape** — the line stage drops a backslash that is immediately followed by `>`.
+  Live `1xt22os` (Project Yatta) rendered `\>> Check here` where Reddit shows `>> Check here`.
+  Doubled form only: a lone `\>` would otherwise become a Discord quote line, and the round-99
+  escaped spoiler opener is untouched.
+- **Scheme-less X/Twitter status URLs** — `x.com/<user>/status/<id>` (no `https://`) is linked, so
+  live `1xsunnc` (Wuwa 4.0 login OST) no longer ends with dead text. Only that exact shape: prose,
+  markdown link targets and every other host stay byte-identical.
+
+Round 113 (see `docs/history/ROUND_113.md`); smoke `r113a–c`, round-112 `r112a–i` still green.
+
 ## Unreleased — dev-only `kuro_probe.yml`: Information table shows each slide's `carouselNotes` (2026-11-11)
 
 One column added to the launcher-carousel table (legacy, new-protocol, global and CN feeds alike)

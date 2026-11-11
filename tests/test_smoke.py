@@ -13344,6 +13344,45 @@ check("r112i: the blur lives in the ONE gallery() closure, keyed on media kind, 
       and _r112_src.count("_strip_inline_img_tokens(") == 2
       and not re.search(r"redd\.it|embedez|vxreddit|redditez", _r112_src.split("def gallery(")[1].split("\n\n")[0]))
 
+# ---- round 113 (2026-11-11): three reading fixes, no structure change ----
+# (a) the mobile / music YouTube hosts must resolve like www — live post 1xquvvi
+#     (r/Zenlesszonezeroleaks_) got no YouTube button and no second link
+#     message because the URL selector returned None while the id reader
+#     already accepted the host; (b) Reddit's escape for a literal `>` (`\>>`
+#     in the markdown, `>> Check here` on Reddit) must not put a backslash on
+#     the card — live 1xt22os; (c) a scheme-less `x.com/<user>/status/<id>`
+#     must become a clickable link — live 1xsunnc showed dead text.
+check("r113a: the mobile and music YouTube hosts select a URL (button + link message); www, "
+      "youtu.be, shorts, live and the id reader are unchanged",
+      all(v3.extract_youtube_url(u) == u and v3.select_youtube_url(u, "body") == u
+          for u in ("https://m.youtube.com/watch?v=hXE0oHPFWAM",
+                    "https://music.youtube.com/watch?v=hXE0oHPFWAM",
+                    "https://www.youtube.com/watch?v=hXE0oHPFWAM&t=5s",
+                    "https://youtu.be/hXE0oHPFWAM",
+                    "https://www.youtube.com/shorts/hXE0oHPFWAM",
+                    "https://www.youtube.com/live/hXE0oHPFWAM"))
+      and v3.extract_youtube_id("https://m.youtube.com/watch?v=hXE0oHPFWAM")[0] == "hXE0oHPFWAM"
+      and v3.extract_youtube_url("no link here") is None)
+check("r113b: Reddit's escaped literal `>` loses the backslash, a real quote line is untouched, "
+      "and the round-99 escaped spoiler opener still renders as `>!…!<`",
+      v3._clean_plain_body("Everything updated.\n\n\\>> Check here")
+      == "Everything updated.\n\n>> Check here"
+      and v3.clean_rss_body("<p>t</p><p><a href=\"https://sr.yatta.moe/x\">\\&gt;&gt; Check here</a></p>")
+      == "t\n\n[>> Check here](https://sr.yatta.moe/x)"
+      and v3._clean_plain_body("> quoted line") == "> quoted line"
+      and v3._clean_plain_body("\\>!not a spoiler!<") == ">!not a spoiler!<",
+      repr(v3._clean_plain_body("Everything updated.\n\n\\>> Check here")))
+check("r113c: a scheme-less x.com / twitter.com status URL is linked; every other shape is untouched",
+      v3._clean_plain_body("x.com/hotakatoki/status/2120176561634635897")
+      == "https://x.com/hotakatoki/status/2120176561634635897"
+      and v3._clean_plain_body("via twitter.com/a_b/status/123456789 today")
+      == "via https://twitter.com/a_b/status/123456789 today"
+      and v3._clean_plain_body("https://x.com/a/status/123456789") == "https://x.com/a/status/123456789"
+      and v3._clean_plain_body("x.com/a") == "x.com/a"
+      and v3._clean_plain_body("x.com/a/status/1") == "x.com/a/status/1"
+      and v3._clean_plain_body("abx.com/a/status/123456789") == "abx.com/a/status/123456789"
+      and v3._clean_plain_body("[read](x.com/a/status/123456789)") == "[read](x.com/a/status/123456789)")
+
 # ---- Round 89: no GitHub Actions annotation may leak out of this suite ----
 # Restore the real stdout first, then judge what the suite actually emitted.
 sys.stdout = _stdout_guard.stream
