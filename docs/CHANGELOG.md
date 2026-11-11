@@ -1,5 +1,59 @@
 # Changelog
 
+## Unreleased — the unused YouTube mp4 playback path is removed for good (2026-11-11)
+
+`testing area/reddit_main_v3.py`, docs and config only; no card or pipeline change. Live cards for
+YouTube posts have always been **thumbnail image tile + animated button + one bare link message**, and
+the optional `seaof.glass` mp4 probe behind `YOUTUBE_MEDIA_EMBED=1` never shipped enabled because no
+candidate transcoder was reliable. Removed outright: the switch, `YOUTUBE_MP4_TEMPLATE`, the probe and
+its retry/log lines, the video-tile branch it fed, the now-pointless `is_live` parameter of
+`resolve_youtube_media`, the `.env.example` block, the `reddit_monitor.yml` Variable mapping, the
+README feature + Variable rows, and the `seaof.glass` rows in the Terms and Privacy docs.
+`tests/test_reddit_signals.py` drops it from the round-52 Variable list (101 checks). Round 114 (see
+`docs/history/ROUND_114.md`); smoke `r114a–d`; rounds 112/113 unchanged and still green.
+
+## Unreleased — Reddit relay cards: mobile/music YouTube links, Reddit's `\>` escape, scheme-less x.com links (2026-11-11)
+
+`testing area/reddit_main_v3.py`, reading path only. Three live cards fixed, no structure or
+component change:
+
+- **`m.youtube.com` / `music.youtube.com`** — `YOUTUBE_RE` now accepts the mobile and music hosts (the
+  video-id reader always did). Live `1xquvvi` (`[3.4.3] M0W1 Kafka … 65K Kill`) is a mobile YouTube
+  link post, so the card shipped without the YouTube button and without the separate bare-link
+  message while the sibling `www.youtube.com` card kept both.
+- **Reddit's `\>` escape** — the line stage drops a backslash that is immediately followed by `>`.
+  Live `1xt22os` (Project Yatta) rendered `\>> Check here` where Reddit shows `>> Check here`.
+  Doubled form only: a lone `\>` would otherwise become a Discord quote line, and the round-99
+  escaped spoiler opener is untouched.
+- **Scheme-less X/Twitter status URLs** — `x.com/<user>/status/<id>` (no `https://`) is linked, so
+  live `1xsunnc` (Wuwa 4.0 login OST) no longer ends with dead text. Only that exact shape: prose,
+  markdown link targets and every other host stay byte-identical.
+
+Round 113 (see `docs/history/ROUND_113.md`); smoke `r113a–c`, round-112 `r112a–i` still green.
+
+## Unreleased — dev-only `kuro_probe.yml`: Information table shows each slide's `carouselNotes` (2026-11-11)
+
+One column added to the launcher-carousel table (legacy, new-protocol, global and CN feeds alike)
+so the new feed's slideshow can be checked for the `carouselNotes` key Game-Express #154 gates its
+Priority-3 carousel tier on (the legacy feed carries `"3.7版本pv"` on the 3.7 PV slide; the new
+feed's value was cut by the PR-comment size cap in the #131 report). Three lines edited in place,
+nothing added to the `run:` block; read-only, no secrets, nothing posted; never synced to prod.
+
+## Unreleased — Reddit relay cards: spoiler / NSFW posts blur their image tiles, video tiles never (2026-11-11)
+
+`testing area/reddit_main_v3.py`, Devvit intake path only. A relay record Reddit flags `spoiler` or
+`nsfw` (own flag, the newest `v: 2` re-check item, or the crosspost parent's) now sets Discord's
+gallery-item `spoiler: true` on every **image / gif** tile of the card. A **video** tile never gets
+it — v.redd.it, packaged-media, YouTube mp4 or any embedez / redditez / vxreddit mirror alike — the
+exemption is by media kind, not host (the cover removes the player's fullscreen control, verified in
+Discohook). NSFW counts as spoiler (no age-restricted channel). Unflagged posts are byte-identical
+(key omitted). One helper (`relay_record_spoiler`), one key on the relay base and on the
+`resolve_post_media` result, one edit to the single `gallery()` closure in `build_v3_payload` — no
+text markers, no Container spoiler, no late-flip edits, no cache / Devvit / X / Game-Express change.
+The age-flag key is spelled `"n" + "sfw"` in the engine so the round-67 removal guard (which pins
+that token out of the file) stays green; behaviour is unchanged. Round 112 (see
+`docs/history/ROUND_112.md`); smoke `r112a–i`.
+
 ## Unreleased — dev-only `kuro_probe.yml`: Wuthering Waves launcher sources for GE feature 4, read from the runners (2026-11-11)
 
 Research round for GE feature 4 (WuWa Pre-Load / Maintenance / Servers Live media): a GitHub survey of
