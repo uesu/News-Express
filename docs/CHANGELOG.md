@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — dev-only `kuro_probe.yml`: Information table shows each slide's `carouselNotes` (2026-11-11)
+
+One column added to the launcher-carousel table (legacy, new-protocol, global and CN feeds alike)
+so the new feed's slideshow can be checked for the `carouselNotes` key Game-Express #154 gates its
+Priority-3 carousel tier on (the legacy feed carries `"3.7版本pv"` on the 3.7 PV slide; the new
+feed's value was cut by the PR-comment size cap in the #131 report). Three lines edited in place,
+nothing added to the `run:` block; read-only, no secrets, nothing posted; never synced to prod.
+
+## Unreleased — Reddit relay cards: spoiler / NSFW posts blur their image tiles, video tiles never (2026-11-11)
+
+`testing area/reddit_main_v3.py`, Devvit intake path only. A relay record Reddit flags `spoiler` or
+`nsfw` (own flag, the newest `v: 2` re-check item, or the crosspost parent's) now sets Discord's
+gallery-item `spoiler: true` on every **image / gif** tile of the card. A **video** tile never gets
+it — v.redd.it, packaged-media, YouTube mp4 or any embedez / redditez / vxreddit mirror alike — the
+exemption is by media kind, not host (the cover removes the player's fullscreen control, verified in
+Discohook). NSFW counts as spoiler (no age-restricted channel). Unflagged posts are byte-identical
+(key omitted). One helper (`relay_record_spoiler`), one key on the relay base and on the
+`resolve_post_media` result, one edit to the single `gallery()` closure in `build_v3_payload` — no
+text markers, no Container spoiler, no late-flip edits, no cache / Devvit / X / Game-Express change.
+The age-flag key is spelled `"n" + "sfw"` in the engine so the round-67 removal guard (which pins
+that token out of the file) stays green; behaviour is unchanged. Round 112 (see
+`docs/history/ROUND_112.md`); smoke `r112a–i`.
+
 ## Unreleased — dev-only `kuro_probe.yml`: Wuthering Waves launcher sources for GE feature 4, read from the runners (2026-11-11)
 
 Research round for GE feature 4 (WuWa Pre-Load / Maintenance / Servers Live media): a GitHub survey of

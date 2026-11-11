@@ -144,7 +144,7 @@ jobs:
                   return out
               for s in (d.get("slideshow") or [])[:8]:
                   if isinstance(s, dict):
-                      out.append(f"| {tag} | slide | {s.get('url', '')} | {s.get('jumpUrl', '')} | {s.get('time', '') or s.get('startTime', '')} |")
+                      out.append(f"| {tag} | slide | {s.get('url', '')} | {s.get('jumpUrl', '')} | {s.get('time', '') or s.get('startTime', '')} | {s.get('carouselNotes', '')} |")
               gd = d.get("guidance") or {}
               for k in ("activity", "notice", "news"):
                   v = gd.get(k) if isinstance(gd, dict) else None
@@ -213,7 +213,7 @@ jobs:
                  f"{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())} · read-only · stdlib", "",
                  "### Endpoints", "", "| endpoint | HTTP | ms | Last-Modified | reading |", "|---|---:|---:|---|---|", *rows, "",
                  "### Media (HEAD)", "", "| source | field | HTTP | Last-Modified | bytes | type | dated path | url |", "|---|---|---:|---|---:|---|---|---|", *media, "",
-                 "### Information (carousel + lists, first rows)", "", "| source | kind | content / image | jumpUrl | time |", "|---|---|---|---|---|", *infos, "",
+                 "### Information (carousel + lists, first rows)", "", "| source | kind | content / image | jumpUrl | time | carouselNotes |", "|---|---|---|---|---|---|", *infos, "",
                  "<details><summary>Raw JSON (background + information + new game index config, truncated)</summary>", "", "```json"]
           keep = {}
           for k, v in raw.items():

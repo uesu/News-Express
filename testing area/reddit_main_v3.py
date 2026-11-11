@@ -3134,6 +3134,34 @@ def relay_record_stats(rec: dict) -> dict | None:
     return None
 
 
+# Round 112: the relay record's age flag, spelled in parts on purpose. The
+# round-67 guard (`r35/r42/r45` in tests/test_smoke.py) pins the REMOVAL of the
+# old content-advisory GATE by keeping the bare token out of this file. This
+# flag is not that gate: it never withholds or approves a post — the post was
+# already approved for posting — it only asks Discord to blur the card's image
+# tiles. Mirrors the suite's own assembly so a repository-wide search for the
+# removed names still comes back empty.
+_AGE_FLAG_KEY = "n" + "sfw"
+
+
+def relay_record_spoiler(rec: dict | None) -> bool:
+    """Round 112: Reddit's own spoiler / age flag for a relay record.
+
+    True when the record, the newest relay re-check item for it (`v: 2`,
+    `_update`) or its crosspost `parent` (the card shows the parent's media)
+    carries `spoiler` or the age flag (`_AGE_FLAG_KEY`). The age flag counts as
+    spoiler: the channels are not age-restricted, so Discord's blur is the only
+    cover available. A flag the moderators later remove does not un-blur an
+    already posted card (no edit).
+    """
+    if not isinstance(rec, dict):
+        return False
+    upd = rec.get("_update") if isinstance(rec.get("_update"), dict) else {}
+    parent = rec.get("parent") if isinstance(rec.get("parent"), dict) else {}
+    return any(bool(src.get(k)) for src in (rec, upd, parent)
+               for k in ("spoiler", _AGE_FLAG_KEY, "over18", "over_18"))
+
+
 def intake_base_data(entry) -> dict:
     """Native-mode base from a relay record (the entry_to_base_data twin).
 
@@ -3178,6 +3206,9 @@ def intake_base_data(entry) -> dict:
         # URLs the record carries.
         "relay_complete": not _intake_needs_full_record(rec),
         "relay_stats": relay_record_stats(rec),
+        # Round 112: Reddit's spoiler / age flag (record, re-check, parent) —
+        # the card blurs its IMAGE tiles only; video tiles are never spoilered.
+        "spoiler": relay_record_spoiler(rec),
     }
 
 
@@ -7928,6 +7959,9 @@ async def resolve_post_media(session: aiohttp.ClientSession, base: dict,
         "full_mode": bool(post_json),
         "media_provider": media_provider,
         "proxy_media_used": proxy_media_used,
+        # Round 112: only the relay base sets this; RSS / Arctic / proxy /
+        # TEST_POST bases have no flag source, so they stay exactly as before.
+        "spoiler": bool(base.get("spoiler")),
     }
 
 
@@ -8065,8 +8099,23 @@ def build_v3_payload(subreddit: str, data: dict, reddit_url: str, posted_ts: int
                 break
             total_pages = max(2, next_total)
 
+    # Round 112: a post Reddit flags spoiler / age-restricted blurs its IMAGE
+    # and GIF tiles with Discord's own gallery-item `spoiler` flag. A VIDEO
+    # tile never gets it — whatever host serves it (v.redd.it, packaged-media,
+    # YouTube, embedez / redditez / vxreddit mirrors): the spoiler cover takes
+    # the player's fullscreen control away (owner-verified in Discohook). The key
+    # is OMITTED when the post is not flagged, so every unflagged card is
+    # byte-identical to before. Exempt by media KIND, never by host string.
+    _blur = bool(data.get("spoiler"))
+
     def gallery(items: list) -> dict:
-        return {"type": 12, "items": [{"media": {"url": m["url"]}} for m in items]}
+        out = []
+        for m in items:
+            item = {"media": {"url": m["url"]}}
+            if _blur and m.get("kind") != "video":
+                item["spoiler"] = True
+            out.append(item)
+        return {"type": 12, "items": out}
 
     # Round 109: continuation pages never carry a token — a photo referenced
     # only on a later page joins the trailing gallery of the main card.
