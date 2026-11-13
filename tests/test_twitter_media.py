@@ -973,9 +973,13 @@ check("r115: 20+20 separated media compact only the quote as needed to respect D
 
 _R115_workflow = open(os.path.join(ROOT, ".github", "workflows", "twitter_monitor.yml"), encoding="utf-8").read()
 _R115_env_example = open(os.path.join(ROOT, ".env.example"), encoding="utf-8").read()
-check("r115: the optional setting is wired to the Twitter workflow Variable and documented as opt-in",
+_R115_readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
+_R115_tracking = open(os.path.join(ROOT, "docs", "REPOSITORY_TRACKING.md"), encoding="utf-8").read()
+check("r115: the setting is workflow-wired and documented in the README, config example, and tracking guide",
       "TWITTER_MEDIA_GALLERY_LAYOUT: ${{ vars.TWITTER_MEDIA_GALLERY_LAYOUT }}" in _R115_workflow
-      and "# TWITTER_MEDIA_GALLERY_LAYOUT=on" in _R115_env_example)
+      and "# TWITTER_MEDIA_GALLERY_LAYOUT=on" in _R115_env_example
+      and "TWITTER_MEDIA_GALLERY_LAYOUT" in _R115_readme
+      and "TWITTER_MEDIA_GALLERY_LAYOUT" in _R115_tracking)
 
 x3.TWITTER_MEDIA_GALLERY_LAYOUT = True
 _R115_grouped_payload = x3.build_v3_payload(
