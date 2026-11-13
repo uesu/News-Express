@@ -236,9 +236,10 @@ Runtime switches such as `REDDIT_VIDEO_QUALITY`, proxy/video healing, freshness/
 checks, cache caps and X media healing stay optional; use their documented defaults.
 For Twitter/X gallery layout, go to *Settings → Secrets and variables → Actions →
 Variables → New repository variable*, name it `TWITTER_MEDIA_GALLERY_LAYOUT`, and set its
-value to `on` to group up to 10 media attachments per Discord gallery. Leave it unset or
-set it to `off` to keep each attachment separate (the default). This setting is already
-wired into the Twitter monitor workflow. The existing
+value to `on` to group up to 10 media attachments per Discord gallery at any media count.
+Leave it unset or set it to `off` for the automatic layout: 1–4 attachments stay together
+in one gallery, while 5–20 attachments are shown separately (one gallery per attachment).
+This setting is already wired into the Twitter monitor workflow. The existing
 News workflows wire specific names, not Game-Express's JSON settings import; adding a new
 application option may need workflow wiring. Never put webhook/token values in Variables,
 Markdown, or tracked `.env` files.
@@ -388,7 +389,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `MEDIA_HEAL_DELAY_SECONDS` | `45` | wait before each re-edit (30–60 is sane) |
 | `MEDIA_HEAL_ATTEMPTS` | `4` | max same-payload re-edits per message; hard-capped at 4 |
 | `MEDIA_HEAL_CARRY_HOURS` | `6` | round 100: a message still unresolved after the in-run edits is carried over in `media_heal_carry.json` and gets one GET + at most one identical edit **per later run** until it renders or this many hours pass; `0` = off (warn and forget, pre-round-100) |
-| `TWITTER_MEDIA_GALLERY_LAYOUT` | unset / `off` | optional `on` groups up to 10 attachments per Discord gallery; unset, empty, or `off` keeps the default separate layout (one gallery per attachment) |
+| `TWITTER_MEDIA_GALLERY_LAYOUT` | unset / `off` | optional `on` groups up to 10 attachments per gallery at any count; otherwise the automatic layout keeps 1–4 together in one gallery and shows 5–20 separately (one gallery per attachment) |
 | `TWITTER_HIGH_VIDEO_LIMIT` | unset (`256 MiB`) | opt-in `1`/`true`/`yes`/`on` = **350 MiB** gallery video cap. Unset, empty, `0`, `false`, `off`, `350` and any other value keep the proven 256 MiB cap; the 350 MiB ceiling is not yet proven on Discord's proxy, so raise it only after review |
 | `TWITTER_MAX_AGE_HOURS` | `24` | round 95c stale-backlog floor: a feed entry older than this is **not a new tweet** and is skipped (`STALE-SKIP`) before any tweet-data request, so a down/restoring nitter instance that answers with a days-old backlog cannot be posted. Age is judged by two witnesses, in **UTC**: for the account's own tweet the **tweet id** wins (immutable — a mirror that re-stamps an old entry, or mangles the date, cannot smuggle it through); for a **repost** the feed date wins (reposting an older tweet is a legitimate post). An entry whose age cannot be established still posts (fail-open), and `TEST_TWEET_ID` is exempt. `0` disables the guard and restores pre-95c behaviour exactly |
 
