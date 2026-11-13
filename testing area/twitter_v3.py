@@ -616,6 +616,15 @@ QUOTE_TEXT_BUDGET = 1500  # quote text shares a component with the quote header
 MAX_TWEET_MEDIA = 20  # X raised the combined photo/video attachment limit in November 2026.
 MEDIA_GALLERY_SIZE = 10  # Discord Media Gallery limit per component.
 
+
+def _twitter_media_gallery_layout_enabled(value: str | None) -> bool:
+    """Only the explicit value `on` enables grouped galleries; default stays separate."""
+    return isinstance(value, str) and value.strip().lower() == "on"
+
+
+TWITTER_MEDIA_GALLERY_LAYOUT = _twitter_media_gallery_layout_enabled(
+    os.getenv("TWITTER_MEDIA_GALLERY_LAYOUT"))
+
 BROWSER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -1767,9 +1776,17 @@ def thumbnail_section(texts: list, thumb_item: dict) -> dict:
     }
 
 
-def media_gallery_components(items: list) -> list:
-    """Split tweet media into Discord galleries of at most ten, in source order."""
+def media_gallery_components(items: list, *, grouped: bool | None = None) -> list:
+    """Build source-ordered Discord galleries, grouped only when explicitly enabled.
+
+    The default (unset/off) mirrors X's separate-media layout: one gallery per
+    attachment. `on` groups up to ten items into each gallery component.
+    """
     items = (items or [])[:MAX_TWEET_MEDIA]
+    if grouped is None:
+        grouped = TWITTER_MEDIA_GALLERY_LAYOUT
+    if not grouped:
+        return [{"type": 12, "items": [item]} for item in items]
     return [{"type": 12, "items": items[i:i + MEDIA_GALLERY_SIZE]}
             for i in range(0, len(items), MEDIA_GALLERY_SIZE)]
 
@@ -1808,6 +1825,30 @@ def _pack_twitter_components(components: list, accent: int) -> list:
     return [{"type": 17, "accent_color": accent,
              "components": components[i:i + 10]}
             for i in range(0, len(components), 10)]
+
+
+def _twitter_component_count(component: dict) -> int:
+    """Count all components recursively, including Container parents and buttons."""
+    return 1 + sum(_twitter_component_count(child)
+                   for child in component.get("components", [])
+                   if isinstance(child, dict))
+
+
+def _group_selected_galleries(components: list, gallery_ids: set) -> list:
+    """Compact a chosen run of galleries to stay below Discord's 40-component cap."""
+    selected = [c for c in components if id(c) in gallery_ids]
+    if not selected:
+        return components
+    first_id = id(selected[0])
+    items = [item for gallery in selected for item in gallery.get("items", [])]
+    grouped = media_gallery_components(items, grouped=True)
+    out = []
+    for component in components:
+        if id(component) == first_id:
+            out.extend(grouped)
+        elif id(component) not in gallery_ids:
+            out.append(component)
+    return out
 
 
 def build_quote_components(quote: dict, q_gallery: list, q_notes: list) -> list:
@@ -2065,14 +2106,19 @@ def build_v3_payload(account: str, tweet: dict, read_post_url: str,
         inner_components.extend(media_gallery_components(lead_gallery_items))
     for chunk in chunks:
         inner_components.append({"type": 10, "content": chunk})
+    main_gallery_ids = set()
     if gallery_items:
         inner_components.append({"type": 14, "divider": True, "spacing": 1})
-        inner_components.extend(media_gallery_components(gallery_items))
+        main_galleries = media_gallery_components(gallery_items)
+        main_gallery_ids = {id(c) for c in main_galleries}
+        inner_components.extend(main_galleries)
     media_notes_component = None
     if media_notes:
         media_notes_component = {"type": 10, "content": ""}
         inner_components.append(media_notes_component)
+    quote_gallery_ids = set()
     if quote_components:
+        quote_gallery_ids = {id(c) for c in quote_components if c.get("type") == 12}
         inner_components.extend(quote_components)
 
     if not chunks and not gallery_items and not quote_components:
@@ -2099,8 +2145,19 @@ def build_v3_payload(account: str, tweet: dict, read_post_url: str,
         if not media_notes_component["content"]:
             inner_components.remove(media_notes_component)
 
-    containers = _pack_twitter_components(
-        inner_components, accent_from_color(tweet.get("color")))
+    accent = accent_from_color(tweet.get("color"))
+    containers = _pack_twitter_components(inner_components, accent)
+    total_components = sum(_twitter_component_count(c) for c in containers)
+    if total_components > 40 and quote_gallery_ids:
+        inner_components = _group_selected_galleries(inner_components, quote_gallery_ids)
+        containers = _pack_twitter_components(inner_components, accent)
+        total_components = sum(_twitter_component_count(c) for c in containers)
+    if total_components > 40 and main_gallery_ids:
+        # Keep every attachment and prioritize validity. In the rare case of a
+        # maxed-out post plus a maxed-out quoted post, grouping the main media
+        # is the final fallback after quote galleries have already been compacted.
+        inner_components = _group_selected_galleries(inner_components, main_gallery_ids)
+        containers = _pack_twitter_components(inner_components, accent)
     return {"flags": IS_COMPONENTS_V2, "components": containers}
 
 
