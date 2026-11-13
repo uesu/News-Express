@@ -613,6 +613,8 @@ MEDIA_HEAL_SCOPE = media_heal_scope(os.getenv("MEDIA_HEAL_SCOPE"))
 TEXT_CHUNK_SIZE = 1900
 MAX_TEXT_COMPONENTS = 4
 QUOTE_TEXT_BUDGET = 1500  # quote text shares a component with the quote header
+MAX_TWEET_MEDIA = 20  # X raised the combined photo/video attachment limit in November 2026.
+MEDIA_GALLERY_SIZE = 10  # Discord Media Gallery limit per component.
 
 BROWSER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -890,10 +892,10 @@ def canonical_media_entries(media: dict | None) -> list:
     media = media if isinstance(media, dict) else {}
     entries = [e for e in (media.get("all") or []) if isinstance(e, dict) and e.get("url")]
     if entries:
-        return entries
+        return entries[:MAX_TWEET_MEDIA]
     ordered = [v for v in (media.get("videos") or []) if isinstance(v, dict) and v.get("url")]
     ordered += [p for p in (media.get("photos") or []) if isinstance(p, dict) and p.get("url")]
-    return ordered
+    return ordered[:MAX_TWEET_MEDIA]
 
 
 def gallery_video_url(video: dict, raw_url: str) -> str:
@@ -1765,6 +1767,49 @@ def thumbnail_section(texts: list, thumb_item: dict) -> dict:
     }
 
 
+def media_gallery_components(items: list) -> list:
+    """Split tweet media into Discord galleries of at most ten, in source order."""
+    items = (items or [])[:MAX_TWEET_MEDIA]
+    return [{"type": 12, "items": items[i:i + MEDIA_GALLERY_SIZE]}
+            for i in range(0, len(items), MEDIA_GALLERY_SIZE)]
+
+
+def _fit_media_notes(notes: list, budget: int) -> str:
+    """Keep whole diagnostic notes that fit; never exceed Discord's text budget."""
+    if budget <= 0:
+        return ""
+    notes = [str(note).strip() for note in notes or [] if str(note).strip()]
+    joined = "\n".join(notes)
+    if len(joined) <= budget:
+        return joined
+    omitted = "-# Additional media details omitted; open the original post."
+    kept = []
+    for note in notes:
+        candidate = "\n".join(kept + [note])
+        if len(candidate) + (1 + len(omitted) if len(kept) < len(notes) else 0) > budget:
+            break
+        kept.append(note)
+    if not kept:
+        return omitted if len(omitted) <= budget else ""
+    result = "\n".join(kept)
+    if len(kept) < len(notes) and len(result) + 1 + len(omitted) <= budget:
+        result += "\n" + omitted
+    return result
+
+
+def _text_chars(component: dict) -> int:
+    total = len(component.get("content") or "") if component.get("type") == 10 else 0
+    return total + sum(_text_chars(child) for child in component.get("components", [])
+                       if isinstance(child, dict))
+
+
+def _pack_twitter_components(components: list, accent: int) -> list:
+    """Pack card children into Discord containers (at most ten children each)."""
+    return [{"type": 17, "accent_color": accent,
+             "components": components[i:i + 10]}
+            for i in range(0, len(components), 10)]
+
+
 def build_quote_components(quote: dict, q_gallery: list, q_notes: list) -> list:
     """
     Renders the quoted tweet like the better embed services do:
@@ -1797,9 +1842,10 @@ def build_quote_components(quote: dict, q_gallery: list, q_notes: list) -> list:
     else:
         components.append({"type": 10, "content": head})
     if q_gallery:
-        components.append({"type": 12, "items": q_gallery[:10]})
-    for note in q_notes:
-        components.append({"type": 10, "content": note})
+        components.extend(media_gallery_components(q_gallery))
+    q_note_text = _fit_media_notes(q_notes, 1200)
+    if q_note_text:
+        components.append({"type": 10, "content": q_note_text})
     return components
 
 
@@ -2014,15 +2060,18 @@ def build_v3_payload(account: str, tweet: dict, read_post_url: str,
     elif thumb_item:
         # an article card already leads with its cover; keep the card tile
         gallery_items = [thumb_item] + list(gallery_items)
+    gallery_items = gallery_items[:MAX_TWEET_MEDIA]
     if lead_gallery_items:  # ROUND 10: article cover, shown right under the header
-        inner_components.append({"type": 12, "items": lead_gallery_items[:10]})
+        inner_components.extend(media_gallery_components(lead_gallery_items))
     for chunk in chunks:
         inner_components.append({"type": 10, "content": chunk})
     if gallery_items:
         inner_components.append({"type": 14, "divider": True, "spacing": 1})
-        inner_components.append({"type": 12, "items": gallery_items[:10]})
-    for note in media_notes or []:
-        inner_components.append({"type": 10, "content": note})
+        inner_components.extend(media_gallery_components(gallery_items))
+    media_notes_component = None
+    if media_notes:
+        media_notes_component = {"type": 10, "content": ""}
+        inner_components.append(media_notes_component)
     if quote_components:
         inner_components.extend(quote_components)
 
@@ -2043,12 +2092,16 @@ def build_v3_payload(account: str, tweet: dict, read_post_url: str,
     inner_components.append(build_nested_action_row(read_post_url))
     inner_components.append({"type": 10, "content": SUPPORT_FOOTER})
 
-    container = {
-        "type": 17,
-        "accent_color": accent_from_color(tweet.get("color")),
-        "components": inner_components,
-    }
-    return {"flags": IS_COMPONENTS_V2, "components": [container]}
+    if media_notes_component:
+        notes_budget = 4000 - sum(_text_chars(c) for c in inner_components
+                                  if c is not media_notes_component)
+        media_notes_component["content"] = _fit_media_notes(media_notes, notes_budget)
+        if not media_notes_component["content"]:
+            inner_components.remove(media_notes_component)
+
+    containers = _pack_twitter_components(
+        inner_components, accent_from_color(tweet.get("color")))
+    return {"flags": IS_COMPONENTS_V2, "components": containers}
 
 
 async def main():
