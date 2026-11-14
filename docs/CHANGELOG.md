@@ -6,9 +6,10 @@ X Mobile Engineering lead Jonah Katz and the official `@XCreators` account annou
 combined per-post photo/video attachment limit has risen from four to 20 ([Katz](https://x.com/dinkin_flickaa/status/2120946118267732158),
 [XCreators](https://x.com/XCreators/status/2121034947280753090)). The Twitter V3 pipeline already
 collects the ordered `media.all` list (including GIF entries), but the Discord builder only emitted
-the first 10 items. It now preserves up to 20 in source order. By default it emits one gallery per
-attachment (the separated-media view); the optional `TWITTER_MEDIA_GALLERY_LAYOUT=on` repo Variable
-groups up to ten attachments per gallery (20 becomes 10 + 10). Both layouts pack containers within
+the first 10 items. It now preserves up to 20 in source order. The default layout keeps the legacy
+1–4-item posts together in one gallery, then presents 5–20-item posts separately (one gallery per
+attachment). The optional `TWITTER_MEDIA_GALLERY_LAYOUT=on` repo Variable groups up to ten
+attachments per gallery at any count (20 becomes 10 + 10). Both layouts pack containers within
 Discord's component limits and keep media diagnostics within the message text budget. GIFs use the
 same 20-entry handling when present in the source payload; the announcement does not separately
 spell out a GIF-specific cap. A read-only FxTwitter probe of the
