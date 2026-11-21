@@ -173,8 +173,10 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
    the 24-hour schedule (plus its 30-minute scheduling slack). An in-place update preserves
    that state; do **not** uninstall/reinstall or clear Redis just to make the pending count
    zero, because that discards dedup/recheck history and can cause duplicate deliveries. A
-   zero recheck count means no delivered posts are due on that poll, not an error. Old Python
-   `pending_reddit.json` entries are not used by relay-primary candidates.
+   zero recheck count means no delivered posts are due on that poll, not an error. Relay
+   candidates bypass legacy transient retry throttles, but a terminal removal/deletion hold in
+   `pending_reddit.json` remains active until a newer clean relay listing confirms restoration.
+   Do not clear that file to force a held post through.
 
    **Why `--copy-paste`** (2026-11-02, CLI 0.15.1, Windows 11): the default
    `npx devvit login` (localhost callback, OAuth client `Bep8X2RR…`) produced a token that
@@ -302,7 +304,7 @@ memory carried over, no re-bootstrap), code 0.0.10 (devvit 0.15.2) as **Reddit 0
 | 0.0.10 | 2026-11-03 | `devvit` / `@devvit/web` 0.15.1 → **0.15.2** (release notes: Community Engagement Playbook docs + `media.upload` attribution — nothing the relay uses; the portal's App Versions tab flagged 0.15.1 with "a new version of Devvit is available"). No code change; 25 unit tests, build and schema check green. Uploads as Reddit **`0.0.7`**. |
 | 0.0.11 | 2026-11-10 | `devvit` / `@devvit/web` 0.15.2 → **0.15.3** (tarball diff: `@devvit/shared-types` fetch polyfill wraps the response body as `Uint8Array`; `@devvit/reddit` `getCurrentUsername()` reads `context.username`; dev-portal proto fields; the other packages differ in source maps only — nothing the relay uses). No code change; 25 unit tests, build and lint green. Uploads as Reddit **`0.0.8`**. |
 
-| 0.0.13 | Unreleased | Spoiler-flag-only changes resend a higher-revision full record so News-Express can PATCH the existing Discord card; the Python reader consumes terminal Devvit removal/deletion updates and deletes saved Discord card/page/YouTube companion IDs automatically, preserving retryable AutoMod-filtered items. Reader changes make the relay the sole default intake, pause rather than probe/fall back when unhealthy, and bypass legacy fresh-hold/pending-recheck throttles only for relay candidates; the retained old engine remains available explicitly. Devvit source changes are not live until uploaded/installed. No `RETRACT_*` Variables or Reddit `/new` absence probes are used for post-delivery deletion. |
+| 0.0.13 | Unreleased | Spoiler-flag-only changes resend a higher-revision full record so News-Express can PATCH the existing Discord card; the Python reader consumes terminal Devvit removal/deletion updates and deletes saved Discord card/page/YouTube companion IDs automatically, preserving retryable AutoMod-filtered items. Reader changes make the relay the sole default intake, pause rather than probe/fall back when unhealthy, and bypass generic legacy fresh-age/transient pending throttles for relay candidates while still enforcing terminal removal/deletion holds until a newer clean relay listing confirms restoration; the retained old engine remains available explicitly. Devvit source changes are not live until uploaded/installed. No `RETRACT_*` Variables or Reddit `/new` absence probes are used for post-delivery deletion. |
 | 0.0.12 | Superseded before upload | The proposed 48 h Devvit recheck stage is withdrawn; the relay remains on its existing 5 min / 30 min / 2 h / 6 h / 24 h schedule. Python's 48 h intake/cache window and relay Discord-ID retention remain separate and do not extend Devvit's checks. The earlier proposal also documented revised-card PATCHes and the optional `SPOILER_MEDIA_AND_BODY=1` behavior; this switch remains off unless explicitly enabled. |
 
 ## 9. News-Express reader (round 101 — the relay as the primary listing)
@@ -314,7 +316,10 @@ unreachable intake logs `INTAKE-PAUSED` and pauses delivery; it does not fall ba
 the old RSS / Redlib / Arctic listing engine. To deliberately use the retained old engine,
 set `INTAKE_READER=off`; `shadow` runs the old engine and logs a comparison for diagnostics.
 The old engine keeps its own fresh-hold and pending-recheck behavior. Relay candidates bypass
-both throttles and do not use the old pending cache or liveness probes.
+the generic fresh-age and transient pending-retry throttles and do not use old-chain liveness
+probes. The reader still enforces terminal removal/deletion evidence in each relay record, and
+retains those terminal pending holds until a newer clean relay listing confirms restoration;
+AutoModerator queue states remain retryable.
 
 Since relay 0.0.7 the relay also carries the complete record (`record.json`); relay-served
 posts make no Redlib, reddit.com, or Arctic request. The vxreddit / embedez / embeddit proxies
