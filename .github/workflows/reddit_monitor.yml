@@ -148,8 +148,7 @@ jobs:
           RETRACT_WINDOW_SECONDS: ${{ vars.RETRACT_WINDOW_SECONDS }}
           # Two-day Reddit relisting/edit window, expressed in hours.
           REDDIT_MONITOR_WINDOW_HOURS: ${{ vars.REDDIT_MONITOR_WINDOW_HOURS }}
-          AUTO_EDIT_RELAY_POSTS: ${{ vars.AUTO_EDIT_RELAY_POSTS }}
-          # Opt-in: conceal the whole body as well as existing spoiler media.
+          # Opt-in: spoiler all media tiles (including video) and the full Reddit-marked body.
           SPOILER_MEDIA_AND_BODY: ${{ vars.SPOILER_MEDIA_AND_BODY }}
           # Round 95 (2026-10-30): independent pre-delivery liveness probe.
           #   REDDIT_LIVENESS_PROBE=0     disable it (restores pre-round-95

@@ -16,9 +16,10 @@ posts through a 48-hour stage and retains recheck state for 48 hours plus 30 min
 change applies to every configured subreddit; News-Express card editing remains in the News-Express
 reader, separate from Game-Express publishing.
 
-Reddit-flagged media keeps its existing spoiler treatment. The new `SPOILER_MEDIA_AND_BODY=1`
-repo Variable additionally wraps every non-empty rendered body line for spoiler-marked posts;
-unset/false leaves existing body rendering unchanged. README, workflow, `.env.example`, relay setup
+Reddit-flagged posts keep their existing spoiler behavior by default. The new
+`SPOILER_MEDIA_AND_BODY=1` repo Variable additionally wraps every non-empty rendered body line
+and spoiler-flags every media tile (images, GIFs and video); unset/false leaves current body and
+media behavior unchanged. README, workflow, `.env.example`, relay setup
 docs and offline regressions cover the setting, short descriptions (including “(It’s Truvia)”), long
 bodies/continuations, revision edits, cache retention and the 48-hour relay schedule.
 

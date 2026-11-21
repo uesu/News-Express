@@ -13491,6 +13491,19 @@ finally:
 check("r113: delivered relay IDs survive the 48 h + 30 min scheduler slack; unrelated records keep old pruning",
       "Sub_edit" in _r113_retained and "Sub_old_regular" not in _r113_retained)
 
+_r113_video = _r109_data("video description", 0, video=True)
+_r113_video["spoiler"] = True
+with patch.object(v3, "SPOILER_MEDIA_AND_BODY", False):
+    _r113_video_default = _r109_build(_r113_video)
+with patch.object(v3, "SPOILER_MEDIA_AND_BODY", True):
+    _r113_video_enabled = _r109_build(_r113_video)
+check("r113: combined spoiler mode flags video media too; off mode preserves the existing video tile behavior",
+      [flag for _url, flag in _r112_items(_r113_video_default)] == [None]
+      and [flag for _url, flag in _r112_items(_r113_video_enabled)] == [True]
+      and any("||video description||" in x["content"]
+              for c in _r113_video_enabled["components"]
+              for x in c["components"] if x.get("type") == 10))
+
 check("r113: two-day monitoring uses an hour-based setting in the workflow and intake reader",
       v3.REDDIT_MONITOR_WINDOW_HOURS == 48
       and v3.MAX_AGE_SECONDS == 48 * 3600

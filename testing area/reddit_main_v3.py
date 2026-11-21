@@ -407,8 +407,6 @@ POSTED_MESSAGES_FILE = "posted_messages.json"
 # conceals their complete rendered body. Unset/false preserves body rendering.
 SPOILER_MEDIA_AND_BODY = (os.getenv("SPOILER_MEDIA_AND_BODY", "0").strip().lower()
                           in ("1", "true", "yes", "on"))
-AUTO_EDIT_RELAY_POSTS = (os.getenv("AUTO_EDIT_RELAY_POSTS", "1").strip().lower()
-                         not in ("0", "false", "no", "off"))
 
 # Round 72 (+ precision follow-up and Round 74 cold-proxy coverage): inspect
 # Discord's response for video cards. A video endpoint can be reachable
@@ -529,7 +527,6 @@ def _effective_settings() -> dict:
         "intake_configured": bool(_get("INTAKE_CHANNEL_ID") and _get("DISCORD_BOT_TOKEN")),
         "intake_stale_seconds": _int("INTAKE_STALE_SECONDS"),
         "intake_lookback_hours": _int("INTAKE_LOOKBACK_HOURS"),
-        "auto_edit_relay_posts": bool(_get("AUTO_EDIT_RELAY_POSTS")),
         "spoiler_media_and_body": bool(_get("SPOILER_MEDIA_AND_BODY")),
         # Round 108: archive hardening knobs (old chain).
         "arctic_min_spacing": _int("ARCTIC_MIN_SPACING"),
@@ -8226,18 +8223,17 @@ def build_v3_payload(subreddit: str, data: dict, reddit_url: str, posted_ts: int
 
     # Round 112: a post Reddit flags spoiler / age-restricted blurs its IMAGE
     # and GIF tiles with Discord's own gallery-item `spoiler` flag. A VIDEO
-    # tile never gets it — whatever host serves it (v.redd.it, packaged-media,
-    # YouTube, embedez / redditez / vxreddit mirrors): the spoiler cover takes
-    # the player's fullscreen control away (owner-verified in Discohook). The key
-    # is OMITTED when the post is not flagged, so every unflagged card is
-    # byte-identical to before. Exempt by media KIND, never by host string.
+    # tile keeps the established behavior by default because Discord's cover
+    # can obscure player controls. The opt-in full-media/body mode deliberately
+    # applies the same spoiler cover to video tiles too. The key is omitted for
+    # unaffected media, preserving existing cards when the new mode is off.
     _blur = bool(data.get("spoiler"))
 
     def gallery(items: list) -> dict:
         out = []
         for m in items:
             item = {"media": {"url": m["url"]}}
-            if _blur and m.get("kind") != "video":
+            if _blur and (m.get("kind") != "video" or SPOILER_MEDIA_AND_BODY):
                 item["spoiler"] = True
             out.append(item)
         return {"type": 12, "items": out}
@@ -8957,7 +8953,7 @@ async def main():
                             continue
                         unique_key = f"{sub}_{post_id}"
                         relay_edit = False
-                        if isinstance(entry, _IntakeEntry) and AUTO_EDIT_RELAY_POSTS:
+                        if isinstance(entry, _IntakeEntry):
                             prior = posted_messages.get(unique_key) or {}
                             try:
                                 revision = max(1, int(entry.record.get("revision") or 1))
@@ -9834,7 +9830,7 @@ async def main():
                     target_url = f"{webhook_url}?with_components=true"
                     # Video cards, retraction, multi-part bodies and relay edits
                     # need confirmed message IDs; other ordinary cards keep the old POST.
-                    relay_auto_edit = (isinstance(entry, _IntakeEntry) and AUTO_EDIT_RELAY_POSTS)
+                    relay_auto_edit = isinstance(entry, _IntakeEntry)
                     if RETRACT_DEAD_POSTS or inspect_video_response or continuations or relay_auto_edit:
                         target_url += "&wait=true"
                     if continuations:
