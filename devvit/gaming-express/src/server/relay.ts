@@ -82,10 +82,17 @@ export type UpdateMessage = {
 }
 
 /** Re-check schedule after delivery: the stage a post of `ageSeconds` is due
- *  for (0 = not yet). Five looks per post: the next poll after delivery
- *  (~5 min — modqueue / AutoMod removals surface here), 30 min, 2 h, 6 h and
- *  24 h (late approvals). */
-export const RECHECK_STAGES_SECONDS = [300, 1800, 7200, 21600, 86400] as const
+ *  for (0 = not yet). Six looks per post: the next poll (~5 min), 30 min,
+ *  2 h, 6 h, 24 h and 48 h. The final look supports two-day edit monitoring. */
+export const RECHECK_WINDOW_HOURS = 48
+export const RECHECK_STAGES_SECONDS = [
+  300,
+  1800,
+  7200,
+  21600,
+  86400,
+  RECHECK_WINDOW_HOURS * 3600,
+] as const
 
 export function dueStage(ageSeconds: number): number {
   let stage = 0

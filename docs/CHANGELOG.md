@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — Reddit relay revisions, two-day monitoring and opt-in full-body spoilers
+
+News-Express now persists Discord message IDs for new relay-delivered Reddit cards and consumes a
+newer Devvit `revision` by PATCHing the existing card rather than reposting. Cards with overflow
+body pages update those pages in place, create newly needed pages, and delete stale extras; an
+uncertain page-creation outcome is held instead of blindly duplicated. Revision intake bypasses the
+original post-age gate only when a stored delivered card and a strictly higher revision both exist.
+The ID cache remains for 48 hours plus 30 minutes of scheduler slack; ordinary posts retain the
+existing retraction-cache expiry.
+
+The Python monitor and intake lookback now use hour-based `REDDIT_MONITOR_WINDOW_HOURS` and
+`INTAKE_LOOKBACK_HOURS` settings (48-hour defaults). The shared Devvit relay now checks delivered
+posts through a 48-hour stage and retains recheck state for 48 hours plus 30 minutes. This relay
+change applies to every configured subreddit; News-Express card editing remains in the News-Express
+reader, separate from Game-Express publishing.
+
+Reddit-flagged posts keep their existing spoiler behavior by default. The new
+`SPOILER_MEDIA_AND_BODY=1` repo Variable additionally wraps every non-empty rendered body line
+and spoiler-flags every media tile (images, GIFs and video); unset/false leaves current body and
+media behavior unchanged. README, workflow, `.env.example`, relay setup
+docs and offline regressions cover the setting, short descriptions (including “(It’s Truvia)”), long
+bodies/continuations, revision edits, cache retention and the 48-hour relay schedule.
+
 ## Unreleased — X posts support the 20-item photo/video limit (2026-11-13)
 
 X Mobile Engineering lead Jonah Katz and the official `@XCreators` account announced that the

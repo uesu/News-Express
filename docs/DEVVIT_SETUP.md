@@ -293,6 +293,8 @@ memory carried over, no re-bootstrap), code 0.0.10 (devvit 0.15.2) as **Reddit 0
 | 0.0.10 | 2026-11-03 | `devvit` / `@devvit/web` 0.15.1 → **0.15.2** (release notes: Community Engagement Playbook docs + `media.upload` attribution — nothing the relay uses; the portal's App Versions tab flagged 0.15.1 with "a new version of Devvit is available"). No code change; 25 unit tests, build and schema check green. Uploads as Reddit **`0.0.7`**. |
 | 0.0.11 | 2026-11-10 | `devvit` / `@devvit/web` 0.15.2 → **0.15.3** (tarball diff: `@devvit/shared-types` fetch polyfill wraps the response body as `Uint8Array`; `@devvit/reddit` `getCurrentUsername()` reads `context.username`; dev-portal proto fields; the other packages differ in source maps only — nothing the relay uses). No code change; 25 unit tests, build and lint green. Uploads as Reddit **`0.0.8`**. |
 
+| 0.0.12 | Unreleased | Extend the delivered-post recheck ladder with a 48 h stage and retain relay markers for 48 h + 30 min. News-Express now reads the default 48 h intake window (hour-based `INTAKE_LOOKBACK_HOURS` / `REDDIT_MONITOR_WINDOW_HOURS`), stores Discord IDs for relay cards, and PATCHes revised relay records instead of reposting them; existing message pages are reconciled. `SPOILER_MEDIA_AND_BODY=1` additionally spoiler-flags every media tile (including video) and hides the complete rendered body of Reddit-flagged posts; unset preserves existing spoiler behavior. |
+
 ## 9. News-Express reader (round 101 — the relay as the primary listing)
 
 Since round 101 the Reddit engine (`testing area/reddit_main_v3.py`) reads the intake channel
@@ -325,7 +327,7 @@ relay structure for gallery photos, muxed-audio video and the stats line):
   `relay_complete`, and for such a post the engine skips the reddit.com post JSON, the archive
   probes (child, parent, post), both redlib gallery harvests and the archive liveness lookup
   (a clean relay record is `live` from the listing itself, source `relay-listing`; the relay
-  re-checks it at ~5 min / 30 min / 2 h / 6 h / 24 h). Reddit's own counts ride on the card's
+  re-checks it at ~5 min / 30 min / 2 h / 6 h / 24 h / 48 h). Reddit's own counts ride on the card's
   stats line when no proxy served one. (The News-Express `💬 OP comment` card line and
   `REDDIT_OP_COMMENT` were removed in round 104 at the owner's request — they never showed on
   live cards — and the relay carries no comments.) The retraction seatbelt skips the `/new` listing snapshot and the mirror probe for posts the relay
@@ -361,7 +363,7 @@ Record: [`docs/history/ROUND_103.md`](history/ROUND_103.md),
 | --- | --- | --- |
 | `INTAKE_READER` | `primary` | `primary` = relay is the listing when healthy; `shadow` = read + compare, old chain decides (`INTAKE-SHADOW` log line); `off` = never read the channel |
 | `INTAKE_STALE_SECONDS` | `1800` | newest relay message (record or re-check) older than this ⇒ old chain this run |
-| `INTAKE_LOOKBACK_SECONDS` | `21600` | how far back the channel is read each run (held posts re-enter while inside this window; ≤ 8 pages of 100) |
+| `INTAKE_LOOKBACK_HOURS` | `48` | how far back the channel is read each run, matching the 48-hour monitor/edit window (≤ 8 pages of 100) |
 
 ### Reader-side troubleshooting
 
