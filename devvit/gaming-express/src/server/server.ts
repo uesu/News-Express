@@ -25,6 +25,7 @@ import {
   seenKey,
   shouldReport,
   sortOldestFirst,
+  spoilerChanged,
   stageKey,
   stateKey,
   stateKeyOf,
@@ -447,14 +448,15 @@ async function recheckDelivered(
 
     // Re-send the complete record when the readers need it again:
     //  • edited body (hash changed),
-    //  • approved — removed/filtered/deleted before, live now (the readers'
-    //    6 h window may have lost the original record by then).
+    //  • spoiler flag changed (Discord must mirror Reddit's latest flag),
+    //  • approved — removed/filtered/deleted before, live now.
     if (!item.deleted && !item.removed && enabled) {
       const reasons: string[] = []
       const hash = bodyHash(post.body ?? '')
       if (item.edited && (await redis.get(bodyHashKey(d.id))) !== hash)
         reasons.push('edited')
       if (becameLive(previous, item)) reasons.push('approved')
+      if (spoilerChanged(previous, item.spoiler)) reasons.push('spoiler')
       if (reasons.length > 0) {
         const rec = toRecord(post, post.subredditName)
         rec.revision =

@@ -293,6 +293,7 @@ memory carried over, no re-bootstrap), code 0.0.10 (devvit 0.15.2) as **Reddit 0
 | 0.0.10 | 2026-11-03 | `devvit` / `@devvit/web` 0.15.1 → **0.15.2** (release notes: Community Engagement Playbook docs + `media.upload` attribution — nothing the relay uses; the portal's App Versions tab flagged 0.15.1 with "a new version of Devvit is available"). No code change; 25 unit tests, build and schema check green. Uploads as Reddit **`0.0.7`**. |
 | 0.0.11 | 2026-11-10 | `devvit` / `@devvit/web` 0.15.2 → **0.15.3** (tarball diff: `@devvit/shared-types` fetch polyfill wraps the response body as `Uint8Array`; `@devvit/reddit` `getCurrentUsername()` reads `context.username`; dev-portal proto fields; the other packages differ in source maps only — nothing the relay uses). No code change; 25 unit tests, build and lint green. Uploads as Reddit **`0.0.8`**. |
 
+| 0.0.13 | Unreleased | Spoiler-flag-only changes now resend a higher-revision full record so News-Express can PATCH the existing Discord card; the production Python reader consumes terminal Devvit removal/deletion updates and deletes all saved Discord card/page/YouTube companion IDs automatically, preserving retryable AutoMod-filtered items. No `RETRACT_*` Variables or Reddit `/new` absence probes are used for post-delivery deletion. |
 | 0.0.12 | Unreleased | Extend the delivered-post recheck ladder with a 48 h stage and retain relay markers for 48 h + 30 min. News-Express now reads the default 48 h intake window (hour-based `INTAKE_LOOKBACK_HOURS` / `REDDIT_MONITOR_WINDOW_HOURS`), stores Discord IDs for relay cards, and PATCHes revised relay records instead of reposting them; existing message pages are reconciled. `SPOILER_MEDIA_AND_BODY=1` additionally spoiler-flags every media tile (including video) and hides the complete rendered body of Reddit-flagged posts; unset preserves existing spoiler behavior. |
 
 ## 9. News-Express reader (round 101 — the relay as the primary listing)
@@ -317,7 +318,7 @@ relay structure for gallery photos, muxed-audio video and the stats line):
 - **Liveness from the relay's re-checks** — the latest `v: 2` update per post is consulted by
   `candidate_liveness_verdict()` before the record's own `removed` and before any archive
   lookup (`relay-update`: *still listed* ⇒ live, removed/deleted ⇒ hold, queue category ⇒
-  pending approval), and by the retraction seatbelt (`RETRACT_DEAD_POSTS`, off by default)
+  pending approval), while terminal relay removals automatically delete matching delivered Discord cards
   before the mirror/proxy probe. Re-check messages count as relay liveness; a quiet relay reads
   `relay empty (relay alive (N re-check message(s)) but no new post …)`, not stale.
 - **Edits** — a re-sent record (`revision` ≥ 2) is the newer message and supersedes the first
@@ -330,7 +331,9 @@ relay structure for gallery photos, muxed-audio video and the stats line):
   re-checks it at ~5 min / 30 min / 2 h / 6 h / 24 h / 48 h). Reddit's own counts ride on the card's
   stats line when no proxy served one. (The News-Express `💬 OP comment` card line and
   `REDDIT_OP_COMMENT` were removed in round 104 at the owner's request — they never showed on
-  live cards — and the relay carries no comments.) The retraction seatbelt skips the `/new` listing snapshot and the mirror probe for posts the relay
+  live cards — and the relay carries no comments.) Relay lifecycle handling consumes v2 status
+  updates directly and does not use the `/new` listing snapshot or mirror probes for removals.
+  For posts the relay
   has re-checked. A record the CDN could not complete keeps the full round-101 fill-in.
 
 Record: [`docs/history/ROUND_103.md`](history/ROUND_103.md),

@@ -21,6 +21,7 @@ import {
   seenKey,
   shouldReport,
   sortOldestFirst,
+  spoilerChanged,
   stateKeyOf,
   toContent,
   toMultipartBody,
@@ -471,6 +472,22 @@ test('becameLive: removed/filtered/deleted before and live now = approval', () =
     ),
     false,
     'still removed',
+  )
+})
+
+test('spoilerChanged: only a known post-level spoiler transition requests a complete re-send', () => {
+  assert.equal(
+    spoilerChanged(null, true),
+    false,
+    'first observation is not a transition',
+  )
+  assert.equal(spoilerChanged(stateKeyOf(item({spoiler: false})), false), false)
+  assert.equal(spoilerChanged(stateKeyOf(item({spoiler: false})), true), true)
+  assert.equal(spoilerChanged(stateKeyOf(item({spoiler: true})), false), true)
+  assert.equal(
+    spoilerChanged('removed=null|deleted=false', true),
+    false,
+    'unknown state fails closed',
   )
 })
 

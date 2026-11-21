@@ -1,14 +1,34 @@
 # Changelog
 
-## Unreleased — Reddit relay revisions, two-day monitoring and opt-in full-body spoilers
+## Unreleased — Relay lifecycle deletion and spoiler-state revision follow-ups
+
+Devvit's existing post-delivery status rechecks now resend a complete, higher-revision `v:1` record
+when Reddit's post-level spoiler flag changes (including false-to-true and true-to-false). News-Express
+therefore PATCHes the saved Discord card from the authoritative latest Reddit flag, using its existing
+spoiler behavior; `SPOILER_MEDIA_AND_BODY=1` remains optional and expands that behavior to the body
+and video tiles. This is post-level status, not text/media content classification.
+
+News-Express now treats Devvit's explicit author-deleted or terminal moderator-removal `v:2` updates
+as an automatic lifecycle instruction: delete the saved Discord card and every tracked continuation
+and YouTube companion message. Discord 404 is idempotent success; failed deletes are retried on later
+intake reads. Retryable AutoModerator-filtered/approval states are not deleted. No Reddit `/new`
+absence inference is used for this action, and there is no `RETRACT_DEAD_POSTS`, `RETRACT_MODE`, or
+`RETRACT_WINDOW_SECONDS` repository Variable. Cards remain deduplicated after deletion.
+
+The relay's 48-hour recheck ladder from the previous release is retained in source, but takes effect
+only after uploading and installing that Devvit app version. Existing installations keep their current
+24-hour ladder until switched. The Python runtime changes are automatically synchronized by the
+production sync workflow; no production secrets or Variables are changed by this PR.
+
+## 2026-11-21 — Reddit relay revisions, two-day monitoring and opt-in full-body spoilers
 
 News-Express now persists Discord message IDs for new relay-delivered Reddit cards and consumes a
 newer Devvit `revision` by PATCHing the existing card rather than reposting. Cards with overflow
 body pages update those pages in place, create newly needed pages, and delete stale extras; an
 uncertain page-creation outcome is held instead of blindly duplicated. Revision intake bypasses the
 original post-age gate only when a stored delivered card and a strictly higher revision both exist.
-The ID cache remains for 48 hours plus 30 minutes of scheduler slack; ordinary posts retain the
-existing retraction-cache expiry.
+The Discord-ID cache remains for 48 hours plus 30 minutes of scheduler slack so relay revisions
+and lifecycle status changes can act on saved messages.
 
 The Python monitor and intake lookback now use hour-based `REDDIT_MONITOR_WINDOW_HOURS` and
 `INTAKE_LOOKBACK_HOURS` settings (48-hour defaults). The shared Devvit relay now checks delivered

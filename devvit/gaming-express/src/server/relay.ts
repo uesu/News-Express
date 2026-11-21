@@ -176,6 +176,16 @@ export function becameLive(
   return /removed=(?!null)|deleted=true/.test(previousState)
 }
 
+/** True when Reddit's post-level spoiler flag changed since the last re-check. */
+export function spoilerChanged(
+  previous: string | null,
+  current: boolean,
+): boolean {
+  if (!previous) return false
+  const match = /(?:^|\|)spoiler=(true|false)(?:\||$)/.exec(previous)
+  return Boolean(match && (match[1] === 'true') !== current)
+}
+
 /** Cheap stable hash (FNV-1a, 32 bit) of a body — enough to notice an edit. */
 export function bodyHash(s: string): string {
   let h = 0x811c9dc5

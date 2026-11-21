@@ -92,8 +92,8 @@ flowchart LR
 | **Feeds (fallback)** | one **combined RSS request** for all subreddits (fits Reddit's ~1 req/min datacenter limit) with automatic per-subreddit fallback; the optional `REDDIT_FEED_TOKEN` moves requests to the logged-in tier. Runs automatically whenever the relay is unconfigured, unreachable, empty or stale (`INTAKE-FALLBACK` log line) |
 | **FULL MODE** | with an optional Reddit script app: 💬/👍 stats, the OP's stickied comment, and true crosspost embeds |
 | **Fallback fleet** | proxy services (vxreddit → redditez → Embeddit rewrite — the priority/tie-break order, dispatched as bounded concurrent waves with Embeddit held back), Redlib instances, and the Arctic Shift archive — a dead source never breaks a run |
-| **Delivery checks & state** | dedup, stateless fresh-age hold (default 30 s, `0` off), plus operational pending rechecks for selected liveness/media-readiness holds; optional post-delivery retraction; pristine `/new` confirmation removed 2026-10-21 (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
-| **Listing safety** | retraction seatbelt retains its own `/new` listing proof (two proofs required); delivery no longer requires pristine listing — outages are never proof of absence, removal checks still apply |
+| **Delivery checks & state** | dedup, stateless fresh-age hold (default 30 s, `0` off), plus operational pending rechecks for selected liveness/media-readiness holds; explicit terminal Devvit relay removals automatically delete tracked Discord messages, while retryable AutoMod queues are preserved; pristine `/new` confirmation removed 2026-10-21 (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
+| **Relay lifecycle** | explicit Devvit removal/deletion updates automatically delete delivered Discord cards and tracked companion pages; retryable AutoMod queue items are preserved; RSS/listing absence is never treated as proof |
 
 ### 🧱 Platform
 
@@ -184,9 +184,9 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 └── .gitignore
 ```
 
-> `posted_messages.json` stores optional retraction records and durable long-body
-> delivery progress, including when retraction is disabled. It is gitignored locally
-> and force-added by the production workflow. Preserve it with the other live caches.
+> `posted_messages.json` stores relay message IDs, revision state, lifecycle status, and durable
+> long-body delivery progress. It is gitignored locally and force-added by the production workflow;
+> preserve it with the other live caches so updates can edit/delete the correct Discord messages.
 
 ---
 
@@ -355,9 +355,6 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `FRESH_HOLD_SECONDS` | `30` | flat minimum post age before a candidate is considered; `0` = off (stateless) |
 | `PENDING_RECHECK_SECONDS` | `300` | shared throttle for retryable operational holds — 5 min, i.e. exactly one cron tick, so a hold is re-probed on the next run (round 95c; `1800` restores the old 30-min wait); confirmed removed/deleted archive entries use a no-recheck path unless they reappear via RSS (provenance-aware, still runs removal checks) |
 | `REDDIT_VIDEO_QUALITY` | `balanced` | video-quality selection: `balanced` (EmbedEZ 1080p may replace vxreddit → 720p → durable DASH floor), `compatibility` (pre-round-67 order, instant rollback), `highest` (wider quality window) |
-| `RETRACT_DEAD_POSTS` | `0` | `1` enables the dead-post retraction seatbelt |
-| `RETRACT_MODE` | `edit` | `edit` (tombstone in place) or `delete` |
-| `RETRACT_WINDOW_SECONDS` | `21600` | how far back a delivered post can still be retracted (6 h) |
 | `REDDIT_MONITOR_WINDOW_HOURS` | `48` | two-day Reddit freshness, pending and relay edit window; configured in hours |
 | `SPOILER_MEDIA_AND_BODY` | `0` | `1` spoiler-flags all media (images, GIFs, video) and the body on Reddit-flagged posts; unset preserves current behavior |
 | `REDDIT_LIVENESS_PROBE` | `1` | independent pre-delivery liveness check against the Arctic archive record (`removed_by_category` + title/body markers); `0` restores pre-round-95 behaviour exactly |
@@ -436,7 +433,7 @@ STATIC_BUTTONS = [
 V3 splits the entire retrieved post body across the main card and as many text-only
 continuations as needed, including part five and ten-plus messages. Media, stats and
 buttons stay on the main card. Confirmed page IDs and remaining payloads persist in
-`posted_messages.json`, also when retraction is disabled. Rate-limit rejections resume
+`posted_messages.json`, including relay lifecycle state. Rate-limit rejections resume
 on a later run after Retry-After; other posts may appear between deferred parts.
 Uncertain outcomes (timeouts, server errors or missing
 message IDs) hold for manual reconciliation to avoid duplicate pages. Inspect Discord
@@ -481,10 +478,11 @@ and its four Variables, so the monitor makes no content-based posting decision
 on any path. The truthful record of that removal lives in
 [`docs/history/ROUND_67.md`](docs/history/ROUND_67.md).
 
-**After delivery (opt-in):** the **retraction seatbelt** (`RETRACT_DEAD_POSTS=1`,
-off by default) can rewrite a confirmed-dead post's card as a tombstone (or
-delete it), but only with two independent proofs, and it never touches the
-dedup key — a retraction can never cause a re-post.
+**After delivery (automatic for Devvit relay updates):** when the intake relay reports an author-deleted
+post or a terminal moderator removal, News-Express deletes the saved Discord card and all tracked
+continuation/companion messages. Retryable AutoMod-filtered posts are retained for possible approval.
+There is no retraction Variable or RSS/listing-absence inference; the relay status is the authority.
+Deleted cards remain deduplicated and are not reposted from the same relay snapshot.
 
 **Latency:** delivery happens on the first tick a post clears the checks —
 latency is simply your cron interval (5 min as run by the owner's cron-job.org
