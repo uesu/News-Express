@@ -2,7 +2,7 @@
 
 Relays new posts from a configurable set of gaming subreddits and official publisher
 accounts to a private Discord intake channel — one compact record per post, delivered once,
-followed up with removal, deletion, edit and approval notices during the post's first two days.
+followed up with removal, deletion, edit and approval notices through the post's first 24 hours.
 
 Gaming Express is the Reddit intake of a Discord server that publishes news from the official
 accounts of a handful of games. The publisher posts it exists for are the ones a community
@@ -36,7 +36,7 @@ channel, stays with the reader on the Discord side.
    a longer backlog simply continues on the next poll. Each delivery is one Discord message:
    a compact record as the content and the complete record (untruncated body, every media
    URL, video renditions, crosspost parent) as a small JSON attachment.
-4. **Re-check.** Each delivered post is looked at again a few times during its first two days (through the 48-hour stage).
+4. **Re-check.** Each delivered post is looked at again at about 5 min, 30 min, 2 h, 6 h and 24 h after creation.
    The first look always reports back; the later looks report only a change — removal,
    deletion, lock, spoiler/NSFW flag or edit. An edited post, and a post that was removed and
    later approved, are re-sent as a new revision. Score and comment counts are carried but

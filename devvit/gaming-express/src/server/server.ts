@@ -48,7 +48,7 @@ const LISTING_LIMIT = 25
 /** Hard cap on Discord sends per poll — the rest is picked up next tick.
  *  15 at 5-minute polls (was 10 at 2-minute polls): same ceiling per minute. */
 const MAX_SENDS_PER_POLL = 15
-/** De-dup markers outlive the 48 h News-Express window by a wide margin. */
+/** De-dup markers outlive the relay's 24 h post-delivery recheck window. */
 const SEEN_TTL_SECONDS = 7 * 24 * 3600
 /** Give up on a post after this many delivery failures. */
 const MAX_FAILS = 3

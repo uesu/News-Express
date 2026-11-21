@@ -15,10 +15,12 @@ intake reads. Retryable AutoModerator-filtered/approval states are not deleted. 
 absence inference is used for this action, and there is no `RETRACT_DEAD_POSTS`, `RETRACT_MODE`, or
 `RETRACT_WINDOW_SECONDS` repository Variable. Cards remain deduplicated after deletion.
 
-The relay's 48-hour recheck ladder from the previous release is retained in source, but takes effect
-only after uploading and installing that Devvit app version. Existing installations keep their current
-24-hour ladder until switched. The Python runtime changes are automatically synchronized by the
-production sync workflow; no production secrets or Variables are changed by this PR.
+The proposed 48-hour Devvit recheck stage has been withdrawn before upload: the relay source and
+installed app remain on the established 5 min / 30 min / 2 h / 6 h / 24 h schedule. Python's 48-hour
+intake lookback and Discord-ID cache retention remain in place, but do not extend how long Devvit
+checks Reddit posts. The spoiler-only resend code is in source but also requires a Devvit upload and
+install before it runs on Reddit. The Python runtime changes are synchronized separately; no
+production secrets or Variables are changed.
 
 ## 2026-11-21 — Reddit relay revisions, two-day monitoring and opt-in full-body spoilers
 
