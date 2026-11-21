@@ -337,7 +337,6 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   unresolved after the in-run edits is carried in `media_heal_carry.json` (committed
   beside `posted_tweets.json`; account + message id + identical payload, never a webhook
   URL) and gets one identical edit per later run until it renders or the window ends.
-- `RETRACT_DEAD_POSTS` — default OFF; `1` enables dead-post tombstoning
   (round 44; requires two independent proofs before touching a message).
   (Round 66 removed the workflow mappings for the round-42-45 gate Variables
   — settle windows, dup-media/repost/mod-queue gates, listing racing — that

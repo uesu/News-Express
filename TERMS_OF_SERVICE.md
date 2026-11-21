@@ -22,12 +22,12 @@ Reddit account; it writes public post records into a private Discord channel of 
 Reddit monitor reads back with a bot token you create. Both halves run under your accounts and
 Reddit's and Discord's developer terms apply to you as the operator.
 
-The Reddit V3 monitor's dead-post retraction feature is **disabled by default**. If you enable
-`RETRACT_DEAD_POSTS`, the monitor requests Discord message IDs (`wait=true`), stores the public card
-payload and delivery metadata in `posted_messages.json`, and may edit or delete a card only after its
-configured independent removal checks pass. You are responsible for choosing `RETRACT_MODE`, keeping
-that state file private when appropriate, and ensuring that any automated edit/delete behavior fits
-your Discord server's rules and moderation practice.
+When the Devvit intake reports that a previously delivered Reddit post was deleted by its author or
+terminally removed by moderators, the Reddit monitor automatically deletes the tracked Discord card
+and its continuation/companion messages. Retryable AutoModerator-filtered posts are retained. This
+uses the relay's explicit status update, not an inference from RSS/listing absence, and requires no
+configuration Variable. The operator is responsible for ensuring this automated deletion behavior
+fits their Discord server's moderation practice and for protecting `posted_messages.json`.
 
 Operational logs and completion summaries are best-effort diagnostics, not
 proof of healthy sources, successful delivery or committed/pushed state. Follow
@@ -54,10 +54,10 @@ You agree NOT to use the Service to:
 ## 4. Third-Party Dependencies
 
 The Service depends on free/community-run third parties — Reddit's Developer Platform (Devvit),
-which hosts the optional *Gaming Express* relay under your own Reddit account and whose developer
-terms govern that app; Discord's bot API for the optional intake reader; Nitter mirrors, Redlib (public Reddit
-RSS, post pages, and — when the optional retraction seatbelt is enabled — the public `/new`
-listings it reads to confirm a delivered post is still visible, including reddit.com's
+which hosts the *Gaming Express* relay under your own Reddit account and whose developer
+terms govern that app; Discord's bot API for the optional intake reader; Nitter mirrors, Redlib (legacy public Reddit
+RSS feeds and post pages used only when the Devvit intake is unavailable; automatic deletion follows
+explicit relay status and never listing absence. The prior listing path included reddit.com's
 token-authenticated per-subreddit RSS listing (round 38e); the former pristine listing
 confirmation (round 64, removed 2026-10-21) also read listings with a cache-busting `_fresh`
 parameter and `no-cache` headers; the fallback fleet
