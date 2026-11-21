@@ -19,6 +19,7 @@ import {
   parseEnabled,
   parseSubreddits,
   parseUsers,
+  RECHECK_WINDOW_HOURS,
   type RelayRecord,
   SENT_ZSET,
   seenKey,
@@ -58,7 +59,7 @@ const DISCORD_TIMEOUT_MS = 8_000
 const MAX_RECHECKS_PER_POLL = 20
 const POLL_SOFT_DEADLINE_MS = 20_000
 /** How long a delivered post stays on the re-check list (last stage + slack). */
-const RECHECK_WINDOW_SECONDS = 86400 + 1800
+const RECHECK_WINDOW_SECONDS = RECHECK_WINDOW_HOURS * 3600 + 1800
 /** After this many consecutive multipart failures the attachment is skipped
  *  for a while (plain JSON content only) so a Discord/Devvit quirk cannot
  *  double every send. */

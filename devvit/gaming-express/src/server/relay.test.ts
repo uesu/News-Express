@@ -16,6 +16,7 @@ import {
   parseSubreddits,
   parseUsers,
   RECHECK_STAGES_SECONDS,
+  RECHECK_WINDOW_HOURS,
   type RelayRecord,
   seenKey,
   shouldReport,
@@ -430,8 +431,12 @@ test('toMultipartBody: payload_json + record.json in one hand-built form, bounda
   assert.ok(!JSON.stringify(full).includes(boundary))
 })
 
-test('dueStage: five looks — 5 min, 30 min, 2 h, 6 h, 24 h', () => {
-  assert.deepEqual([...RECHECK_STAGES_SECONDS], [300, 1800, 7200, 21600, 86400])
+test('dueStage: six looks — 5 min, 30 min, 2 h, 6 h, 24 h, 48 h', () => {
+  assert.equal(RECHECK_WINDOW_HOURS, 48)
+  assert.deepEqual(
+    [...RECHECK_STAGES_SECONDS],
+    [300, 1800, 7200, 21600, 86400, 172800],
+  )
   assert.equal(dueStage(0), 0)
   assert.equal(dueStage(299), 0)
   assert.equal(dueStage(300), 1)
@@ -441,7 +446,9 @@ test('dueStage: five looks — 5 min, 30 min, 2 h, 6 h, 24 h', () => {
   assert.equal(dueStage(21600), 4)
   assert.equal(dueStage(86399), 4)
   assert.equal(dueStage(86400), 5)
-  assert.equal(dueStage(999999), 5)
+  assert.equal(dueStage(172799), 5)
+  assert.equal(dueStage(172800), 6)
+  assert.equal(dueStage(999999), 6)
 })
 
 test('becameLive: removed/filtered/deleted before and live now = approval', () => {
