@@ -49,8 +49,10 @@ flowchart LR
     ENG -->|"auto-commit"| CACHE["💾 posted_*.json<br/>dedup caches"]
 ```
 
-* **Scheduling** — a free [cron-job.org](https://cron-job.org) job pings the two
-  workflows every 10 minutes via `workflow_dispatch`. GitHub's native
+* **Scheduling** — a free [cron-job.org](https://cron-job.org) job pings the configured
+  GitHub Actions workflows every 10 minutes by default via `workflow_dispatch`; change its
+  crontab on cron-job.org for a different interval. This is independent of the Reddit Devvit
+  relay, which polls Reddit every 5 minutes. GitHub's native
   `schedule:` is **disabled on purpose** (it raced the external trigger →
   double posts; re-enabling is a documented two-line change — see
   [Setup step 4](#step-4--reliable-10-minute-automation-external-trigger)).
@@ -88,7 +90,7 @@ flowchart LR
 | **Body text** | clean markdown body (links stay clickable, Reddit spoiler markers → Discord spoilers; `SPOILER_MEDIA_AND_BODY=1` spoiler-flags all media (including video) and hides the whole body for Reddit-flagged posts, while unset preserves current behavior; author-escaped `\>!…!<` stays literal, Reddit `>text` quotes gain Discord's `> ` and consecutive quote paragraphs join into one quote block, empty-blockquote artifacts dropped, entities unescaped exactly once on every path) |
 | **Readable tables** | Valid Markdown pipe tables and rectangular HTML tables with TH headers become grouped row blocks: a bold first-column heading (for example **Patch 3.7**) and `- Column: value` bullets. Headers and wording are generic across subreddits; entities are decoded. HTML cell boundaries are preserved before RSS tag stripping. A one-column table (`\|Heading\|` / `\|:-\|` / rows) renders as a titled list — heading line, then one row per line — and blank lines between boundary-piped rows (Reddit's rich-text export) still read as one table. Merged-cell/malformed HTML tables retain existing cleanup; already-flattened text is not reconstructed. Ordinary pipe prose is not treated as a table |
 | **Proxy-video cold-start heal** | Video cards inspect Discord's returned media metadata; non-native video tiles queue only for a non-positive dimension or a Discord `proxy_url` with incomplete video metadata. Sparse responses without a proxy attempt remain unknown, and every candidate is revalidated before at most one same-message edit. Initially healthy videos receive no repair work; ordinary posts and native media never enter the repair path (see [Round 72](docs/history/ROUND_72.md) and [Round 74](docs/history/ROUND_74.md)) |
-| **Discovery (relay primary)** | the **Devvit relay** ([`devvit/gaming-express`](devvit/README.md)) runs on Reddit, polls `/new` every 5 minutes and writes one JSON record per post into a private Discord **intake channel**; the engine reads that channel with a bot token. Healthy relay records are the sole active listing; delivered posts are rechecked at ~5 min / 30 min / 2 h / 6 h / 24 h. Relay records never invoke the legacy Reddit/Redlib/Arctic discovery or liveness probes. If relay intake is stale, empty, unconfigured, or unreachable, delivery pauses with `INTAKE-PAUSED` rather than silently switching engines. Setup and update: [DEVVIT_SETUP.md §9](docs/DEVVIT_SETUP.md#9-news-express-reader-round-101--the-relay-as-the-primary-listing) |
+| **Discovery (relay primary)** | the **Devvit relay** ([`devvit/gaming-express`](devvit/README.md)) runs on Reddit, polls `/new` every 5 minutes and writes one JSON record per post into a private Discord **intake channel**; the engine reads that channel with a bot token. Healthy relay records are the sole active listing; delivered posts are rechecked at ~5 min / 30 min / 2 h / 5 h. Relay records never invoke the legacy Reddit/Redlib/Arctic discovery or liveness probes. If relay intake is stale, empty, unconfigured, or unreachable, delivery pauses with `INTAKE-PAUSED` rather than silently switching engines. Setup and update: [DEVVIT_SETUP.md §9](docs/DEVVIT_SETUP.md#9-news-express-reader-round-101--the-relay-as-the-primary-listing) |
 | **Retained legacy engine** | the prior combined-feed / per-subreddit / Redlib / Arctic path remains available by explicitly setting `INTAKE_READER=off`; `shadow` runs it for diagnostics while comparing relay listings. Its own fresh-age and pending-recheck behavior remains intact. It is not an automatic relay fallback. |
 | **FULL MODE** | with an optional Reddit script app: 💬/👍 stats and true crosspost embeds |
 | **Fallback fleet** | proxy services (vxreddit → redditez → Embeddit rewrite — the priority/tie-break order, dispatched as bounded concurrent waves with Embeddit held back), Redlib instances, and the Arctic Shift archive — a dead source never breaks a run |
@@ -260,7 +262,9 @@ state to test a formatting change. Leave manual test IDs unset on routine schedu
 ### Step 4 — Reliable 10-minute automation (external trigger)
 
 GitHub's built-in `schedule:` can lag 15–60 min or skip runs, so an external
-cron does the triggering:
+cron does the triggering. The example is every 10 minutes; change the crontab directly
+on cron-job.org to use 5 minutes or another interval. This controls GitHub Actions only,
+not the separate 5-minute Reddit Devvit poll:
 
 1. **Create a PAT for the external cron only.** Prefer a fine-grained token
    scoped to this repository with **Actions: write** permission (classic PATs
@@ -270,7 +274,7 @@ cron does the triggering:
    **per workflow**:
    * **URL:** `https://api.github.com/repos/<YOU>/<REPO>/actions/workflows/twitter_monitor.yml/dispatches`
      (and a second job for `reddit_monitor.yml`)
-   * **Method:** `POST` · **Crontab:** `*/10 * * * *`
+   * **Method:** `POST` · **Crontab:** `*/10 * * * *` (default; editable on cron-job.org)
    * **Headers:**
 
      | Key | Value |
@@ -355,7 +359,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `FRESH_HOLD_SECONDS` | `30` | flat minimum post age before a candidate is considered; `0` = off (stateless) |
 | `PENDING_RECHECK_SECONDS` | `300` | shared throttle for retryable operational holds — 5 min, i.e. exactly one cron tick, so a hold is re-probed on the next run (round 95c; `1800` restores the old 30-min wait); confirmed removed/deleted archive entries use a no-recheck path unless they reappear via RSS (provenance-aware, still runs removal checks) |
 | `REDDIT_VIDEO_QUALITY` | `balanced` | video-quality selection: `balanced` (EmbedEZ 1080p may replace vxreddit → 720p → durable DASH floor), `compatibility` (pre-round-67 order, instant rollback), `highest` (wider quality window) |
-| `REDDIT_MONITOR_WINDOW_HOURS` | `48` | two-day Reddit freshness, pending and relay edit window; configured in hours |
+| `REDDIT_MONITOR_WINDOW_HOURS` | `5` | Reddit freshness, pending and relay edit window; configured in hours and capped at 5 h |
 | `SPOILER_MEDIA_AND_BODY` | `0` | `1` spoiler-flags all media (images, GIFs, video) and the body on Reddit-flagged posts; unset preserves current behavior |
 | `REDDIT_LIVENESS_PROBE` | `1` | independent pre-delivery liveness check against the Arctic archive record (`removed_by_category` + title/body markers); `0` restores pre-round-95 behaviour exactly |
 | `REDDIT_LIVENESS_STRICT` | `0` | `0` (lenient) holds a post only on positive removal/queue evidence — an unverifiable post posts as before; `1` also holds when no independent source could confirm the post |
@@ -364,7 +368,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `INTAKE_CHANNEL_ID` | *(unset)* | round 101: id of the Discord intake channel the Devvit relay writes to. Together with the `DISCORD_BOT_TOKEN` secret this turns the relay into the primary listing |
 | `INTAKE_READER` | `primary` | `primary` = relay-only; degraded intake pauses delivery with no legacy probes. `shadow` = old engine decides and logs a comparison; `off` = explicitly select the retained old engine |
 | `INTAKE_STALE_SECONDS` | `1800` | newest relay record older than this ⇒ relay delivery pauses (`INTAKE-PAUSED`); other bots sharing the channel never count |
-| `INTAKE_LOOKBACK_HOURS` | `48` | how far back the channel is read each run (held posts and revisions re-enter within the two-day window) |
+| `INTAKE_LOOKBACK_HOURS` | `5` | maximum Discord channel lookback per run (capped at 5 h); separate from Devvit's 5 h post-delivery recheck schedule |
 | `ARCTIC_MIN_SPACING` | `1.0` | round 108: seconds between consecutive Arctic Shift requests (back-to-back archive calls time out); `0` = no spacing |
 | `ARCTIC_RETRY_BUDGET` | `3` | round 108: how many archive requests per run may be retried once after a timeout / 429 / 5xx; `0` = never retry |
 | `ARCTIC_RESTORE_MAX_PER_RUN` | `5` | round 108: never-re-check holds the old chain may reopen per run when the archive re-reads the post clean **after** the hold (the live gates still decide); `0` = off |
@@ -377,7 +381,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `MAX_CACHE_SIZE_PER_SUB` | `250` | newest dedup keys kept **per subreddit** |
 | `MAX_CACHE_SIZE_PER_ACCOUNT` | `250` | newest dedup keys kept **per X account** |
 | `MAX_CACHE_SIZE_TOTAL` | `10000` | global dedup backstop |
-| `MAX_POSTS_PER_RUN` | `25` | per-run flood cap — newest N post, the rest retry next run (48 h window) |
+| `MAX_POSTS_PER_RUN` | `25` | per-run flood cap — newest N post, the rest retry next run within the configured monitor window |
 
 **X (Twitter) monitor**
 
@@ -483,13 +487,17 @@ post or a terminal moderator removal, News-Express deletes the saved Discord car
 continuation/companion messages. Retryable AutoMod-filtered posts are retained for possible approval.
 There is no retraction Variable or RSS/listing-absence inference; the relay status is the authority.
 Deleted cards remain deduplicated and are not reposted from the same relay snapshot.
+With the current source, Devvit checks through 5 hours after post creation and News-Express
+keeps relay message IDs for 5 hours plus 30 minutes of slack; that bounds how late a terminal
+removal can be detected/deleted. After the relay update arrives, the next GitHub Actions run
+processes it (currently every 10 minutes by default).
 
-**Latency:** delivery happens on the first tick a post clears the checks —
-latency is simply your cron interval (5 min as run by the owner's cron-job.org
-schedule; 2-minute crons were proven fine post-round-64, but the workflow's
-concurrency group only queues overlapping runs, so anything below ~5 min buys
-nothing). With the relay (round 101) a post is listed within one relay poll
-(5 min) of its creation.
+**Latency:** the external cron currently triggers GitHub Actions every 10 minutes
+by default, and that interval is independently editable on cron-job.org. The Reddit Devvit
+relay polls every 5 minutes, so new posts are listed within one relay poll; changing the
+external cron does not speed up Reddit polling. Very short external intervals do not make
+Devvit poll faster and may queue overlapping GitHub runs. The actual delivery time also
+depends on the next GitHub Actions trigger after intake.
 
 ---
 

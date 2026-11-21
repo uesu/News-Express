@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — Reduce Reddit freshness and relay rechecks to five hours
+
+The Python Reddit monitor freshness/pending/edit-cache windows and Discord intake history scan are
+now capped at 5 hours (default 5 h), so an older Actions Variable cannot restore the former 48-hour
+window. Devvit's delivered-post recheck stages are now ~5 min, 30 min, 2 h and 5 h (the 6 h stage is removed because it would exceed the new final window); recheck state
+is retained through 5 h plus the existing 30-minute scheduler slack. The Reddit monitor window,
+Discord channel lookback and Devvit post-delivery recheck are separate controls. No rate-limit cause
+is established by this change: earlier relay-primary runs also succeeded with 48-hour settings.
+
+The revision/PATCH support remains intact; it was added in a separate edit-support change, not by
+this recheck adjustment. For relay `http_429` responses, run summaries now include the failing
+channel-history page and safe Discord rate-limit headers (when supplied), so the next report can
+show whether a large lookback scan reached a later-page limit. This does not retry or bypass a 429.
+
 ## Unreleased — Relay lifecycle deletion and spoiler-state revision follow-ups
 
 Devvit's existing post-delivery status rechecks now resend a complete, higher-revision `v:1` record
@@ -20,11 +34,10 @@ status. Terminal holds remain suppressed unless a newer clean relay listing conf
 AutoModerator queue states remain retryable. This closes a gap where relay candidates bypassed the
 legacy pending gate and could be delivered even though the relay's current status said removed.
 
-The proposed 48-hour Devvit recheck stage has been withdrawn before upload: the relay source and
-installed app remain on the established 5 min / 30 min / 2 h / 6 h / 24 h schedule. Python's 48-hour
-intake lookback and Discord-ID cache retention remain in place, but do not extend how long Devvit
-checks Reddit posts. The spoiler-only resend code is in source but also requires a Devvit upload and
-install before it runs on Reddit. The Python runtime changes are synchronized separately; no
+At the time of this earlier update, the proposed 48-hour Devvit recheck stage had been withdrawn
+before upload and the relay remained on its established 5 min / 30 min / 2 h / 6 h / 24 h schedule.
+That historical schedule is superseded by the five-hour recheck change documented above. The
+spoiler-only resend code is in source but also requires a Devvit upload and install before it runs on Reddit. The Python runtime changes are synchronized separately; no
 production secrets or Variables are changed.
 
 ## 2026-11-21 — Reddit relay revisions, two-day monitoring and opt-in full-body spoilers
@@ -34,13 +47,14 @@ newer Devvit `revision` by PATCHing the existing card rather than reposting. Car
 body pages update those pages in place, create newly needed pages, and delete stale extras; an
 uncertain page-creation outcome is held instead of blindly duplicated. Revision intake bypasses the
 original post-age gate only when a stored delivered card and a strictly higher revision both exist.
-The Discord-ID cache remains for 48 hours plus 30 minutes of scheduler slack so relay revisions
-and lifecycle status changes can act on saved messages.
+At the time of this dated entry, the Discord-ID cache was set to 48 hours plus 30 minutes of
+scheduler slack so relay revisions and lifecycle status changes could act on saved messages; the
+current five-hour default and its slack are documented above.
 
-The Python monitor and intake lookback now use hour-based `REDDIT_MONITOR_WINDOW_HOURS` and
-`INTAKE_LOOKBACK_HOURS` settings (48-hour defaults). The shared Devvit relay now checks delivered
-posts through a 48-hour stage and retains recheck state for 48 hours plus 30 minutes. This relay
-change applies to every configured subreddit; News-Express card editing remains in the News-Express
+At that point, the Python monitor and intake lookback used hour-based `REDDIT_MONITOR_WINDOW_HOURS`
+and `INTAKE_LOOKBACK_HOURS` settings (48-hour defaults), and the shared Devvit relay checked
+delivered posts through a 48-hour stage and retained recheck state for 48 hours plus 30 minutes.
+This relay change applies to every configured subreddit; News-Express card editing remains in the News-Express
 reader, separate from Game-Express publishing.
 
 Reddit-flagged posts keep their existing spoiler behavior by default. The new
@@ -48,7 +62,7 @@ Reddit-flagged posts keep their existing spoiler behavior by default. The new
 and spoiler-flags every media tile (images, GIFs and video); unset/false leaves current body and
 media behavior unchanged. README, workflow, `.env.example`, relay setup
 docs and offline regressions cover the setting, short descriptions (including “(It’s Truvia)”), long
-bodies/continuations, revision edits, cache retention and the 48-hour relay schedule.
+bodies/continuations, revision edits, cache retention and that then-current 48-hour relay schedule.
 
 ## Unreleased — X posts support the 20-item photo/video limit (2026-11-13)
 
