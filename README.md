@@ -88,11 +88,11 @@ flowchart LR
 | **Body text** | clean markdown body (links stay clickable, Reddit spoiler markers → Discord spoilers; `SPOILER_MEDIA_AND_BODY=1` spoiler-flags all media (including video) and hides the whole body for Reddit-flagged posts, while unset preserves current behavior; author-escaped `\>!…!<` stays literal, Reddit `>text` quotes gain Discord's `> ` and consecutive quote paragraphs join into one quote block, empty-blockquote artifacts dropped, entities unescaped exactly once on every path) |
 | **Readable tables** | Valid Markdown pipe tables and rectangular HTML tables with TH headers become grouped row blocks: a bold first-column heading (for example **Patch 3.7**) and `- Column: value` bullets. Headers and wording are generic across subreddits; entities are decoded. HTML cell boundaries are preserved before RSS tag stripping. A one-column table (`\|Heading\|` / `\|:-\|` / rows) renders as a titled list — heading line, then one row per line — and blank lines between boundary-piped rows (Reddit's rich-text export) still read as one table. Merged-cell/malformed HTML tables retain existing cleanup; already-flattened text is not reconstructed. Ordinary pipe prose is not treated as a table |
 | **Proxy-video cold-start heal** | Video cards inspect Discord's returned media metadata; non-native video tiles queue only for a non-positive dimension or a Discord `proxy_url` with incomplete video metadata. Sparse responses without a proxy attempt remain unknown, and every candidate is revalidated before at most one same-message edit. Initially healthy videos receive no repair work; ordinary posts and native media never enter the repair path (see [Round 72](docs/history/ROUND_72.md) and [Round 74](docs/history/ROUND_74.md)) |
-| **Discovery (round 101)** | the **Devvit relay** ([`devvit/gaming-express`](devvit/README.md)) runs on Reddit, polls `/new` every 5 minutes and writes one JSON record per post into a private Discord **intake channel** (any channel you choose — the owner uses `#modlogs`; the reader skips every message that is not a relay record); the engine reads that channel back with a bot token and uses it as the listing while it is healthy (`INTAKE: relay ok`); since round 103 the relay also carries the complete record (`record.json`: full body, all media, crosspost parent) and re-checks every delivered post for removals/deletions/edits/approvals (~5 min … 24 h), and since round 104 a relay-served post makes **no** redlib / reddit.com / Arctic request at all (only the vxreddit / embedez / embeddit proxies, which are part of the relay structure) — Reddit's RSS retirement (2026-11-13) and the 2027 login wall do not touch this path. Setup: [DEVVIT_SETUP.md §9](docs/DEVVIT_SETUP.md#9-news-express-reader-round-101--the-relay-as-the-primary-listing) |
-| **Feeds (fallback)** | one **combined RSS request** for all subreddits (fits Reddit's ~1 req/min datacenter limit) with automatic per-subreddit fallback; the optional `REDDIT_FEED_TOKEN` moves requests to the logged-in tier. Runs automatically whenever the relay is unconfigured, unreachable, empty or stale (`INTAKE-FALLBACK` log line) |
-| **FULL MODE** | with an optional Reddit script app: 💬/👍 stats, the OP's stickied comment, and true crosspost embeds |
+| **Discovery (relay primary)** | the **Devvit relay** ([`devvit/gaming-express`](devvit/README.md)) runs on Reddit, polls `/new` every 5 minutes and writes one JSON record per post into a private Discord **intake channel**; the engine reads that channel with a bot token. Healthy relay records are the sole active listing; delivered posts are rechecked at ~5 min / 30 min / 2 h / 6 h / 24 h. Relay records never invoke the legacy Reddit/Redlib/Arctic discovery or liveness probes. If relay intake is stale, empty, unconfigured, or unreachable, delivery pauses with `INTAKE-PAUSED` rather than silently switching engines. Setup and update: [DEVVIT_SETUP.md §9](docs/DEVVIT_SETUP.md#9-news-express-reader-round-101--the-relay-as-the-primary-listing) |
+| **Retained legacy engine** | the prior combined-feed / per-subreddit / Redlib / Arctic path remains available by explicitly setting `INTAKE_READER=off`; `shadow` runs it for diagnostics while comparing relay listings. Its own fresh-age and pending-recheck behavior remains intact. It is not an automatic relay fallback. |
+| **FULL MODE** | with an optional Reddit script app: 💬/👍 stats and true crosspost embeds |
 | **Fallback fleet** | proxy services (vxreddit → redditez → Embeddit rewrite — the priority/tie-break order, dispatched as bounded concurrent waves with Embeddit held back), Redlib instances, and the Arctic Shift archive — a dead source never breaks a run |
-| **Delivery checks & state** | dedup, stateless fresh-age hold (default 30 s, `0` off), plus operational pending rechecks for selected liveness/media-readiness holds; explicit terminal Devvit relay removals automatically delete tracked Discord messages, while retryable AutoMod queues are preserved; pristine `/new` confirmation removed 2026-10-21 (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
+| **Delivery checks & state** | relay-primary dedup with no fresh-age or pending-recheck throttle; its media-readiness holds retry on the next intake pass. The explicitly selected legacy engine retains its own fresh-age hold and operational pending rechecks. Explicit terminal Devvit relay removals delete tracked Discord messages, while retryable AutoMod queues are preserved (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
 | **Relay lifecycle** | explicit Devvit removal/deletion updates automatically delete delivered Discord cards and tracked companion pages; retryable AutoMod queue items are preserved; RSS/listing absence is never treated as proof |
 
 ### 🧱 Platform
@@ -362,8 +362,8 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `LIVENESS_PROBE_BUDGET` | `10` | max archive lookups per run (bounds the added latency of a flood run) |
 | `LIVENESS_PROBE_TIMEOUT` | `8` | per-lookup timeout in seconds |
 | `INTAKE_CHANNEL_ID` | *(unset)* | round 101: id of the Discord intake channel the Devvit relay writes to. Together with the `DISCORD_BOT_TOKEN` secret this turns the relay into the primary listing |
-| `INTAKE_READER` | `primary` | `primary` = a healthy relay is the listing (combined feed / per-sub fallback / archive sweep skipped); `shadow` = read and compare only, the old chain decides; `off` = never read the channel |
-| `INTAKE_STALE_SECONDS` | `1800` | newest relay **record** older than this ⇒ this run uses the old chain (`INTAKE-FALLBACK: relay stale`); other bots sharing the channel never count (round 102) |
+| `INTAKE_READER` | `primary` | `primary` = relay-only; degraded intake pauses delivery with no legacy probes. `shadow` = old engine decides and logs a comparison; `off` = explicitly select the retained old engine |
+| `INTAKE_STALE_SECONDS` | `1800` | newest relay record older than this ⇒ relay delivery pauses (`INTAKE-PAUSED`); other bots sharing the channel never count |
 | `INTAKE_LOOKBACK_HOURS` | `48` | how far back the channel is read each run (held posts and revisions re-enter within the two-day window) |
 | `ARCTIC_MIN_SPACING` | `1.0` | round 108: seconds between consecutive Arctic Shift requests (back-to-back archive calls time out); `0` = no spacing |
 | `ARCTIC_RETRY_BUDGET` | `3` | round 108: how many archive requests per run may be retried once after a timeout / 429 / 5xx; `0` = never retry |
@@ -453,15 +453,15 @@ see [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) and the
 **A post delivers when, in order:**
 
 1. **Dedup cache** — already posted? skip. (`<subreddit>_<post_id>` key, retained per the cache caps above.)
-2. **Pending recheck throttle** — retryable operational holds already recorded
-   for a candidate are re-evaluated according to `PENDING_RECHECK_SECONDS`
-   (default 300 s — one cron tick, so the re-check lands on the next run). Confirmed removed/deleted archive entries use a no-recheck
-   path unless they reappear via RSS (eligible for reconsideration when
-   returned by RSS, still subject to removal checks; archive/media presence
-   alone is not proof of current visibility).
-3. **Fresh hold** — a flat, stateless `FRESH_HOLD_SECONDS` (30 s) minimum age
-   computed from the post's own timestamp. This check itself creates no
-   tracker or pending entry.
+2. **Legacy-engine pending recheck throttle** — when `INTAKE_READER=off` or
+   `shadow`, the retained engine re-evaluates retryable operational holds at
+   `PENDING_RECHECK_SECONDS` (default 300 s). Confirmed removed/deleted legacy
+   entries keep their no-recheck behavior unless restored through that engine's
+   listing/archive rules. Relay candidates do not consult this pending cache or
+   wait for this interval; each relay intake can retry eligible media work.
+3. **Legacy-engine fresh hold** — the explicitly selected old engine applies a
+   stateless `FRESH_HOLD_SECONDS` (30 s) minimum age. The relay path has no
+   fresh-age floor; this check creates no tracker or pending entry.
 4. **Operational liveness/media checks** — source evidence about a post's
    liveness or removal/approval state, or incomplete archive media, can defer
    delivery. Retryable holds are recorded with a reason in
@@ -469,11 +469,11 @@ see [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) and the
    removed/deleted no-recheck exception above still applies.
 5. **Deliver** — the card posts; the dedup key is cached.
 
-The fresh-age hold (round 64, stateless) does not write `pending_reddit.json`
+The legacy fresh-age hold (round 64, stateless) does not write `pending_reddit.json`
 (its companion pristine-listing gate was removed in the 2026-10-21 cleanup; do
-not restore it). The active operational pending cache is separate from the
-removed Round-63 settle-window, dedicated moderator-queue, and duplicate-
-media/repost gates. Round 67 also removed the content-advisory gate
+not restore it). The retained engine's operational pending cache is separate
+from the removed Round-63 settle-window, dedicated moderator-queue, and duplicate-
+media/repost gates. The relay path bypasses both legacy throttles. Round 67 also removed the content-advisory gate
 and its four Variables, so the monitor makes no content-based posting decision
 on any path. The truthful record of that removal lives in
 [`docs/history/ROUND_67.md`](docs/history/ROUND_67.md).

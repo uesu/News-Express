@@ -142,9 +142,9 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
    npm test
    ```
 
-   `npm ci` prints deprecation and audit warnings for transitive packages of the Devvit
-   CLI — expected, not actionable here. `npm test` must end with `pass N` / `fail 0`
-   (25 tests as of Reddit 0.0.5) followed by the esbuild line.
+   `npm ci` may print deprecation and audit warnings for transitive packages of the Devvit
+   CLI. `npm test` must end with `pass N` / `fail 0` followed by the esbuild line; use the
+   count printed by the current checkout rather than a historical fixed test count.
 
 4. Log in with the **copy-paste** flow, upload, switch the installation to the new version:
 
@@ -154,6 +154,7 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
    npx devvit whoami
    npx devvit upload --copy-paste
    npx devvit install GamingExpressRelay
+   npx devvit logs GamingExpressRelay
    ```
 
    `login --copy-paste` prints a reddit.com link: open it, approve as the relay account,
@@ -165,7 +166,15 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
    moment the install completes; there is nothing to delete. The **Update** button on
    `developers.reddit.com/r/GamingExpressRelay/apps/gaming-express` does the same thing as
    `install`; after using it the CLI answers `Version 0.0.N has already been installed`,
-   which is the confirmation, not an error.
+   which is the confirmation, not an error. `logs` should show the normal poll line and, when
+   delivered posts are due, `recheck N looked, N update msg, N re-sent`.
+
+   Recheck work is stored in the installation's Redis state and is pruned automatically after
+   the 24-hour schedule (plus its 30-minute scheduling slack). An in-place update preserves
+   that state; do **not** uninstall/reinstall or clear Redis just to make the pending count
+   zero, because that discards dedup/recheck history and can cause duplicate deliveries. A
+   zero recheck count means no delivered posts are due on that poll, not an error. Old Python
+   `pending_reddit.json` entries are not used by relay-primary candidates.
 
    **Why `--copy-paste`** (2026-11-02, CLI 0.15.1, Windows 11): the default
    `npx devvit login` (localhost callback, OAuth client `Bep8X2RR…`) produced a token that
@@ -293,23 +302,23 @@ memory carried over, no re-bootstrap), code 0.0.10 (devvit 0.15.2) as **Reddit 0
 | 0.0.10 | 2026-11-03 | `devvit` / `@devvit/web` 0.15.1 → **0.15.2** (release notes: Community Engagement Playbook docs + `media.upload` attribution — nothing the relay uses; the portal's App Versions tab flagged 0.15.1 with "a new version of Devvit is available"). No code change; 25 unit tests, build and schema check green. Uploads as Reddit **`0.0.7`**. |
 | 0.0.11 | 2026-11-10 | `devvit` / `@devvit/web` 0.15.2 → **0.15.3** (tarball diff: `@devvit/shared-types` fetch polyfill wraps the response body as `Uint8Array`; `@devvit/reddit` `getCurrentUsername()` reads `context.username`; dev-portal proto fields; the other packages differ in source maps only — nothing the relay uses). No code change; 25 unit tests, build and lint green. Uploads as Reddit **`0.0.8`**. |
 
-| 0.0.13 | Unreleased | Spoiler-flag-only changes resend a higher-revision full record so News-Express can PATCH the existing Discord card; the production Python reader consumes terminal Devvit removal/deletion updates and deletes saved Discord card/page/YouTube companion IDs automatically, preserving retryable AutoMod-filtered items. These Devvit source changes are not live until uploaded/installed. No `RETRACT_*` Variables or Reddit `/new` absence probes are used for post-delivery deletion. |
+| 0.0.13 | Unreleased | Spoiler-flag-only changes resend a higher-revision full record so News-Express can PATCH the existing Discord card; the Python reader consumes terminal Devvit removal/deletion updates and deletes saved Discord card/page/YouTube companion IDs automatically, preserving retryable AutoMod-filtered items. Reader changes make the relay the sole default intake, pause rather than probe/fall back when unhealthy, and bypass legacy fresh-hold/pending-recheck throttles only for relay candidates; the retained old engine remains available explicitly. Devvit source changes are not live until uploaded/installed. No `RETRACT_*` Variables or Reddit `/new` absence probes are used for post-delivery deletion. |
 | 0.0.12 | Superseded before upload | The proposed 48 h Devvit recheck stage is withdrawn; the relay remains on its existing 5 min / 30 min / 2 h / 6 h / 24 h schedule. Python's 48 h intake/cache window and relay Discord-ID retention remain separate and do not extend Devvit's checks. The earlier proposal also documented revised-card PATCHes and the optional `SPOILER_MEDIA_AND_BODY=1` behavior; this switch remains off unless explicitly enabled. |
 
 ## 9. News-Express reader (round 101 — the relay as the primary listing)
 
-Since round 101 the Reddit engine (`testing area/reddit_main_v3.py`) reads the intake channel
-back **before** the combined feed. While the relay is healthy (HTTP 200 and the newest relay
-message younger than `INTAKE_STALE_SECONDS`, default 1800 s) the relay is the listing and the
-RSS / redlib / Arctic sweep is skipped; in every other state the run logs one
-`INTAKE-FALLBACK: relay <status> (<why>)` line and the old chain runs exactly as before.
-Record of the design: [`docs/history/ROUND_101.md`](history/ROUND_101.md); shared-channel
-paging and freshness rules: [`docs/history/ROUND_102.md`](history/ROUND_102.md).
+The Reddit engine (`testing area/reddit_main_v3.py`) reads the intake channel before
+processing candidates. With the default `INTAKE_READER=primary`, Devvit is the sole active
+intake and authority: only a healthy relay is processed. Stale, empty, unconfigured, or
+unreachable intake logs `INTAKE-PAUSED` and pauses delivery; it does not fall back to or probe
+the old RSS / Redlib / Arctic listing engine. To deliberately use the retained old engine,
+set `INTAKE_READER=off`; `shadow` runs the old engine and logs a comparison for diagnostics.
+The old engine keeps its own fresh-hold and pending-recheck behavior. Relay candidates bypass
+both throttles and do not use the old pending cache or liveness probes.
 
-Since round 103 (relay 0.0.7) the relay is also the **complete** source, and since round 104
-(relay 0.0.8) a relay-served post costs **no redlib / reddit.com / Arctic request at all** —
-those stay as the fallback only (the vxreddit / embedez / embeddit proxies remain part of the
-relay structure for gallery photos, muxed-audio video and the stats line):
+Since relay 0.0.7 the relay also carries the complete record (`record.json`); relay-served
+posts make no Redlib, reddit.com, or Arctic request. The vxreddit / embedez / embeddit proxies
+remain available for supported media resolution as part of the relay delivery structure.
 
 - **Full body, full media, crosspost parent** — read from the message's `record.json`
   (`cdn.discordapp.com`, no token) only when the inline record was cut or names a crosspost
@@ -323,18 +332,16 @@ relay structure for gallery photos, muxed-audio video and the stats line):
   `relay empty (relay alive (N re-check message(s)) but no new post …)`, not stale.
 - **Edits** — a re-sent record (`revision` ≥ 2) is the newer message and supersedes the first
   for a post that has not been delivered yet; delivered posts are not re-posted.
-- **Round 104 — `relay_complete`.** A record with nothing cut and its crosspost parent named
-  is the whole post: `intake_base_data()` marks it
-  `relay_complete`, and for such a post the engine skips the reddit.com post JSON, the archive
-  probes (child, parent, post), both redlib gallery harvests and the archive liveness lookup
-  (a clean relay record is `live` from the listing itself, source `relay-listing`; the relay
-  re-checks it at ~5 min / 30 min / 2 h / 6 h / 24 h). Reddit's own counts ride on the card's
-  stats line when no proxy served one. (The News-Express `💬 OP comment` card line and
-  `REDDIT_OP_COMMENT` were removed in round 104 at the owner's request — they never showed on
-  live cards — and the relay carries no comments.) Relay lifecycle handling consumes v2 status
-  updates directly and does not use the `/new` listing snapshot or mirror probes for removals.
-  For posts the relay
-  has re-checked. A record the CDN could not complete keeps the full round-101 fill-in.
+- **Relay-only resolution.** Every relay record is treated as authoritative input, even if
+  `record.json` could not be fetched or the inline body was truncated. `intake_base_data()`
+  prevents reddit.com JSON, archive, and Redlib discovery/liveness lookups; media can still use
+  the relay-carried URLs and the approved media proxy services. A truncated body uses the
+  relayed portion if no complete body is available. Relay lifecycle handling consumes v2
+  status updates directly; it does not infer removal from listing absence.
+- **Rechecks and retries.** Devvit checks delivered posts at ~5 min / 30 min / 2 h / 6 h /
+  24 h. Relay-path media readiness is retried on the next intake pass without the old engine's
+  `PENDING_RECHECK_SECONDS` delay or `FRESH_HOLD_SECONDS` floor. Reddit's counts ride on the
+  card stats line when available. The app carries no comments; there is no OP-comment feature.
 
 Record: [`docs/history/ROUND_103.md`](history/ROUND_103.md),
 [`docs/history/ROUND_104.md`](history/ROUND_104.md).
@@ -357,31 +364,31 @@ Record: [`docs/history/ROUND_103.md`](history/ROUND_103.md),
    (News-Express the dev repo needs neither; the workflow syncs through `sync_prod.yml`.)
 6. **Verify on the next run.** The step summary's settings line ends with
    `intake primary (relay ok; N record(s), newest S s)` and *Combined fetch status* reads
-   `relay`; `monitor.log` has `INTAKE: relay ok — …`. Before step 5 each run logs
-   `INTAKE-FALLBACK: relay unconfigured …` and behaves exactly as before.
+   `relay`; `monitor.log` has `INTAKE: relay ok — …`. Before step 5 the run logs
+   `INTAKE-PAUSED: relay unconfigured …` and does not probe either engine.
 
 ### Switches (repo Variables, all optional)
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `INTAKE_READER` | `primary` | `primary` = relay is the listing when healthy; `shadow` = read + compare, old chain decides (`INTAKE-SHADOW` log line); `off` = never read the channel |
-| `INTAKE_STALE_SECONDS` | `1800` | newest relay message (record or re-check) older than this ⇒ old chain this run |
-| `INTAKE_LOOKBACK_HOURS` | `48` | how far back the channel is read each run, matching the 48-hour monitor/edit window (≤ 8 pages of 100) |
+| `INTAKE_READER` | `primary` | `primary` = relay-only; unhealthy intake pauses delivery. `shadow` = old engine runs for comparison; `off` = explicitly use the retained old engine |
+| `INTAKE_STALE_SECONDS` | `1800` | newest relay message (record or re-check) older than this ⇒ relay delivery pauses; no automatic old-engine fallback |
+| `INTAKE_LOOKBACK_HOURS` | `48` | how far back the channel is read each run (≤ 8 pages of 100); Python intake retention is separate from Devvit's 24 h check schedule |
 
 ### Reader-side troubleshooting
 
 | Log / summary | Meaning / action |
 | --- | --- |
-| `INTAKE-FALLBACK: relay unconfigured` | secret or Variable missing in the prod repo (step 5) |
+| `INTAKE-PAUSED: relay unconfigured` | secret or Variable missing in the prod repo (step 5); delivery paused, no old-engine fallback |
 | `relay http_401 (bot token rejected)` | token wrong or reset — paste the current one |
 | `relay http_403 (bot lacks View Channel / Read Message History…)` | step 3 |
 | `relay http_404 (channel id unknown to this bot…)` | wrong id, or the bot was never invited (step 2) |
 | `relay ok` but `0 record(s) for this engine` every run | records arrive with empty `content` ⇒ Message Content Intent off (step 1), or the `sub` names do not match `SUBREDDITS` |
-| `relay stale (newest relay message is N s old)` | the relay is paused (`relayEnabled=false`), uninstalled, or Reddit is quiet; `npx devvit logs GamingExpressRelay` — harmless either way, the old chain ran |
+| `INTAKE-PAUSED: relay stale` / `relay empty` / `relay error` | relay-only delivery is paused; check `npx devvit logs GamingExpressRelay`, its `relayEnabled` setting, target subreddits, and webhook. The old engine was not queried. |
 | `relay empty` | no message in the lookback window at all — same causes as stale |
 | `relay empty (N message(s) in the last 360 min but none is a relay record …)` | the bot sees the channel but no relay record: Message Content Intent off (step 1), wrong channel id, or the relay webhook (`intakeWebhook`) still points at the old channel — `npx devvit settings set intakeWebhook` |
-| `relay empty (relay alive (N re-check message(s)) but no new post …)` | 0.0.7: the relay is running, Reddit was simply quiet — harmless, the old chain ran and found nothing either |
-| `[<id>] relay record.json unavailable (…) — inline record kept` | the CDN read of the complete record failed (expired link, outage); the round-101 fill-in handles that post |
+| `relay empty (relay alive (N re-check message(s)) but no new post …)` | The relay is running, but no new post record is in the intake window. Delivery remains relay-only; no legacy discovery calls are made. |
+| `[<id>] relay record.json unavailable (…) — inline record kept` | the CDN read of the complete record failed (expired link, outage); relay-carried fields remain authoritative, including the relayed body portion if it was truncated — no old-engine fill-in is probed |
 | relay log `attachment refused (Nx) — sending content only` | Discord/Devvit rejected the multipart upload; records still arrive as plain content; after 3 in a row the attachment pauses for an hour (`attach:off`) — report it, nothing is lost |
 
 ## 10. Roadmap (each step its own PR, none started without an explicit go)
