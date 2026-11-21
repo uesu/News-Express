@@ -432,21 +432,20 @@ test('toMultipartBody: payload_json + record.json in one hand-built form, bounda
   assert.ok(!JSON.stringify(full).includes(boundary))
 })
 
-test('dueStage: five looks — 5 min, 30 min, 2 h, 6 h and 24 h', () => {
-  assert.equal(RECHECK_WINDOW_HOURS, 24)
-  assert.deepEqual([...RECHECK_STAGES_SECONDS], [300, 1800, 7200, 21600, 86400])
+test('dueStage: four looks — 5 min, 30 min, 2 h and 5 h', () => {
+  assert.equal(RECHECK_WINDOW_HOURS, 5)
+  assert.deepEqual([...RECHECK_STAGES_SECONDS], [300, 1800, 7200, 18000])
   assert.equal(dueStage(0), 0)
   assert.equal(dueStage(299), 0)
   assert.equal(dueStage(300), 1)
   assert.equal(dueStage(1799), 1)
   assert.equal(dueStage(1800), 2)
   assert.equal(dueStage(7200), 3)
-  assert.equal(dueStage(21600), 4)
-  assert.equal(dueStage(86399), 4)
-  assert.equal(dueStage(86400), 5)
-  assert.equal(dueStage(172799), 5)
-  assert.equal(dueStage(172800), 5)
-  assert.equal(dueStage(999999), 5)
+  assert.equal(dueStage(17999), 3)
+  assert.equal(dueStage(18000), 4)
+  assert.equal(dueStage(19800), 4)
+  assert.equal(dueStage(19801), 4)
+  assert.equal(dueStage(999999), 4)
 })
 
 test('becameLive: removed/filtered/deleted before and live now = approval', () => {

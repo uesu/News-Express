@@ -71,7 +71,7 @@ explicitly labelled).
 Since round 101 (2026-11-02) the listing itself comes from the **Devvit relay**: the
 engine reads the intake channel back (secret `DISCORD_BOT_TOKEN`, Variables
 `INTAKE_CHANNEL_ID`, `INTAKE_READER=primary|shadow|off`, `INTAKE_STALE_SECONDS=1800`,
-`INTAKE_LOOKBACK_HOURS=48`). The run result carries an `intake` object
+`INTAKE_LOOKBACK_HOURS=5`). The run result carries an `intake` object
 (`status`, `mode`, `records_in_window`, `records_for_this_engine`, `newest_age_seconds`,
 `pages`, `detail`; never ids or the token) and the summary's settings line ends with
 `intake primary (relay ok; N record(s), newest S s)` or `intake primary (relay STALE →

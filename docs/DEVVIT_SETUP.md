@@ -170,7 +170,7 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
    delivered posts are due, `recheck N looked, N update msg, N re-sent`.
 
    Recheck work is stored in the installation's Redis state and is pruned automatically after
-   the 24-hour schedule (plus its 30-minute scheduling slack). An in-place update preserves
+   the 5-hour schedule (plus its 30-minute scheduling slack). An in-place update preserves
    that state; do **not** uninstall/reinstall or clear Redis just to make the pending count
    zero, because that discards dedup/recheck history and can cause duplicate deliveries. A
    zero recheck count means no delivered posts are due on that poll, not an error. Relay
@@ -343,8 +343,8 @@ remain available for supported media resolution as part of the relay delivery st
   the relay-carried URLs and the approved media proxy services. A truncated body uses the
   relayed portion if no complete body is available. Relay lifecycle handling consumes v2
   status updates directly; it does not infer removal from listing absence.
-- **Rechecks and retries.** Devvit checks delivered posts at ~5 min / 30 min / 2 h / 6 h /
-  24 h. Relay-path media readiness is retried on the next intake pass without the old engine's
+- **Rechecks and retries.** Devvit checks delivered posts at ~5 min / 30 min / 2 h / 5 h.
+  Relay-path media readiness is retried on the next intake pass without the old engine's
   `PENDING_RECHECK_SECONDS` delay or `FRESH_HOLD_SECONDS` floor. Reddit's counts ride on the
   card stats line when available. The app carries no comments; there is no OP-comment feature.
 
@@ -378,7 +378,7 @@ Record: [`docs/history/ROUND_103.md`](history/ROUND_103.md),
 | --- | --- | --- |
 | `INTAKE_READER` | `primary` | `primary` = relay-only; unhealthy intake pauses delivery. `shadow` = old engine runs for comparison; `off` = explicitly use the retained old engine |
 | `INTAKE_STALE_SECONDS` | `1800` | newest relay message (record or re-check) older than this ⇒ relay delivery pauses; no automatic old-engine fallback |
-| `INTAKE_LOOKBACK_HOURS` | `48` | how far back the channel is read each run (≤ 8 pages of 100); Python intake retention is separate from Devvit's 24 h check schedule |
+| `INTAKE_LOOKBACK_HOURS` | `5` | maximum lookback per run (capped at 5 h and ≤ 8 pages of 100); this Python-side history scan is separate from Devvit's 5 h post-delivery recheck schedule |
 
 ### Reader-side troubleshooting
 

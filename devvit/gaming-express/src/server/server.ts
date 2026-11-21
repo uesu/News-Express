@@ -48,7 +48,7 @@ const LISTING_LIMIT = 25
 /** Hard cap on Discord sends per poll — the rest is picked up next tick.
  *  15 at 5-minute polls (was 10 at 2-minute polls): same ceiling per minute. */
 const MAX_SENDS_PER_POLL = 15
-/** De-dup markers outlive the relay's 24 h post-delivery recheck window. */
+/** De-dup markers outlive the relay's 5 h post-delivery recheck window. */
 const SEEN_TTL_SECONDS = 7 * 24 * 3600
 /** Give up on a post after this many delivery failures. */
 const MAX_FAILS = 3
@@ -360,7 +360,7 @@ async function rememberSent(rec: RelayRecord): Promise<void> {
 }
 
 /**
- * Look again at recently delivered posts (~5 min, 30 min, 2 h, 6 h and 24 h
+ * Look again at recently delivered posts (~5 min, 30 min, 2 h and 5 h
  * after creation) and tell the readers what Reddit shows now: one batched
  * `v: 2` update message per poll (first look always, later looks on change),
  * and a re-sent `v: 1` record (`revision` ≥ 2, `resent` = why) when the body
