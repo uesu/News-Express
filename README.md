@@ -400,7 +400,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `REDDIT_JSON_PROBE` | `auto` | when the feed-token `.json` probe runs: `auto` = only when both OAuth secrets exist; `force` = always; `off` = never |
+| `REDDIT_JSON_PROBE` | `off` (including when unset/empty) | optional feed-token `.json` probe: `off` = never (default; `REDDIT_FEED_TOKEN` still authenticates RSS); `auto` = try `.json` when a valid feed token or both OAuth secrets exist; `force` = always try once per run with new posts |
 | `FEEDTOKEN_JSON_STAGGER` | `65` | seconds between feed-token `.json` attempts |
 
 **Test tools** (local `.env` or manual workflow runs — never in scheduled runs)
@@ -408,8 +408,8 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | Variable | Meaning |
 |---|---|
 | `TEST_TWEET_ID` | rebuild one specific tweet: `screen_name/tweet_id` (also the `test_tweet` workflow input) |
-| `TEST_POST_ID` | rebuild one specific Reddit post: `Subreddit/post_id` (also the `test_post` workflow input) |
-| `DRY_RUN` | `1` = log full card payloads, touch neither Discord nor the cache (also the `dry_run` workflow input) |
+| `TEST_POST_ID` | rebuild one specific Reddit post: `Subreddit/post_id` (also the `test_post` workflow input); when relay is primary, uses that exact relay record and does not fall back to the legacy Reddit/Redlib engine |
+| `DRY_RUN` | `1` = build/log the full card without posting to Discord or saving posting caches. In manual workflow runs, `auto` makes a targeted `test_post` dry-run by default; choose `no` only to deliberately deliver it |
 
 ### Customizing the buttons
 
