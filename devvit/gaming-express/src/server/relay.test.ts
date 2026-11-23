@@ -226,6 +226,14 @@ test('devvit.json: secret settings carry no defaultValue (upload schema rule)', 
   }
 })
 
+test('devvit.json: Reddit listing poll runs every three minutes', () => {
+  const cfgPath = new URL('../../devvit.json', import.meta.url)
+  const cfg = JSON.parse(readFileSync(cfgPath, 'utf8')) as {
+    scheduler?: {tasks?: Record<string, {cron?: string}>}
+  }
+  assert.equal(cfg.scheduler?.tasks?.poll?.cron, '*/3 * * * *')
+})
+
 test('redis keys: listing id (t3_x) and record id (x) map to the same marker', () => {
   // v0.0.1 defect: bootstrap/lookup keyed on `t3_1xkvvda`, the post-send
   // marker on `1xkvvda` — the marker never matched and the same post was

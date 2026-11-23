@@ -82,8 +82,8 @@ export type UpdateMessage = {
 }
 
 /** Re-check schedule after delivery: the stage a post of `ageSeconds` is due
- *  for (0 = not yet). Four looks per post: the next poll (~5 min), 30 min,
- *  2 h and 5 h. */
+ *  for (0 = not yet). Four looks per post: first due at 5 min (serviced on
+ *  the next 3-minute poll), then 30 min, 2 h and 5 h. */
 export const RECHECK_WINDOW_HOURS = 5
 export const RECHECK_STAGES_SECONDS = [
   300,
