@@ -41,7 +41,7 @@
     "tasks": {
       "poll": {
         "endpoint": "/internal/scheduler/poll",
-        "cron": "*/5 * * * *"
+        "cron": "*/3 * * * *"
       }
     }
   },

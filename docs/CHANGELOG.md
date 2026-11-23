@@ -8,20 +8,36 @@ and `|:-|` separator as literal text in Discord. The special case is intentional
 header that is a valid HTTP(S) Markdown link; other incomplete or malformed table shapes remain
 unchanged. See [Round 116](history/ROUND_116.md).
 
-## Unreleased — Reddit post-level spoilers hide the complete text body
+## Unreleased — poll Reddit every 3 minutes from the Devvit relay
 
-A Reddit post-level Spoiler flag now spoiler-wraps the rendered body by default, including text-only
-posts and any long-body continuation pages. This matches Reddit's post-wide reveal behavior: the
-viewer can reveal the description together with its media. Image/GIF spoiler covers remain unchanged;
-video tiles retain their established default behavior because Discord's cover can obscure player
-controls. `SPOILER_MEDIA_AND_BODY=1` now serves only as the optional video-tile cover setting.
+The Gaming Express Reddit scheduler now runs every 3 minutes instead of every 5. At the current
+12-subreddit/3-account settings this is 5 listing requests per minute; even with the maximum 20
+post re-checks it stays around 11.7 Reddit requests per minute, below the 100/min budget. The
+per-poll cap remains 15 Discord sends. Re-check stage thresholds are unchanged (first due at
+5 minutes), and the separate News-Express reader schedule is unchanged. A new config regression
+checks the cron expression. This remains source-only until a fresh authenticated Devvit upload.
 
-Rich-text spoiler formatting remains independent: when a post has no post-level Spoiler flag, only
-the selected spoiler-marked text is hidden. Titles and controls remain visible.
+## Unreleased — update the Gaming Express Devvit SDK and CLI to 0.15.6
 
-Regression coverage includes text-only posts, rich-text-only spoilers, post-level spoiler bodies,
-long-body continuation pages, existing image/GIF behavior and the video opt-in. See
-[Round 115](history/ROUND_115.md).
+The Devvit app source now pins `devvit` and `@devvit/web` to stable 0.15.6, with the matching CLI
+and SDK dependency tree locked. The installed app uses only the server-side relay APIs; npm package
+comparison shows 0.15.6 adds Devvit Web view and client-navigation attribution support, with no
+breaking change in the app's exercised APIs. The portal's “new version available” notice still
+requires the owner to run the documented authenticated upload and install/update flow; changing
+source or passing local tests does not upload or submit the app.
+
+## Unreleased — Reddit post-level spoilers reveal the complete body in one click
+
+A Reddit post-level Spoiler flag now wraps the complete rendered text body in one Discord spoiler
+pair, so multi-paragraph descriptions reveal together rather than line-by-line. Long bodies that
+must span Discord messages receive one balanced wrapper per message chunk (a spoiler cannot cross
+message boundaries). Text-only posts are covered. Titles, metadata, and controls remain visible;
+image/GIF spoiler covers are unchanged, and `SPOILER_MEDIA_AND_BODY=1` remains only the optional
+video-tile cover setting.
+
+Rich-text spoiler formatting remains selective when there is no post-level Spoiler flag. Regression
+coverage includes multi-paragraph one-click reveal, title visibility, text-only posts, long-body
+continuations, existing image/GIF behavior, and the video opt-in. See [Round 117](history/ROUND_117.md).
 
 ## Unreleased — Reduce Reddit freshness and relay rechecks to five hours
 

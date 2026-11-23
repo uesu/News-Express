@@ -42,11 +42,11 @@ import {
 // Tunables
 // ---------------------------------------------------------------------------
 
-/** Newest posts fetched per subreddit per poll. 5-min polls (0.0.6; 2-min
- *  before) on leak subs never see more than a handful; 25 covers a burst. */
+/** Newest posts fetched per subreddit per poll. The 3-minute cadence on leak
+ *  subs should see only a handful; 25 still covers a burst. */
 const LISTING_LIMIT = 25
 /** Hard cap on Discord sends per poll — the rest is picked up next tick.
- *  15 at 5-minute polls (was 10 at 2-minute polls): same ceiling per minute. */
+ *  15 at 3-minute polls allows up to 5/min while preserving a bounded burst. */
 const MAX_SENDS_PER_POLL = 15
 /** De-dup markers outlive the relay's 5 h post-delivery recheck window. */
 const SEEN_TTL_SECONDS = 7 * 24 * 3600
@@ -203,8 +203,9 @@ async function runPoll(): Promise<PollResult> {
   }
 
   // 1. Fetch all listings concurrently: one call per subreddit (`/new`) and one
-  //    per official account (`u/<name>` submitted, newest first). 12 + 3 calls
-  //    every 5 minutes (3/min) is far inside the 100 QPM budget.
+  //    per official account (`u/<name>` submitted, newest first). With the 3-minute
+  //    cron, 12 + 3 listing calls are 5/min. Even adding the 20-call recheck cap
+  //    (11.7 Reddit calls/min worst case) stays well inside the 100 QPM budget.
   type Listing = {
     target: string
     sub: string | null
@@ -360,8 +361,9 @@ async function rememberSent(rec: RelayRecord): Promise<void> {
 }
 
 /**
- * Look again at recently delivered posts (~5 min, 30 min, 2 h and 5 h
- * after creation) and tell the readers what Reddit shows now: one batched
+ * Look again at recently delivered posts (first due at 5 min, then 30 min,
+ * 2 h and 5 h after creation; the 3-minute poll may service a stage up to
+ * almost 3 minutes after its threshold) and tell the readers what Reddit shows now: one batched
  * `v: 2` update message per poll (first look always, later looks on change),
  * and a re-sent `v: 1` record (`revision` ≥ 2, `resent` = why) when the body
  * was edited or when a removed/filtered post became live again (approval,

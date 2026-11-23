@@ -16,7 +16,7 @@ engine reads the intake channel through its own code in `testing area/reddit_mai
 ## 1. What it does
 
 ```
-Reddit scheduler (cron */5 * * * *; */2 before 0.0.6)
+Reddit scheduler (cron */3 * * * *; */5 before this update, */2 before 0.0.6)
    │  POST /internal/scheduler/poll
    ▼
 gaming-express (runs on Reddit's servers)
@@ -87,10 +87,13 @@ Messages are sent with `allowed_mentions: {parse: []}`, so a title can never pin
 | `officialUsers` | `genshinimpact,HonkaiStarRail,HonkaiNexusAnima` — the verified accounts that actually post (audit below). Optional: every one of them posts only into its own subreddit, which is already in `subreddits`, so this is a second path, not the only one. May be left empty. |
 | `relayEnabled` | `true` |
 
-12 subreddit calls + 3 account calls every 5 minutes = 3 requests/min, far inside the
-platform's 100 requests/min budget (0.0.6; the 2-minute cadence of 0.0.1–0.0.5 was ≈ 7.5/min
-and ran for a day with `0 failed` — 5 minutes matches the engines' own cron and leaves even
-more headroom). Up to 15 Discord sends per poll; anything beyond waits for the next tick.
+12 subreddit calls + 3 account calls every 3 minutes = 5 listing requests/min. At the
+20-post re-check cap, the theoretical total is at most 35 Reddit calls per 3-minute poll
+(about 11.7/min), still well inside the platform's 100 requests/min budget. The relay keeps its
+15-send per-poll cap (up to 5 sends/min when continuously saturated); overflow waits for the next
+tick. The first re-check remains due at 5 minutes and is picked up on the next 3-minute poll.
+The News-Express Discord reader's own schedule is separate and is not changed by this Devvit poll
+cadence update.
 
 ### Publisher-account audit (Arctic Shift archive + live profiles, 2026-11-02)
 
@@ -129,6 +132,12 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
   back into Command Prompt). See §3 step 4 for why the `--copy-paste` form is the one to use.
 
 ## 3. Fresh deploy or update (same procedure every time)
+
+The repository now pins `devvit` and `@devvit/web` at stable **0.15.6** in
+`package.json` and the lockfile. `npm ci` installs that reviewed CLI/SDK set; do not substitute
+`next`/prerelease or an unpinned `npm update`. This source change does not upload itself: Reddit
+continues running the previously uploaded build until the owner completes the authenticated steps
+below. The portal screenshot's 0.15.6 notice is cleared only by uploading a new build.
 
 1. Delete the previous copy: `%USERPROFILE%\Downloads\News-Express-main` and
    `News-Express-main.zip`.
@@ -219,7 +228,7 @@ later is a settings change only (`npx devvit settings set …`), no code or uplo
    npx devvit logs GamingExpressRelay
    ```
 
-   Expected line every 5 minutes (every 2 minutes before 0.0.6; 0.0.7+ appends `; recheck N looked, N update msg, N re-sent`):
+   Expected line every 3 minutes (every 5 minutes before this update, and every 2 minutes before 0.0.6; 0.0.7+ appends `; recheck N looked, N update msg, N re-sent`):
 
    ```
    poll: 12 subs, 3 users, N fetched, 0 sent, N seen, 0 failed, N bootstrapped
