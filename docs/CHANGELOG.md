@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — Reddit post-level spoilers hide the complete text body
+
+A Reddit post-level Spoiler flag now spoiler-wraps the rendered body by default, including text-only
+posts and any long-body continuation pages. This matches Reddit's post-wide reveal behavior: the
+viewer can reveal the description together with its media. Image/GIF spoiler covers remain unchanged;
+video tiles retain their established default behavior because Discord's cover can obscure player
+controls. `SPOILER_MEDIA_AND_BODY=1` now serves only as the optional video-tile cover setting.
+
+Rich-text spoiler formatting remains independent: when a post has no post-level Spoiler flag, only
+the selected spoiler-marked text is hidden. Titles and controls remain visible.
+
+Regression coverage includes text-only posts, rich-text-only spoilers, post-level spoiler bodies,
+long-body continuation pages, existing image/GIF behavior and the video opt-in. See
+[Round 115](history/ROUND_115.md).
+
 ## Unreleased — Reduce Reddit freshness and relay rechecks to five hours
 
 The Python Reddit monitor freshness/pending/edit-cache windows and Discord intake history scan are
