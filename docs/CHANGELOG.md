@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — clean up link-only Markdown tables in Reddit posts
+
+A one-column Reddit table consisting only of a linked header and its alignment separator (no data
+rows) is now rendered as a standalone Markdown link. This avoids exposing the table's boundary pipes
+and `|:-|` separator as literal text in Discord. The special case is intentionally limited to a
+header that is a valid HTTP(S) Markdown link; other incomplete or malformed table shapes remain
+unchanged. See [Round 116](history/ROUND_116.md).
+
 ## Unreleased — Reddit post-level spoilers hide the complete text body
 
 A Reddit post-level Spoiler flag now spoiler-wraps the rendered body by default, including text-only
