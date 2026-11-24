@@ -95,7 +95,7 @@ flowchart LR
 | **Retained legacy engine** | the prior combined-feed / per-subreddit / Redlib / Arctic path remains available by explicitly setting `INTAKE_READER=off`; `shadow` runs it for diagnostics while comparing relay listings. Its own fresh-age and pending-recheck behavior remains intact. It is not an automatic relay fallback. |
 | **FULL MODE** | with an optional Reddit script app: 💬/👍 stats and true crosspost embeds |
 | **Fallback fleet** | proxy services (vxreddit → redditez → Embeddit rewrite — the priority/tie-break order, dispatched as bounded concurrent waves with Embeddit held back), Redlib instances, and the Arctic Shift archive — a dead source never breaks a run |
-| **Delivery checks & state** | relay-primary dedup with no fresh-age or pending-recheck throttle; its media-readiness holds retry on the next intake pass. The explicitly selected legacy engine retains its own fresh-age hold and operational pending rechecks. Explicit terminal Devvit relay removals delete tracked Discord messages, while retryable AutoMod queues are preserved (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
+| **Delivery checks & state** | relay-primary records have no Reddit-post-age cutoff or fresh-age/pending-recheck throttle: an old post that reaches the relay can still be considered if uncached and current status checks allow it. Media-readiness holds retry on the next intake pass. The explicitly selected legacy engine keeps a fixed five-hour age bound and its operational pending rechecks. Explicit terminal Devvit relay removals delete tracked Discord messages, while retryable AutoMod queues are preserved (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
 | **Relay lifecycle** | explicit Devvit removal/deletion updates automatically delete delivered Discord cards and tracked companion pages; retryable AutoMod queue items are preserved; RSS/listing absence is never treated as proof |
 
 ### 🧱 Platform
@@ -360,7 +360,6 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `FRESH_HOLD_SECONDS` | `30` | flat minimum post age before a candidate is considered; `0` = off (stateless) |
 | `PENDING_RECHECK_SECONDS` | `300` | shared throttle for retryable operational holds — 5 min, i.e. exactly one cron tick, so a hold is re-probed on the next run (round 95c; `1800` restores the old 30-min wait); confirmed removed/deleted archive entries use a no-recheck path unless they reappear via RSS (provenance-aware, still runs removal checks) |
 | `REDDIT_VIDEO_QUALITY` | `balanced` | video-quality selection: `balanced` (EmbedEZ 1080p may replace vxreddit → 720p → durable DASH floor), `compatibility` (pre-round-67 order, instant rollback), `highest` (wider quality window) |
-| `REDDIT_MONITOR_WINDOW_HOURS` | `5` | Reddit freshness, pending and relay edit window; configured in hours and capped at 5 h |
 | `SPOILER_MEDIA_AND_BODY` | `0` | `1` additionally spoiler-flags video tiles on Reddit-flagged posts; the body and image/GIF tiles are spoilered by default when Reddit's post-level Spoiler flag is set |
 | `REDDIT_LIVENESS_PROBE` | `1` | independent pre-delivery liveness check against the Arctic archive record (`removed_by_category` + title/body markers); `0` restores pre-round-95 behaviour exactly |
 | `REDDIT_LIVENESS_STRICT` | `0` | `0` (lenient) holds a post only on positive removal/queue evidence — an unverifiable post posts as before; `1` also holds when no independent source could confirm the post |
@@ -369,7 +368,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `INTAKE_CHANNEL_ID` | *(unset)* | round 101: id of the Discord intake channel the Devvit relay writes to. Together with the `DISCORD_BOT_TOKEN` secret this turns the relay into the primary listing |
 | `INTAKE_READER` | `primary` | `primary` = relay-only; degraded intake pauses delivery with no legacy probes. `shadow` = old engine decides and logs a comparison; `off` = explicitly select the retained old engine |
 | `INTAKE_STALE_SECONDS` | `1800` | newest relay record older than this ⇒ relay delivery pauses (`INTAKE-PAUSED`); other bots sharing the channel never count |
-| `INTAKE_LOOKBACK_HOURS` | `5` | maximum Discord channel lookback per run (capped at 5 h); separate from Devvit's 5 h post-delivery recheck schedule |
+| `INTAKE_LOOKBACK_HOURS` | `5` | maximum Discord channel-message lookback per run (capped at 5 h); this is not a Reddit post-age limit and is separate from Devvit's 5 h post-delivery recheck schedule |
 | `ARCTIC_MIN_SPACING` | `1.0` | round 108: seconds between consecutive Arctic Shift requests (back-to-back archive calls time out); `0` = no spacing |
 | `ARCTIC_RETRY_BUDGET` | `3` | round 108: how many archive requests per run may be retried once after a timeout / 429 / 5xx; `0` = never retry |
 | `ARCTIC_RESTORE_MAX_PER_RUN` | `5` | round 108: never-re-check holds the old chain may reopen per run when the archive re-reads the post clean **after** the hold (the live gates still decide); `0` = off |
@@ -471,9 +470,11 @@ see [`docs/history/ENGINE_HISTORY.md`](docs/history/ENGINE_HISTORY.md) and the
    entries keep their no-recheck behavior unless restored through that engine's
    listing/archive rules. Relay candidates do not consult this pending cache or
    wait for this interval; each relay intake can retry eligible media work.
-3. **Legacy-engine fresh hold** — the explicitly selected old engine applies a
-   stateless `FRESH_HOLD_SECONDS` (30 s) minimum age. The relay path has no
-   fresh-age floor; this check creates no tracker or pending entry.
+3. **Age eligibility** — the explicitly selected legacy engine keeps a fixed
+   five-hour maximum age and its stateless `FRESH_HOLD_SECONDS` (30 s) minimum
+   age. Relay-primary records have neither limit: a delayed relay record is not
+   rejected just because Reddit created the post more than five hours earlier.
+   The Discord intake lookback measures relay-message age, not Reddit-post age.
 4. **Operational liveness/media checks** — source evidence about a post's
    liveness or removal/approval state, or incomplete archive media, can defer
    delivery. Retryable holds are recorded with a reason in
