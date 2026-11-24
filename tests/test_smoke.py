@@ -7847,6 +7847,7 @@ check("existing Twitter summary handles timestamp-prefixed five-account producti
       "accounts observed in feed logs: 5" in _app_tw_summary
       and "entries read: 98" in _app_tw_summary
       and "successful feeds: 5" in _app_tw_summary
+      and "new candidates: not separately measured by this log format" in _app_tw_summary
       and "posts delivered: 1" in _app_tw_summary and "cache: success" in _app_tw_summary)
 _app_fail_log = (_app_tw_log + "2026-10-17 04:00:46,000 [WARNING] [Offline] NO working nitter instance this run\n"
                  "2026-10-17 04:00:46,001 [INFO] [Offline] skipping — no feed / 0 entries.\n")
@@ -11033,7 +11034,9 @@ check("r119: V3 summary reports cache/delivery counters without age-floor fields
       'logging.info(f"V3 SUMMARY: posted=' in _x95c_src
       and "dedup_skipped=" in _x95c_src and "cache_missing=" in _x95c_src
       and "stale_skipped=" not in _x95c_src and "max_age_hours=" not in _x95c_src)
-_x95c_log = ("[INFO] [TYPEII_EN_2119676737907007696] V3 Posted: "
+_x95c_log = ("[INFO] dedup cache near cap: 476 key(s) (per-account quota 250, "
+             "backstop 10000); hot: Wuthering=249\n"
+             "[INFO] [TYPEII_EN_2119676737907007696] V3 Posted: "
              "TYPEII_EN_2119676737907007696 (lang=en | source=fxtwitter)\n"
              "[INFO] V3 SUMMARY: posted=1 forced_test_reposts=0 dedup_skipped=3 "
              "new_candidates=1 accounts=TYPEII_EN:new=1/cached=3/delivered=1 "
@@ -11042,6 +11045,8 @@ _x95c_summary = _app_summary_shell("twitter", _x95c_log)
 check("r119: an old uncached tweet is reportable as delivered; summary has no stale refusals",
       "TYPEII_EN_2119676737907007696" in _x95c_summary
       and "### Deduplication state" in _x95c_summary
+      and "new candidates: 1 (engine counter)" in _x95c_summary
+      and "cache near-cap warning: 476 key(s) (per-account quota 250, backstop 10000); hot: Wuthering=249" in _x95c_summary
       and "uncached entries are eligible regardless of tweet age" in _x95c_summary
       and "STALE-SKIP" not in _x95c_summary
       and "entries refused as stale backlog" not in _x95c_summary,

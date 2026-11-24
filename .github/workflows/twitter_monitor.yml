@@ -258,9 +258,18 @@ jobs:
             echo "- successful feeds: ${feeds_ok}"
             echo "- failed feeds: ${feeds_failed}"
             echo "- empty feeds: ${feeds_empty}"
+            v3_summary=$(grep -o 'V3 SUMMARY:.*' twitter_monitor.log 2>/dev/null | tail -n 1 || true)
+            engine_new_candidates=""
+            if [ -n "$v3_summary" ]; then
+              engine_new_candidates=$(printf '%s' "$v3_summary" | sed -nE 's/.*new_candidates=([0-9]+).*/\1/p')
+            fi
             echo
             echo "### Posts"
-            echo "- new candidates: not separately measured by this log format"
+            if [ -n "$engine_new_candidates" ]; then
+              echo "- new candidates: ${engine_new_candidates} (engine counter)"
+            else
+              echo "- new candidates: not separately measured by this log format"
+            fi
             echo "- posts delivered: $(count_matches 'V3 Posted:')"
             # Round 96b: name WHICH accounts fed and which instance answered, so a
             # "successful feeds: 4" count never leaves the reader guessing which
@@ -306,7 +315,6 @@ jobs:
             fi
             echo
             echo "### Deduplication state (round 119)"
-            v3_summary=$(grep -o 'V3 SUMMARY:.*' twitter_monitor.log 2>/dev/null | tail -n 1 || true)
             if [ -n "$v3_summary" ]; then
               echo "- engine: ${v3_summary#V3 SUMMARY: }"
             else
@@ -314,6 +322,10 @@ jobs:
             fi
             echo "- cache behavior: keys already in posted_tweets.json are skipped; uncached entries are eligible regardless of tweet age."
             echo "- cache retention is bounded by MAX_CACHE_SIZE_PER_ACCOUNT and MAX_CACHE_SIZE_TOTAL; only retained keys can guarantee a duplicate skip."
+            cache_pressure=$(grep -o 'dedup cache near cap:.*' twitter_monitor.log 2>/dev/null | tail -n 1 || true)
+            if [ -n "$cache_pressure" ]; then
+              echo "- cache near-cap warning: ${cache_pressure#dedup cache near cap: }"
+            fi
             if [ -n "$v3_summary" ]; then
               engine_posted=$(printf '%s' "$v3_summary" | sed -nE 's/.*posted=([0-9]+).*/\1/p')
               posted_logged=$(count_matches 'V3 Posted:')
