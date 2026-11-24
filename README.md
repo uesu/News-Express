@@ -390,12 +390,18 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 |---|---|---|
 | `MEDIA_HEAL` | `on` | `off` = disable the post-posting media re-edit pass |
 | `MEDIA_HEAL_SCOPE` | `video` | `on`/`all` = also heal photos/gif/webp; `off` = never re-edit |
-| `MEDIA_HEAL_DELAY_SECONDS` | `45` | wait before each re-edit (30–60 is sane) |
+| `MEDIA_HEAL_DELAY_SECONDS` | `15` | wait before each re-edit when Discord returns a cold/unresolved media tile |
 | `MEDIA_HEAL_ATTEMPTS` | `4` | max same-payload re-edits per message; hard-capped at 4 |
 | `MEDIA_HEAL_CARRY_HOURS` | `6` | round 100: a message still unresolved after the in-run edits is carried over in `media_heal_carry.json` and gets one GET + at most one identical edit **per later run** until it renders or this many hours pass; `0` = off (warn and forget, pre-round-100) |
 | `TWITTER_MEDIA_GALLERY_LAYOUT` | unset / `off` | optional `on` groups up to 10 attachments per gallery at any count; otherwise the automatic layout keeps 1–4 together in one gallery and shows 5–20 separately (one gallery per attachment) |
-| `TWITTER_HIGH_VIDEO_LIMIT` | unset (`256 MiB`) | opt-in `1`/`true`/`yes`/`on` = **350 MiB** gallery video cap. Unset, empty, `0`, `false`, `off`, `350` and any other value keep the proven 256 MiB cap; the 350 MiB ceiling is not yet proven on Discord's proxy, so raise it only after review |
-| `TWITTER_MAX_AGE_HOURS` | `24` | round 95c stale-backlog floor: a feed entry older than this is **not a new tweet** and is skipped (`STALE-SKIP`) before any tweet-data request, so a down/restoring nitter instance that answers with a days-old backlog cannot be posted. Age is judged by two witnesses, in **UTC**: for the account's own tweet the **tweet id** wins (immutable — a mirror that re-stamps an old entry, or mangles the date, cannot smuggle it through); for a **repost** the feed date wins (reposting an older tweet is a legitimate post). An entry whose age cannot be established still posts (fail-open), and `TEST_TWEET_ID` is exempt. `0` disables the guard and restores pre-95c behaviour exactly |
+
+The Twitter monitor uses a fixed **400 MiB** external-video gallery cap (no opt-in
+Variable). When the original rendition is larger, it probes available MP4 variants
+from highest to lowest bitrate and chooses the best one that fits. It does not
+filter feed entries by age: cached tweet IDs are skipped, while uncached entries
+remain eligible even if they are older than a day. Cache retention is bounded by
+the settings above, so only keys still present in `posted_tweets.json` are covered
+by that duplicate guard.
 
 **FULL MODE probe**
 
@@ -637,17 +643,16 @@ See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
   `EMBEDEZ_API_KEY` or out of credits; switch to free V1/V3.
 * **First run posts only one item per account** — intentional anti-flood
   behavior; backfill starts on subsequent runs.
-* **A big video shows as a thumbnail / "smaller version" note (X)** — intended:
-  the file exceeded the ~256 MB Discord gallery limit (`VIDEO_SIZE_LIMIT`).
-  Opting in with `TWITTER_HIGH_VIDEO_LIMIT=1` raises it to 350 MiB; that ceiling
-  is still unproven on Discord's proxy, so the default stays 256 MiB. The card
-  still plays a smaller rendition or links out to X either way.
-* **A video tile says "Image failed to load" (X)** — Discord's media proxy has
-  not resolved the rendition yet (cold proxy; large files can take far longer
-  than one run). MEDIA-HEAL re-edits the message up to 4 times in the run and,
-  since round 100, carries it over to the next runs (`media_heal_carry.json`,
-  one identical edit per run for up to `MEDIA_HEAL_CARRY_HOURS`, default 6 h) —
-  exactly what pressing *Edit* in Discohook does by hand. Look for
+* **A big video shows as a thumbnail / "smaller version" note (X)** — the
+  original is above the fixed **400 MiB** gallery cap. Available MP4 variants
+  are probed in descending bitrate, so the best fitting rendition is used
+  (for example 4K → 1080p → 720p); if none fit, the card links to X.
+* **A video tile says "Image failed to load" (X)** — Discord's media proxy may
+  still be cold. MEDIA-HEAL waits 15 seconds before revalidating, then makes up
+  to 4 bounded same-payload repair attempts. Still-unresolved media is carried
+  to later runs (`media_heal_carry.json`, one identical edit per run for up to
+  `MEDIA_HEAL_CARRY_HOURS`, default 6 h). This retries the selected rendition;
+  it does not change quality just because a rendition is temporarily cold.
   `MEDIA-HEAL CARRY <key>: media resolved after carried edit #N` in a later
   run. Only if it is still broken after the window: delete the message →
   remove the tweet from `posted_tweets.json` → re-run, and consider lowering
@@ -747,7 +752,7 @@ The Twitter workflow supports these post-delivery media-heal controls:
 - `MEDIA_HEAL` — enables or disables healing; default: enabled.
 - `MEDIA_HEAL_SCOPE` — defaults to `video`; `off` disables healing and `on`/`all`
   includes additional media types.
-- `MEDIA_HEAL_DELAY_SECONDS` — delay before each re-edit; default: 45 seconds.
+- `MEDIA_HEAL_DELAY_SECONDS` — delay before revalidating/re-editing a cold media tile; default: 15 seconds.
 - `MEDIA_HEAL_ATTEMPTS` — maximum same-payload re-edits; default: 4, hard-capped
   at 4.
 - `MEDIA_HEAL_CARRY_HOURS` — round 100: how long a still-unresolved message is

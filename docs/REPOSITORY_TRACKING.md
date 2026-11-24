@@ -8,9 +8,9 @@ This document tracks current monitor observability and selected workflow variabl
 | --- | --- |
 | Inputs | `ACCOUNTS`, `DISCORD_WEBHOOK_URL`, per-account `WEBHOOK_*`, optional `NITTER_RSS_TOKEN` |
 | Cache | `MAX_CACHE_SIZE_PER_ACCOUNT`, `MAX_CACHE_SIZE_TOTAL` |
-| Media healing | `MEDIA_HEAL`, `MEDIA_HEAL_SCOPE`, `MEDIA_HEAL_DELAY_SECONDS`, `MEDIA_HEAL_ATTEMPTS`, `MEDIA_HEAL_CARRY_HOURS` (round 100: cross-run carry-over, state in `media_heal_carry.json`) |
+| Media healing | `MEDIA_HEAL`, `MEDIA_HEAL_SCOPE`, `MEDIA_HEAL_DELAY_SECONDS` (15 s default), `MEDIA_HEAL_ATTEMPTS`, `MEDIA_HEAL_CARRY_HOURS` (round 100: cross-run carry-over, state in `media_heal_carry.json`) |
 | Gallery layout | `TWITTER_MEDIA_GALLERY_LAYOUT` (`on` groups up to 10 attachments per Discord gallery at any count; unset/`off` keeps 1–4 together and presents 5–20 as separate galleries) |
-| Media cap | `TWITTER_HIGH_VIDEO_LIMIT` (opt-in 350 MiB; unset keeps the proven 256 MiB) |
+| Media cap | Fixed 400 MiB; larger original files use the highest-bitrate available MP4 variant within the cap |
 
 `MEDIA_HEAL_SCOPE=video` is the default. `off` disables the pass; `on` or
 `all` includes additional media types. Twitter V3 inspects Discord's returned
