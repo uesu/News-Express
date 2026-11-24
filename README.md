@@ -95,7 +95,7 @@ flowchart LR
 | **Retained legacy engine** | the prior combined-feed / per-subreddit / Redlib / Arctic path remains available by explicitly setting `INTAKE_READER=off`; `shadow` runs it for diagnostics while comparing relay listings. Its own fresh-age and pending-recheck behavior remains intact. It is not an automatic relay fallback. |
 | **FULL MODE** | with an optional Reddit script app: 💬/👍 stats and true crosspost embeds |
 | **Fallback fleet** | proxy services (vxreddit → redditez → Embeddit rewrite — the priority/tie-break order, dispatched as bounded concurrent waves with Embeddit held back), Redlib instances, and the Arctic Shift archive — a dead source never breaks a run |
-| **Delivery checks & state** | relay-primary records have no Reddit-post-age cutoff or fresh-age/pending-recheck throttle: an old post that reaches the relay can still be considered if uncached and current status checks allow it. Media-readiness holds retry on the next intake pass. The explicitly selected legacy engine keeps a fixed five-hour age bound and its operational pending rechecks. Explicit terminal Devvit relay removals delete tracked Discord messages, while retryable AutoMod queues are preserved (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
+| **Delivery checks & state** | relay-primary records have no Reddit-post-age cutoff or fresh-age/pending-recheck throttle: an old post that reaches the relay can still be considered if uncached and current status checks allow it. Media-readiness holds retry on the next intake pass. Only V3's explicitly selected legacy RSS/archive discovery path retains its fixed five-hour archive search horizon and pending-recheck behavior; this is separate from source-age eligibility and from the five-hour post-delivery edit/removal checks. Explicit terminal Devvit relay removals delete tracked Discord messages, while retryable AutoMod queues are preserved (see [the delivery pipeline](#-reddit-delivery-pipeline)) |
 | **Relay lifecycle** | explicit Devvit removal/deletion updates automatically delete delivered Discord cards and tracked companion pages; retryable AutoMod queue items are preserved; RSS/listing absence is never treated as proof |
 
 ### 🧱 Platform
@@ -130,11 +130,12 @@ run: python "testing area/twitter_v3.py"                 # V3 (active)
 
 **Reddit** — edit `.github/workflows/reddit_monitor.yml`:
 
-| | `reddit_main.py` (V1) | `reddit_main_v2_embedez.py` (V2) | `reddit_main_v3.py` (V3 — **active**) |
+| | `reddit_main.py` (V1, inactive) | `reddit_main_v2_embedez.py` (V2, inactive) | `reddit_main_v3.py` (V3 — **active**) |
 |---|---|---|---|
-| Cost | **Free, no API key** | EmbedEZ API key (paid credits) | **Free, no API key** |
-| Look | `redditez.com` link, Discord auto-embeds | Components V2 card from EmbedEZ | Components V2 card from Reddit's own URLs |
-| Media | whatever the mirror unfurls | via EmbedEZ | every photo, video-only video posts, native video chain |
+| Status | Retained for historical/local comparison; not selected by the production workflow | Retained for local card-layout comparison; not selected by the production workflow | The only Reddit engine selected by `reddit_monitor.yml` |
+| Cost | **Free, no API key** | EmbedEZ API key (paid credits; limited preview without one) | **Free, no API key** |
+| Look | `redditez.com` link, Discord auto-embeds | Components V2 card, updated to V3's section order and multi-gallery layout | Components V2 card from Reddit's own URLs |
+| Media | whatever the mirror unfurls | EmbedEZ media, grouped into photo galleries and a separate video gallery | every photo, video-only video posts, native video chain |
 
 ```yaml
 # run: python "testing area/reddit_main.py"             # V1
@@ -142,7 +143,7 @@ run: python "testing area/twitter_v3.py"                 # V3 (active)
 run: python "testing area/reddit_main_v3.py"            # V3 (active)
 ```
 
-> Engines are independent — mix and match freely (e.g. X on V3, Reddit on V1).
+> The V1/V2 Reddit scripts are inactive legacy renderers; uncommenting one is a manual local choice, not a production setting. The production workflow continues to run V3 only. Twitter engine selection is independent.
 
 ---
 

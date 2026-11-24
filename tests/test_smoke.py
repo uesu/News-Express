@@ -2882,6 +2882,34 @@ for _rel in ("testing area/reddit_main.py", "testing area/reddit_main_v2_embedez
     except Exception as _e:
         check(f"r85 parity: {_rel} format helper + redaction (synthetic)", False, f"{type(_e).__name__}: {_e}")
 
+# --- Inactive Reddit V2 card layout remains structurally aligned with V3 ---
+try:
+    _v2 = load_module("smoke_reddit_v2_card_layout", "testing area/reddit_main_v2_embedez.py")
+    _v2_media = [{"url": f"https://cdn.example/photo-{i}.jpg"} for i in range(11)]
+    _v2_media.append({"url": "https://cdn.example/clip.mp4"})
+    _v2_payload = _v2.build_v2_payload(
+        "ExampleSub", {
+            "content": {"title": "<b>Patch news</b>", "description": "<p>Body copy</p>",
+                        "media": _v2_media,
+                        "statistics": {"comments": 4, "shares": 2, "likes": 9, "views": 100}},
+            "user": {"displayName": "<b>NewsBot</b>"},
+        }, "https://www.reddit.com/r/ExampleSub/comments/abc123/post/", posted_ts=1_800_000_000)
+    _v2_containers = _v2_payload["components"]
+    _v2_first, _v2_second = (_v2_containers[0]["components"], _v2_containers[1]["components"])
+    _v2_galleries = [c for container in _v2_containers for c in container["components"]
+                     if c.get("type") == 12]
+    assert _v2_payload["flags"] == (1 << 15) and len(_v2_containers) == 2
+    assert _v2_first[0]["type"] == 10 and "Patch news" in _v2_first[0]["content"]
+    assert _v2_first[1]["content"] == "Body copy"
+    assert [len(g["items"]) for g in _v2_galleries] == [10, 1, 1]
+    assert "💬 4" in next(c["content"] for c in _v2_second if c.get("type") == 10 and "💬" in c.get("content", ""))
+    assert any("consider supporting" in c.get("content", "") for c in _v2_second)
+    check("inactive Reddit V2 renderer follows V3 card order with split photo galleries, separate video, stats, actions and footer", True)
+except AssertionError as _e:
+    check("inactive Reddit V2 renderer follows V3 card order with split photo galleries, separate video, stats, actions and footer", False, str(_e))
+except Exception as _e:
+    check("inactive Reddit V2 renderer follows V3 card order with split photo galleries, separate video, stats, actions and footer", False, f"{type(_e).__name__}: {_e}")
+
 # --- Ensure redaction is used in v3 exception paths ---
 try:
     _src_fetch = inspect.getsource(v3._fetch_feed)

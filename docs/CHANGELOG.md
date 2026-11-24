@@ -2,6 +2,13 @@
 
 ## Unreleased — Relay-delivered Reddit posts are not age-filtered (Round 120)
 
+The inactive V2 Reddit renderer was also polished to follow the active V3
+Components V2 card order: header/body, media galleries (photos grouped by ten,
+video kept separate), stats, action row, and support footer. This is presentation
+parity for local comparison only; it does not activate the legacy script or
+change the production workflow, intake selection, discovery policy, or the
+five-hour post-delivery edit/removal checks.
+
 Retire the configurable `REDDIT_MONITOR_WINDOW_HOURS` setting and remove the
 five-hour maximum-age rejection from the primary Devvit-relay delivery path. A
 post that Reddit holds and the relay later delivers can now proceed regardless
