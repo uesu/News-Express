@@ -1236,11 +1236,11 @@ check("one conditional syndication GET returns image URLs with the corrected end
       and _syndication_session.calls[0][1]["params"]["token"] == "55g4mqlsrg1hi")
 _POLL_FIXTURE = {
     "choices": [
-        {"label": "🤎 Bobabirb", "percentage": 42.2, "count": 59,
+        {"label": "🤎Bobabirb", "percentage": 42.2, "count": 59,
          "image_url": _SYNDICATION_IMAGES[0]},
-        {"label": "🩶 Kaffiend", "percentage": 24.4, "count": 34,
+        {"label": "🩶Kaffiend", "percentage": 24.4, "count": 34,
          "image_url": _SYNDICATION_IMAGES[1]},
-        {"label": "🩷 Nomnom", "percentage": 33.3, "count": 47,
+        {"label": "🩷Nomnom", "percentage": 33.3, "count": 47,
          "image_url": _SYNDICATION_IMAGES[2]},
     ],
     "total_votes": 140,
@@ -1295,6 +1295,11 @@ check("poll fields render choice percentages, choice labels, total votes and rem
       and "24.4% — 🩶 Kaffiend" in _poll_text
       and "\n\n-# 📜 140 votes · 3 hours left" in _poll_text
       and len(_poll_images) == 3)
+check("poll option text gets exactly one space after a leading emoji",
+      x3.space_after_leading_emoji("🤎Bobabirb") == "🤎 Bobabirb"
+      and x3.space_after_leading_emoji("🤎 Bobabirb") == "🤎 Bobabirb"
+      and x3.space_after_leading_emoji("👩‍🚀Pilot") == "👩‍🚀 Pilot"
+      and x3.space_after_leading_emoji("Ordinary label") == "Ordinary label")
 _poll_data = dict(_POLL_FIXTURE, choices=[dict(c, image_url=None) for c in _POLL_FIXTURE["choices"]])
 _poll_text_no_images, _poll_images_none = x3.poll_display_data(_poll_data)
 check("poll remains readable with no choice-image URLs and does not invent or fetch images",

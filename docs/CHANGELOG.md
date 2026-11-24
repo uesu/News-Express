@@ -10,9 +10,11 @@ RSS entries remain deduplicated, an uncached target cannot be duplicated by the
 injected test entry, and the existing cache key remains recorded after a
 successful forced send. The summary reports `forced_test_reposts` separately
 from new candidates. This is a manual visual-test aid, not a scheduled repost
-mode. The poll vote footer now places the actual Unicode scroll emoji (`📜`)
-before the vote total, with a blank line after the choice results; the literal
-`:scroll:` shortcode is not sent because webhook JSON does not expand it.
+mode. Poll option labels now gain exactly one space between a leading emoji
+and its title when providers return them joined (and preserve labels that are
+already spaced, including multi-codepoint emoji sequences). The poll vote footer
+uses the actual Unicode scroll emoji (`📜`) before the total, with a blank line
+after results; webhook JSON does not expand the literal `:scroll:` shortcode.
 
 The existing cache-protected skip remains the default. Regression coverage
 checks the opt-in guard, exact target, cache-at-start requirement, normal-feed

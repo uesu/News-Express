@@ -2052,6 +2052,64 @@ def build_reply_line(tweet: dict) -> str | None:
     return f"-# ↩️ Replying to [@{replying_to}]({href})"
 
 
+def _is_emoji_base(char: str) -> bool:
+    """Recognize common Unicode emoji bases without a third-party emoji package."""
+    codepoint = ord(char)
+    return (
+        0x1F000 <= codepoint <= 0x1FAFF
+        or 0x2600 <= codepoint <= 0x27BF
+        or 0x2300 <= codepoint <= 0x23FF
+        or 0x2B00 <= codepoint <= 0x2BFF
+        or codepoint in {0x00A9, 0x00AE, 0x203C, 0x2049, 0x2122, 0x2139}
+    )
+
+
+def space_after_leading_emoji(label: str) -> str:
+    """Separate a leading emoji grapheme from the poll option's title text."""
+    if not isinstance(label, str) or not label:
+        return label
+
+    # Keycap emoji start with an ASCII digit / # / * rather than an emoji codepoint.
+    end = 0
+    if label[0] in "#*0123456789":
+        end = 1
+        if end < len(label) and label[end] == "\ufe0f":
+            end += 1
+        if end < len(label) and label[end] == "\u20e3":
+            end += 1
+        else:
+            end = 0
+    elif _is_emoji_base(label[0]):
+        end = 1
+        # A flag is a pair of regional-indicator symbols.
+        if (0x1F1E6 <= ord(label[0]) <= 0x1F1FF and end < len(label)
+                and 0x1F1E6 <= ord(label[end]) <= 0x1F1FF):
+            end += 1
+
+    if not end:
+        return label
+
+    # Keep variation selectors, skin-tone modifiers, tag flags and ZWJ-linked
+    # emoji together; insert the space only after the complete leading cluster.
+    while end < len(label):
+        codepoint = ord(label[end])
+        if (0xFE00 <= codepoint <= 0xFE0F
+                or 0xE0100 <= codepoint <= 0xE01EF
+                or 0x1F3FB <= codepoint <= 0x1F3FF
+                or 0xE0020 <= codepoint <= 0xE007F
+                or codepoint == 0x20E3):
+            end += 1
+        elif label[end] == "\u200d" and end + 1 < len(label) \
+                and _is_emoji_base(label[end + 1]):
+            end += 2
+        else:
+            break
+
+    if end < len(label) and not label[end].isspace():
+        return label[:end] + " " + label[end:]
+    return label
+
+
 def poll_choice_image_url(choice: dict) -> str | None:
     """Return a choice's already-supplied image URL, if present."""
     image = (choice.get("image_url") or choice.get("imageUrl")
@@ -2089,6 +2147,7 @@ def poll_display_data(poll: dict | None, *, max_choices: int = 10) -> tuple[str 
         if not isinstance(choice, dict):
             continue
         label = str(choice.get("label") or choice.get("name") or choice.get("text") or "").strip()
+        label = space_after_leading_emoji(label)
         if not label:
             continue
         percentage = choice.get("percentage")
