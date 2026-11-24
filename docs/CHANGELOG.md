@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased — Relay-delivered Reddit posts are not age-filtered (Round 120)
+
+The inactive V2 Reddit renderer was also polished to follow the active V3
+Components V2 card order: header/body, media galleries (photos grouped by ten,
+video kept separate), stats, action row, and support footer. This is presentation
+parity for local comparison only; it does not activate the legacy script or
+change the production workflow, intake selection, discovery policy, or the
+five-hour post-delivery edit/removal checks.
+
+Retire the configurable `REDDIT_MONITOR_WINDOW_HOURS` setting and remove the
+five-hour maximum-age rejection from the primary Devvit-relay delivery path. A
+post that Reddit holds and the relay later delivers can now proceed regardless
+of its original `created` timestamp, subject to the existing current-status /
+removal checks, retained dedup cache, and `MAX_POSTS_PER_RUN` flood cap. This
+addresses the case where the relay record itself was fresh but the Reddit post
+was already about 32 hours old.
+
+The old RSS/archive fallback remains explicitly bounded by a fixed five-hour
+horizon. `INTAKE_LOOKBACK_HOURS` still limits how far back the reader searches
+Discord relay messages; it is not a post-age cutoff. Devvit's separate
+post-delivery edit/removal rechecks and Discord message-ID retention are
+unchanged (five-hour recheck schedule plus existing scheduler slack). No
+production variables or secrets are changed by this source PR.
+
+See [Round 120](history/ROUND_120.md). Regression coverage verifies that a
+32-hour-old relay record remains eligible, an old legacy-feed candidate remains
+bounded, cached relay keys still deduplicate, and the separate relay lifecycle
+window is unchanged.
+
 ## Unreleased — Twitter video headroom, faster cold-media repair, no age cutoff (Round 119)
 
 - Raise the fixed X gallery video cap from 256 MiB to **400 MiB** in both V3
@@ -102,14 +131,16 @@ Rich-text spoiler formatting remains selective when there is no post-level Spoil
 coverage includes multi-paragraph one-click reveal, title visibility, text-only posts, long-body
 continuations, existing image/GIF behavior, and the video opt-in. See [Round 117](history/ROUND_117.md).
 
-## Unreleased — Reduce Reddit freshness and relay rechecks to five hours
+## Historical — Reduce Reddit freshness and relay rechecks to five hours (superseded for relay eligibility)
 
-The Python Reddit monitor freshness/pending/edit-cache windows and Discord intake history scan are
-now capped at 5 hours (default 5 h), so an older Actions Variable cannot restore the former 48-hour
-window. Devvit's delivered-post recheck stages are now ~5 min, 30 min, 2 h and 5 h (the 6 h stage is removed because it would exceed the new final window); recheck state
-is retained through 5 h plus the existing 30-minute scheduler slack. The Reddit monitor window,
-Discord channel lookback and Devvit post-delivery recheck are separate controls. No rate-limit cause
-is established by this change: earlier relay-primary runs also succeeded with 48-hour settings.
+At the time, the Python monitor's source-post age, pending/edit-cache retention, and Discord intake
+history scan were capped at 5 hours (default 5 h), so an older Actions Variable could not restore
+the former 48-hour window. Round 120 below removes the source-post age cutoff for primary relay
+candidates and retires the `REDDIT_MONITOR_WINDOW_HOURS` setting; the fixed five-hour legacy
+fallback horizon, intake-message lookback, pending retention, and Devvit lifecycle schedule remain
+separate. Devvit's delivered-post recheck stages are ~5 min, 30 min, 2 h and 5 h (the 6 h stage was
+removed because it would exceed the final window); recheck state is retained through 5 h plus the
+existing 30-minute scheduler slack. No rate-limit cause was established by that earlier change.
 
 The revision/PATCH support remains intact; it was added in a separate edit-support change, not by
 this recheck adjustment. For relay `http_429` responses, run summaries now include the failing

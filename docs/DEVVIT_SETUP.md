@@ -319,7 +319,11 @@ memory carried over, no re-bootstrap), code 0.0.10 (devvit 0.15.2) as **Reddit 0
 ## 9. News-Express reader (round 101 — the relay as the primary listing)
 
 The Reddit engine (`testing area/reddit_main_v3.py`) reads the intake channel before
-processing candidates. With the default `INTAKE_READER=primary`, Devvit is the sole active
+processing candidates. The production workflow selects V3; the older standalone V1 and V2
+scripts (`reddit_main.py` and `reddit_main_v2_embedez.py`) are inactive and are not activated
+by `INTAKE_READER`. V2's card renderer is retained for local comparison and follows V3's
+header/body, gallery, stats, action-row, and footer order; its EmbedEZ source and discovery
+logic remain legacy-specific. With the default `INTAKE_READER=primary`, Devvit is the sole active
 intake and authority: only a healthy relay is processed. Stale, empty, unconfigured, or
 unreachable intake logs `INTAKE-PAUSED` and pauses delivery; it does not fall back to or probe
 the old RSS / Redlib / Arctic listing engine. To deliberately use the retained old engine,
