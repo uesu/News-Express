@@ -72,6 +72,7 @@ flowchart LR
 |---|---|
 | **Rich cards** | *Components V2* container — media gallery, stats line, `🕐` Discord-native timestamp, per-tweet accent color |
 | **Media** | photos, GIFs, videos in the tweet's **canonical source order** (a mixed post keeps the observed order `JPG → GIF 1 → GIF 2 → GIF 3`), with **real file-size probing** — oversized videos are swapped for the biggest playable mp4 variant, or thumbnail + "Watch on X" |
+| **Polls** | choice labels/results render in the V3 card; when a poll is missing choice artwork, one conditional X syndication lookup fills available images (preferring original resolution). Lookup failure leaves text/results readable; no vote-refresh loop. See [X poll media](docs/TWITTER_POLL_MEDIA.md) |
 | **GIF re-rendering** | animated `.webp`/`.gif` converter chain (`gif.fxtwitter.com` → gifconvert → fastgif), probed **once** per GIF and each answer classed by its **actual response content type**, never by the URL extension. An AVIF is a **last resort** only — it can preview as a static frame in Discord's gallery — and the original mp4 always outranks it (see [Round 73](docs/history/ROUND_73.md)) |
 | **Full Articles** | article tweets post cover image, title, full body text and every in-article image/GIF |
 | **Translation** | non-English tweets get a *Translated from X* block with the original preserved (via FxTwitter's `/en` endpoint); an identical "translation" (X language mis-detection) is dropped automatically |
@@ -678,6 +679,7 @@ services — please support them:
 | **News-Flash-Bot** by [@cold-logic5](https://github.com/cold-logic5) | The original repository this project is based on (RSS → Discord webhook architecture) | [GitHub repo](https://github.com/cold-logic5/News-Flash-Bot) · [Author](https://github.com/cold-logic5) |
 | **Nitter** by [@zedeus](https://github.com/zedeus) | Free & open-source, privacy-focused X/Twitter front-end providing the RSS feeds — active fallback order reviewed 2026-11-06 (round 111, operator-directed: the seven [4cuck/teapawt](https://github.com/4cuck/teapawt) public instances — live on [status.d420.net](https://status.d420.net/), scraping permitted — lead the chain): [nitter.cf](https://nitter.cf/), [xitter.cf](https://xitter.cf/), [nitter.gq](https://nitter.gq/), [xitter.gq](https://xitter.gq/), [teapaw.org](https://teapaw.org/), [teapawt.net](https://teapawt.net/), [teapawt.org](https://teapawt.org/), [nitter.mizuki.st](https://nitter.mizuki.st/) (trial), [nitter.meowing.monster](https://nitter.meowing.monster/), [nitter.miningtcup.me](https://nitter.miningtcup.me/) (RSS token), [nitter.freedit.eu](https://nitter.freedit.eu/), [nitter.gravitywell.xyz](https://nitter.gravitywell.xyz/), [tw.eir-nya.gay](https://tw.eir-nya.gay/) ("kitter", eir's fork based on [Cynosphere's fork](https://gitlab.com/Cynosphere/nitter)), [shitter.thepixora.com](https://shitter.thepixora.com/), [nitter.kareem.one](https://nitter.kareem.one/) (runs [shaquille's fork](https://git.kareem.one/shaquille/nitter)), [xcopy.uk](https://xcopy.uk/), [nitter.mie.foundation](https://nitter.mie.foundation/), then last-resort [nitter.netbub.com](https://nitter.netbub.com/) + [nitter.jaydenha.uk](https://nitter.jaydenha.uk/) | [GitHub](https://github.com/zedeus/nitter) · 💖 [Donations](https://github.com/zedeus/nitter#donations) |
 | **FxTwitter / FxEmbed** by [@dangered wolf](https://github.com/dangeredwolf) | Rich X/Twitter embeds + the free API — primary tweet-data source (round 11) used for media, stats, translation, GIF re-rendering and the video proxy | [fxtwitter.com](https://fxtwitter.com) · [docs.fxembed.com](https://docs.fxembed.com/) · 💖 [Sponsor](https://github.com/sponsors/dangeredwolf) |
+| **Vercel `react-tweet`** | Open-source reference for the public X syndication token formula used by the poll-art fallback; News Express does not depend on this package | [Source](https://github.com/vercel/react-tweet/blob/main/packages/react-tweet/src/api/fetch-tweet.ts) |
 | **vxtwitter (BetterTwitFix / fixvx)** | Backup tweet-data API (round 11) + its **gifconvert** GIF converter | [vxtwitter.com](https://vxtwitter.com) · [API docs](https://vxtwitter.com/api.md) |
 | **EmbedEZ** | Rich Reddit embeds (redditez.com mirror) + the provider API used by Reddit V2 + last-resort tweet-data source (round 11) | [embedez.com](https://embedez.com/) · [API docs](https://embedez.com/docs) |
 | **Embeddit** by [@DeltAndy123](https://github.com/DeltAndy123) | Alternative Reddit embed mirror (credited — its button was removed in the 2026-09-11 trim) | [GitHub](https://github.com/DeltAndy123/Embeddit) |
@@ -707,6 +709,7 @@ of FxTwitter/FxEmbed — [donations welcome](https://github.com/sponsors/dangere
 | [`docs/REPOSITORY_TRACKING.md`](docs/REPOSITORY_TRACKING.md) | Current monitor observability + workflow-Variable inventory per monitor |
 | [`docs/history/REPOSITORY_TRACKING_2026-10-01.md`](docs/history/REPOSITORY_TRACKING_2026-10-01.md) | File/config/policy inventory and audit record (historical snapshot, 2026-10-01) |
 | [`docs/REDDIT_VIDEO_QUALITY.md`](docs/REDDIT_VIDEO_QUALITY.md) · [`docs/REDDIT_VIDEO_MEDIA_REPORT.md`](docs/REDDIT_VIDEO_MEDIA_REPORT.md) · [`docs/VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md`](docs/VIDEO_ONLY_QUALITY_POLICY_CONFIRMATION.md) | Round-67 video-quality policy, evidence report, and the confirmed acceptance policy |
+| [`docs/TWITTER_POLL_MEDIA.md`](docs/TWITTER_POLL_MEDIA.md) | X poll results, conditional choice-art lookup, resolution preference, and graceful fallback |
 | [`docs/CI_SMOKE.md`](docs/CI_SMOKE.md) · [`docs/DEPENDABOT.md`](docs/DEPENDABOT.md) · [`docs/DISCOHOOK.md`](docs/DISCOHOOK.md) · [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) | Topic guides |
 | [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md) · [`TERMS_OF_SERVICE.md`](TERMS_OF_SERVICE.md) | Policies |
 
@@ -724,10 +727,11 @@ feed, entry, delivery, runtime, and cache status. Summary generation is
 local-only and does not add feed, provider, media, Discord, retry, scheduling,
 or cache-selection work to the monitor path.
 
-Account/failure counting accepts timestamped logger prefixes. Counts describe
-observed records, not an independent health/delivery audit: missing measurements
-stay unavailable and this log format does not separately measure new candidates.
-Provider labels can also match image cards; they are not video-only or HTTP totals.
+Account/failure counting accepts timestamped logger prefixes. Twitter's run
+summary also reports the global new-candidate count and deterministic per-account
+new, cached, and delivered counts. These are observed monitor counters, not an
+independent health audit; provider labels can also match image cards and are not
+video-only or HTTP totals.
 
 Reddit crosspost recovery follows validated one-hop originals for media while
 preserving the child identity and Read Post link. Completed archive misses/errors

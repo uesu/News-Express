@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — X poll results include available choice artwork
+
+The active Twitter V3 monitor now preserves poll choice text/results and, when
+provider data lacks choice-image URLs, makes one conditional request to X's
+public syndication endpoint to fill available artwork. The response is matched
+by choice index; X's original-resolution image binding is preferred, with
+smaller variants as fallbacks. Images are appended after normal tweet media, so
+existing photo/GIF/video behavior, ordering, card layout and actions stay
+unchanged. If lookup fails or returns no usable images, the poll remains
+readable without artwork. No periodic vote refresh is added.
+
+VxTwitter `pollData` is normalized into the common poll structure, without
+inventing image URLs. The Twitter run summary also reports the global
+new-candidate count and deterministic per-account new/cached/delivered totals.
+The lookup formula is credited to Vercel's open-source `react-tweet` reference;
+it is not a runtime dependency. Details and limitations: [X poll media guide](TWITTER_POLL_MEDIA.md).
+Regression coverage is in `tests/test_twitter_media.py`; CI also passed the
+smoke and Devvit checks for [PR #156](https://github.com/uesu/News-Express/pull/156).
+
 ## Unreleased — clean up link-only Markdown tables in Reddit posts
 
 A one-column Reddit table consisting only of a linked header and its alignment separator (no data
