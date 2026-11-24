@@ -4,7 +4,7 @@ This guide documents the poll handling in the active Twitter V3 monitor (`testin
 
 ## What the card shows
 
-When poll data is available, the card renders each option's label and percentage (or vote count when no percentage is available), plus the total votes and remaining time when the provider supplies them. If X exposes poll-choice artwork, the images appear in the existing media gallery after the post's ordinary photos, GIFs, or videos. The existing card layout and action buttons are unchanged; the monitor does not add vote buttons.
+When poll data is available, the card renders each option's label and percentage (or vote count when no percentage is available), plus the total votes and remaining time when the provider supplies them. The compact footer uses the actual Unicode scroll glyph (`📜`) before the vote total; sending the literal shortcode `:scroll:` in webhook JSON would display it as text, not convert it to an emoji. If X exposes poll-choice artwork, the images appear in the existing media gallery after the post's ordinary photos, GIFs, or videos. The existing card layout and action buttons are unchanged; the monitor does not add vote buttons.
 
 For the supported X poll-card bindings, the lookup considers choices by their original choice index and prefers X's original-resolution rendition. Other available variants are fallbacks. The image URLs are passed through to Discord; the monitor does not download or probe the image files itself.
 
@@ -23,6 +23,12 @@ VxTwitter's `pollData` is normalized into the monitor's common poll representati
 If the syndication request times out, returns a non-success status, does not match the requested tweet, has no usable poll image bindings, or X does not expose the artwork, the monitor continues with the poll's text/results and posts without choice art. It does not fail the whole tweet because optional image enrichment was unavailable.
 
 Poll results are a snapshot from the provider response when the post is processed. The monitor does not periodically refresh vote counts or edit an old post as votes change. The existing posted-ID cache and delivery behavior remain in effect.
+
+## Manually rebuilding a tweet already in the cache
+
+The manual `test_tweet` workflow input normally obeys the posted-ID cache, as shown by `TEST_TWEET_ID is already in the posted cache — skipping by design`. This is still the default. For an intentional visual retest, provide `test_tweet` and turn on the separate `force_test_tweet` boolean input. It bypasses the cache only for the one synthetic test-feed entry matching that selected account and ID, and only if the ID was already cached at the start of the run. Ordinary feed entries remain deduplicated, so a natural feed copy cannot create a second send in the same run.
+
+A successful forced retest increments the delivered and `forced_test_reposts` counters but is not classified as a new candidate. The cache entry is left intact, so later scheduled runs still skip the tweet. The override is opt-in, manual-workflow-only, and does not change normal scheduled behavior. Do not enable it unless you intentionally want one duplicate Discord card for testing.
 
 ## Verification record
 

@@ -72,7 +72,7 @@ flowchart LR
 |---|---|
 | **Rich cards** | *Components V2* container — media gallery, stats line, `🕐` Discord-native timestamp, per-tweet accent color |
 | **Media** | photos, GIFs, videos in the tweet's **canonical source order** (a mixed post keeps the observed order `JPG → GIF 1 → GIF 2 → GIF 3`), with **real file-size probing** — oversized videos are swapped for the biggest playable mp4 variant, or thumbnail + "Watch on X" |
-| **Polls** | choice labels/results render in the V3 card; when a poll is missing choice artwork, one conditional X syndication lookup fills available images (preferring original resolution). Lookup failure leaves text/results readable; no vote-refresh loop. See [X poll media](docs/TWITTER_POLL_MEDIA.md) |
+| **Polls** | choice labels/results render in the V3 card; vote totals use a `📜` footer; when a poll is missing choice artwork, one conditional X syndication lookup fills available images (preferring original resolution). Lookup failure leaves text/results readable; no vote-refresh loop. See [X poll media](docs/TWITTER_POLL_MEDIA.md) |
 | **GIF re-rendering** | animated `.webp`/`.gif` converter chain (`gif.fxtwitter.com` → gifconvert → fastgif), probed **once** per GIF and each answer classed by its **actual response content type**, never by the URL extension. An AVIF is a **last resort** only — it can preview as a static frame in Discord's gallery — and the original mp4 always outranks it (see [Round 73](docs/history/ROUND_73.md)) |
 | **Full Articles** | article tweets post cover image, title, full body text and every in-article image/GIF |
 | **Translation** | non-English tweets get a *Translated from X* block with the original preserved (via FxTwitter's `/en` endpoint); an identical "translation" (X language mis-detection) is dropped automatically |
@@ -409,6 +409,7 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | Variable | Meaning |
 |---|---|
 | `TEST_TWEET_ID` | rebuild one specific tweet: `screen_name/tweet_id` (also the `test_tweet` workflow input) |
+| `FORCE_TEST_TWEET` | `true` only with `TEST_TWEET_ID`: manually repost that one cached test target once; default false, and its cache key remains recorded (also the `force_test_tweet` workflow input) |
 | `TEST_POST_ID` | rebuild one specific Reddit post: `Subreddit/post_id` (also the `test_post` workflow input); when relay is primary, uses that exact relay record and does not fall back to the legacy Reddit/Redlib engine |
 | `DRY_RUN` | `1` = build/log the full card without posting to Discord or saving posting caches. In manual workflow runs, `auto` makes a targeted `test_post` dry-run by default; choose `no` only to deliberately deliver it |
 
@@ -551,7 +552,10 @@ Every new or changed script is proven **before** it touches production:
   | `HonkaiStarRail_leaks/1wguwvw` | Reddit video | video tile only, no dup first-frame |
 
 * **X:** the `test_tweet` input rebuilds one tweet via the direct FxTwitter
-  path (nitter-free), e.g. `Wuthering_Waves/2100555373073797461`.
+  path (nitter-free), e.g. `Wuthering_Waves/2100555373073797461`. If it is already
+  cached and you intentionally need a fresh Discord copy, also enable
+  `force_test_tweet`; it applies only to that selected manual test entry, stays
+  off by default, and keeps the cache key so scheduled runs still deduplicate it.
 
 ### Local testing
 
@@ -728,10 +732,11 @@ local-only and does not add feed, provider, media, Discord, retry, scheduling,
 or cache-selection work to the monitor path.
 
 Account/failure counting accepts timestamped logger prefixes. Twitter's run
-summary also reports the global new-candidate count and deterministic per-account
-new, cached, and delivered counts. These are observed monitor counters, not an
-independent health audit; provider labels can also match image cards and are not
-video-only or HTTP totals.
+summary also reports the global new-candidate count, deterministic per-account
+new/cached/delivered counts, and `forced_test_reposts` when the manual cached-test
+override is used. These are observed monitor counters, not an independent health
+audit; provider labels can also match image cards and are not video-only or HTTP
+totals.
 
 Reddit crosspost recovery follows validated one-hop originals for media while
 preserving the child identity and Read Post link. Completed archive misses/errors

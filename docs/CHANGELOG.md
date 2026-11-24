@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — manual cached-tweet retests and poll-footer polish (2026-11-24)
+
+The manual Twitter `test_tweet` workflow can now optionally force one deliberate
+repost when the selected ID is already in `posted_tweets.json`. The new
+`force_test_tweet` boolean defaults off and only applies to the synthetic entry
+for the exact requested account/ID when that key was cached at run start. Normal
+RSS entries remain deduplicated, an uncached target cannot be duplicated by the
+injected test entry, and the existing cache key remains recorded after a
+successful forced send. The summary reports `forced_test_reposts` separately
+from new candidates. This is a manual visual-test aid, not a scheduled repost
+mode. The poll vote footer now places the actual Unicode scroll emoji (`📜`)
+before the vote total, with a blank line after the choice results; the literal
+`:scroll:` shortcode is not sent because webhook JSON does not expand it.
+
+The existing cache-protected skip remains the default. Regression coverage
+checks the opt-in guard, exact target, cache-at-start requirement, normal-feed
+deduplication, workflow wiring, and rendered poll footer. See
+[Round 118](history/ROUND_118.md) and the [Twitter poll media guide](TWITTER_POLL_MEDIA.md).
+
 ## Unreleased — X poll results include available choice artwork
 
 The active Twitter V3 monitor now preserves poll choice text/results and, when
