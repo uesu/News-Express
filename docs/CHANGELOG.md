@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — Twitter video headroom, faster cold-media repair, no age cutoff (Round 119)
+
+- Raise the fixed X gallery video cap from 256 MiB to **400 MiB** in both V3
+  and the optional V2 engine. The setting is no longer a `TWITTER_HIGH_VIDEO_LIMIT`
+  opt-in. If the source file is over the cap, probe all known MP4 variants in
+  descending bitrate and use the best variant that fits (for example, 1080p
+  instead of an oversized 4K file, then 720p if needed). This change is grounded
+  in the operator's manual playback of a ~395 MB 1920x1080 X video in Discord;
+  it is not a claim that every 400 MiB or 4K URL will play through every proxy.
+- Set the default `MEDIA_HEAL_DELAY_SECONDS` to **15 seconds** so an unresolved
+  tile gets revalidated/repaired sooner; the existing bounded same-payload heal
+  and later-run carry behavior remain intact.
+- Remove the `TWITTER_MAX_AGE_HOURS` stale-feed rejection. An uncached entry is
+  eligible regardless of age; cached IDs are still skipped. This avoids silently
+  losing legitimate older posts such as TYPEII_EN/2119676737907007696. Duplicate
+  protection is limited to IDs retained in the bounded `posted_tweets.json`
+  cache, so an old uncached feed backlog may now be delivered. No age-based RSS
+  filtering or `STALE-SKIP` summary remains.
+
+See [Round 119](history/ROUND_119.md). Regression tests cover the 400 MiB
+threshold and variant fallback, 15-second default, age-independent eligibility,
+and ordinary cache deduplication.
+
 ## Unreleased — manual cached-tweet retests and poll-footer polish (2026-11-24)
 
 The manual Twitter `test_tweet` workflow can now optionally force one deliberate
@@ -1079,7 +1102,7 @@ the upstream timeline and limits.
   the loop that posts: observability can never cost a delivery. Cost is
   0.19 µs per call and at most ~2.4 KB on a worst-case run-result record.
 
-## Unreleased — Round 96b: the Twitter summary names accounts, posts and refusals (2026-10-30)
+## Round 96b — historical Twitter summary (stale-refusal listing superseded by Round 119; 2026-10-30)
 
 ### Observability (workflow summary only; no engine change, no extra requests)
 
@@ -1159,7 +1182,7 @@ the upstream timeline and limits.
 | production-shaped (no `README.md`, no `docs/`, no `sync_prod.yml`) | `FileNotFoundError` | **1235 PASS**, 0 FAIL |
 | production-shaped + mutated to the pre-fix unguarded read | — | **FAIL r95d** naming the exact line, then the old crash |
 
-## Unreleased — Round 95c: stale-backlog guard, one-tick re-check wait, agent-readable Twitter summary (2026-10-30)
+## Round 95c — historical stale-backlog guard (superseded by Round 119; 2026-10-30)
 
 ### Correctness
 
@@ -1254,7 +1277,7 @@ the upstream timeline and limits.
   compileall clean, workflows parse (Reddit still 7 steps), zizmor identical to base,
   10/10 mutations caught. See `docs/history/ROUND_95.md`.
 
-## Unreleased — Round 94: Twitter run diagnostics, run-result presence, opt-in 350 MiB cap (2026-10-28)
+## Round 94 — historical Twitter diagnostics and opt-in video cap (superseded by Round 119; 2026-10-28)
 
 ### Observability
 
