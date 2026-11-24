@@ -26,6 +26,10 @@
     "esbuild": "0.28.2",
     "typescript": "7.0.2"
   },
+  "overrides": {
+    "isomorphic-git": "1.38.6",
+    "tmp": "0.2.7"
+  },
   "engines": {
     "node": ">=24.0.0"
   }
