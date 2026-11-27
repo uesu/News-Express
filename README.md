@@ -319,8 +319,8 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 
 | Secret | Value |
 |---|---|
-| `ACCOUNTS` | Comma-separated handles. `NTE_GL`, `AKEndfield`, and `SilverPalace_EN` are appended if an older secret value omits them |
-| `WEBHOOK_<ACCOUNT>` | One per account — `WEBHOOK_` + name **UPPERCASED**, non-alphanumerics → `_` (e.g. `PomPom_HonkaiSR` → `WEBHOOK_POMPOM_HONKAISR`). New routes: `WEBHOOK_NTE_GL`, `WEBHOOK_AKENDFIELD`, `WEBHOOK_SILVERPALACE_EN` |
+| `ACCOUNTS` | Comma-separated handles. The three new game accounts (`NTE_GL`, `AKEndfield`, `SilverPalace_EN`) are appended even if an older secret value omits them |
+| `WEBHOOK_<ACCOUNT>` | One per account — `WEBHOOK_` + name **UPPERCASED**, non-alphanumerics → `_` (e.g. `PomPom_HonkaiSR` → `WEBHOOK_POMPOM_HONKAISR`). New routing secrets: `WEBHOOK_NTE_GL`, `WEBHOOK_AKENDFIELD`, `WEBHOOK_SILVERPALACE_EN` |
 | `DISCORD_WEBHOOK_URL` *(optional)* | Catch-all fallback for accounts without their own secret |
 | `NITTER_RSS_TOKEN` *(optional)* | miningtcup's DogWAF token — unlocks the token-gated `nitter.miningtcup.me` (X) and `redlib.miningtcup.me` (Reddit). A secret (not a Variable) so GitHub masks it in logs |
 
@@ -328,8 +328,8 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 
 | Secret | Value |
 |---|---|
-| `SUBREDDITS` | News-Express subreddit names. `SilverPalaceLeak`, `NTELeaks`, and `ArknightsEndfieldLeak` are appended if an older secret value omits them |
-| `WEBHOOK_REDDIT_<SUB>` | One per News-Express subreddit — `WEBHOOK_REDDIT_` + name **UPPERCASED**, non-alphanumerics → `_`. New routes: `WEBHOOK_REDDIT_SILVERPALACELEAK`, `WEBHOOK_REDDIT_NTELEAKS`, `WEBHOOK_REDDIT_ARKNIGHTSENDFIELDLEAK` |
+| `SUBREDDITS` | Comma-separated News-Express subreddit names. `SilverPalaceLeak`, `NTELeaks`, and `ArknightsEndfieldLeak` are appended even if an older secret value omits them |
+| `WEBHOOK_REDDIT_<SUB>` | One per News-Express subreddit — `WEBHOOK_REDDIT_` + name **UPPERCASED**, non-alphanumerics → `_`. New routing secrets: `WEBHOOK_REDDIT_SILVERPALACELEAK`, `WEBHOOK_REDDIT_NTELEAKS`, `WEBHOOK_REDDIT_ARKNIGHTSENDFIELDLEAK` |
 | `REDDIT_FEED_TOKEN` *(optional — **recommended**)* | Your personal Reddit feed token: `old.reddit.com/prefs/feeds` → copy any feed link **exactly as shown** — the full private RSS URL `https://old.reddit.com/.rss?feed=<40-char-key>&user=<username>` works, and so do `https://www.reddit.com/.rss?feed=…`, `https://reddit.com/.rss?feed=…`, `https://old.reddit.com/?feed=…`, `?feed=<key>&user=<username>`, `<key>&user=<username>`, or bare `<key>` (query-only, host/path-agnostic). Moves RSS requests to the logged-in rate tier (429s essentially stop) |
 | `DISCORD_BOT_TOKEN` *(round 101)* | Bot token of a Discord application that is in your server with **View Channels** + **Read Message History** on the intake channel and the **Message Content Intent** enabled. Lets the engine read the Devvit relay channel; without it (or `INTAKE_CHANNEL_ID`) the engine runs the RSS/redlib/archive chain as before |
 | `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` *(optional — V3)* | Reddit **script app** (reddit.com/prefs/apps → type "script" → redirect `http://localhost`). Enables V3 **FULL MODE** (stats, crosspost embeds) via OAuth. V3 works without it; drop both secrets in whenever the app exists and FULL MODE turns on with no code change |
@@ -337,14 +337,14 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `DISCORD_WEBHOOK_URL` *(optional)* | Catch-all fallback |
 
 The supplied production inventory does not list dedicated webhook secrets for the three new
-News-Express Reddit targets or three new X accounts. Add those six routing secrets in GitHub
-Actions Secrets before expecting delivery, or deliberately configure a catch-all webhook.
-Existing `ACCOUNTS` / `SUBREDDITS` values are preserved and the News-Express additions are
-appended if absent. Separately, the shared Devvit relay includes the four Game-Express
+News-Express Reddit targets or three new X accounts. Create those six source-routing secrets in
+GitHub Actions Secrets before expecting Discord delivery, or deliberately configure a catch-all
+webhook. Existing `ACCOUNTS` / `SUBREDDITS` values are preserved and the News-Express additions
+are appended if absent. Separately, the shared Devvit relay now includes the four Game-Express
 communities (`NevernessToEverness`, `SilverPalaceOfficial`, `Endfield`, `ArknightsEndfield`)
-plus these three News-Express communities. Explicitly update the live Devvit installation's
-persistent `subreddits` setting; changing the manifest default does not rewrite an existing
-installation. Upload the updated manifest for future installations.
+plus the three News-Express communities. Explicitly update the live Devvit installation's
+persistent `subreddits` setting; changing the manifest default alone does not rewrite an
+existing installation. Upload the updated manifest to set defaults for future installations.
 
 ### Variables (repo **Variables**, not secrets — all optional, defaults shown)
 
