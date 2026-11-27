@@ -17,7 +17,7 @@ import {
   isDiscordWebhook,
   legacySeenKey,
   parseEnabled,
-  parseSubreddits,
+  parseSubredditSettings,
   parseUsers,
   RECHECK_WINDOW_HOURS,
   type RelayRecord,
@@ -179,12 +179,14 @@ async function runPoll(): Promise<PollResult> {
   }
   const startedAt = Date.now()
 
-  const [webhookRaw, subsRaw, usersRaw, enabledRaw] = await Promise.all([
-    settings.get<string>('intakeWebhook'),
-    settings.get<string>('subreddits'),
-    settings.get<string>('officialUsers'),
-    settings.get<boolean | string>('relayEnabled'),
-  ])
+  const [webhookRaw, subsRaw, additionalSubsRaw, usersRaw, enabledRaw] =
+    await Promise.all([
+      settings.get<string>('intakeWebhook'),
+      settings.get<string>('subreddits'),
+      settings.get<string>('subredditsAdditional'),
+      settings.get<string>('officialUsers'),
+      settings.get<boolean | string>('relayEnabled'),
+    ])
   const webhook = (webhookRaw ?? '').trim()
   const enabled = parseEnabled(enabledRaw) && isDiscordWebhook(webhook)
   if (!isDiscordWebhook(webhook)) {
@@ -192,7 +194,7 @@ async function runPoll(): Promise<PollResult> {
       'intakeWebhook is empty or not a discord.com webhook URL — polling only',
     )
   }
-  const subs = parseSubreddits(subsRaw)
+  const subs = parseSubredditSettings(subsRaw, additionalSubsRaw)
   const users = parseUsers(usersRaw)
   result.subs = subs.length
   result.users = users.length
@@ -204,8 +206,8 @@ async function runPoll(): Promise<PollResult> {
 
   // 1. Fetch all listings concurrently: one call per subreddit (`/new`) and one
   //    per official account (`u/<name>` submitted, newest first). With the 3-minute
-  //    cron, 12 + 3 listing calls are 5/min. Even adding the 20-call recheck cap
-  //    (11.7 Reddit calls/min worst case) stays well inside the 100 QPM budget.
+  //    cron, 19 + 3 listing calls are about 7.3/min. Even adding the 20-call recheck cap
+  //    (14 Reddit calls/min worst case) stays well inside the 100 QPM budget.
   type Listing = {
     target: string
     sub: string | null
@@ -701,16 +703,24 @@ function summarize(r: PollResult): string {
 }
 
 async function statusText(): Promise<string> {
-  const [last, total, subsRaw, usersRaw, enabledRaw, webhook] =
-    await Promise.all([
-      redis.get('last:poll'),
-      redis.get('total:sent'),
-      settings.get<string>('subreddits'),
-      settings.get<string>('officialUsers'),
-      settings.get<boolean | string>('relayEnabled'),
-      settings.get<string>('intakeWebhook'),
-    ])
-  const subs = parseSubreddits(subsRaw)
+  const [
+    last,
+    total,
+    subsRaw,
+    additionalSubsRaw,
+    usersRaw,
+    enabledRaw,
+    webhook,
+  ] = await Promise.all([
+    redis.get('last:poll'),
+    redis.get('total:sent'),
+    settings.get<string>('subreddits'),
+    settings.get<string>('subredditsAdditional'),
+    settings.get<string>('officialUsers'),
+    settings.get<boolean | string>('relayEnabled'),
+    settings.get<string>('intakeWebhook'),
+  ])
+  const subs = parseSubredditSettings(subsRaw, additionalSubsRaw)
   const users = parseUsers(usersRaw)
   const lastAt = last
     ? new Date(JSON.parse(last).at as number).toISOString()

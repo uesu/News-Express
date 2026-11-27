@@ -343,8 +343,9 @@ webhook. Existing `ACCOUNTS` / `SUBREDDITS` values are preserved and the News-Ex
 are appended if absent. Separately, the shared Devvit relay now includes the four Game-Express
 communities (`NevernessToEverness`, `SilverPalaceOfficial`, `Endfield`, `ArknightsEndfield`)
 plus the three News-Express communities. Explicitly update the live Devvit installation's
-persistent `subreddits` setting; changing the manifest default alone does not rewrite an
-existing installation. Upload the updated manifest to set defaults for future installations.
+persistent `subreddits` and `subredditsAdditional` settings; the CLI limits each string setting
+to 250 characters. Changing manifest defaults alone does not rewrite an existing installation.
+Upload the updated manifest to set defaults for future installations.
 
 ### Variables (repo **Variables**, not secrets — all optional, defaults shown)
 

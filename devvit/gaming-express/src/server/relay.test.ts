@@ -13,6 +13,7 @@ import {
   isDiscordWebhook,
   legacySeenKey,
   parseEnabled,
+  parseSubredditSettings,
   parseSubreddits,
   parseUsers,
   RECHECK_STAGES_SECONDS,
@@ -78,6 +79,16 @@ test('parseSubreddits: the six production subreddits survive untouched', () => {
   const six =
     'AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_'
   assert.deepEqual(parseSubreddits(six), six.split(','))
+})
+
+test('parseSubredditSettings: combines the CLI-sized settings and removes duplicates', () => {
+  assert.deepEqual(
+    parseSubredditSettings(
+      'Genshin_Impact,SilverPalaceLeak',
+      'SilverPalaceLeak,NTELeaks',
+    ),
+    ['Genshin_Impact', 'SilverPalaceLeak', 'NTELeaks'],
+  )
 })
 
 test('toContent: small record round-trips unchanged', () => {
@@ -268,9 +279,14 @@ test('settings defaults: the nineteen News- and Game-Express subreddits and thre
     dev?: {subreddit?: string}
   }
   const subs = cfg.settings.global.subreddits?.defaultValue ?? ''
+  const additionalSubs =
+    cfg.settings.global.subredditsAdditional?.defaultValue ?? ''
+  const allSubs = parseSubredditSettings(subs, additionalSubs)
   const users = cfg.settings.global.officialUsers?.defaultValue ?? ''
-  assert.equal(parseSubreddits(subs).length, 19)
-  assert.deepEqual(parseSubreddits(subs), subs.split(','))
+  assert.ok(subs.length <= 250)
+  assert.ok(additionalSubs.length <= 250)
+  assert.equal(allSubs.length, 19)
+  assert.deepEqual(allSubs, [...subs.split(','), ...additionalSubs.split(',')])
   // Game-Express sources (config/games.json → reddit.subreddits / reddit.official).
   for (const s of [
     'Genshin_Impact',
@@ -284,10 +300,10 @@ test('settings defaults: the nineteen News- and Game-Express subreddits and thre
     'Endfield',
     'ArknightsEndfield',
   ])
-    assert.ok(parseSubreddits(subs).includes(s), s)
+    assert.ok(allSubs.includes(s), s)
   // News-Express-specific additions stay in the shared relay configuration too.
   for (const s of ['SilverPalaceLeak', 'NTELeaks', 'ArknightsEndfieldLeak'])
-    assert.ok(parseSubreddits(subs).includes(s), s)
+    assert.ok(allSubs.includes(s), s)
   // Verified + active only (Arctic Shift audit 2026-11-02). u/ZZZ_Official (one post,
   // 2024-04) and u/AnantaOfficial (one post, 2024-12, removed) are dormant; their
   // official content is community re-posts under "Official Media" in their subreddit.

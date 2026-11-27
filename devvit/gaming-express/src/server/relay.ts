@@ -244,6 +244,14 @@ export function parseSubreddits(raw: string | undefined | null): string[] {
   return parseNames(raw, /^\/?r\//i)
 }
 
+/** Combine the two CLI-sized subreddit settings without losing de-duplication. */
+export function parseSubredditSettings(
+  primary: string | undefined | null,
+  additional: string | undefined | null,
+): string[] {
+  return parseSubreddits([primary, additional].filter(Boolean).join(','))
+}
+
 /** `officialUsers` setting → unique account names (accepts `u/Name`, `/u/Name`, `Name`). */
 export function parseUsers(raw: string | undefined | null): string[] {
   return parseNames(raw, /^\/?u(?:ser)?\//i)
