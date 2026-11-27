@@ -11,12 +11,13 @@ Twitter engine target lists. News-Express additions are unioned with configured
 `SUBREDDITS` / `ACCOUNTS` lists so old secret values retain existing targets.
 The repeated Neverness subreddit URL is represented once.
 
-The active Devvit installation persists its own `subreddits` setting, so update
-that setting before the seven new communities are polled by the relay; changing
-the manifest default alone does not update an existing installation. Upload the
-updated manifest for future installations. Discord delivery also requires six
-dedicated webhook secrets for the three new News-Express Reddit targets and
-three X accounts unless an intentional catch-all webhook is configured. The
+The active Devvit installation persists its own settings, so update both
+`subreddits` and `subredditsAdditional` before the seven new communities are
+polled by the relay. The two fields keep the list under Devvit CLI's 250-character
+per-setting limit; changing manifest defaults alone does not update an existing
+installation. Upload the updated manifest for future installations. Discord delivery
+also requires six dedicated webhook secrets for the three new News-Express Reddit
+targets and three X accounts unless an intentional catch-all webhook is configured. The
 supplied production inventory did not list them. Game-Express's own per-game
 `config/games.json` was not changed in this News-Express checkout.
 

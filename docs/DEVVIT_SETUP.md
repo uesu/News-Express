@@ -83,7 +83,8 @@ Messages are sent with `allowed_mentions: {parse: []}`, so a title can never pin
 
 | Setting | Default |
 | --- | --- |
-| `subreddits` | News-Express: `AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_,SilverPalaceLeak,NTELeaks,ArknightsEndfieldLeak` + Game-Express: `Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima,AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield,ArknightsEndfield` |
+| `subreddits` | First 14 targets (240 characters; kept below the Devvit CLI's 250-character setting limit): `AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_,SilverPalaceLeak,NTELeaks,ArknightsEndfieldLeak,Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima` |
+| `subredditsAdditional` | Final five targets: `AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield,ArknightsEndfield` — combined with `subreddits` for 19 total |
 | `officialUsers` | `genshinimpact,HonkaiStarRail,HonkaiNexusAnima` — the verified accounts that actually post (audit below). Optional: every one of them posts only into its own subreddit, which is already in `subreddits`, so this is a second path, not the only one. May be left empty. |
 | `relayEnabled` | `true` |
 
@@ -205,12 +206,15 @@ below. The portal screenshot's 0.15.6 notice is cleared only by uploading a new 
    npx devvit settings set intakeWebhook     → paste the webhook URL
    ```
 
-   After an upgrade that changed the default target lists, pin them explicitly so the
-   installation does not depend on which default it captured:
+   After an upgrade that changed the default target lists, pin both subreddit settings explicitly.
+   Devvit's CLI limits each string setting value to 250 characters, so the complete 323-character
+   target list is split across these two settings:
 
    ```
    npx devvit settings set subreddits
-   → AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_,SilverPalaceLeak,NTELeaks,ArknightsEndfieldLeak,Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima,AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield,ArknightsEndfield
+   → AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_,SilverPalaceLeak,NTELeaks,ArknightsEndfieldLeak,Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima
+   npx devvit settings set subredditsAdditional
+   → AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield,ArknightsEndfield
    npx devvit settings set officialUsers
    → genshinimpact,HonkaiStarRail,HonkaiNexusAnima
    npx devvit settings set relayEnabled
@@ -231,7 +235,7 @@ below. The portal screenshot's 0.15.6 notice is cleared only by uploading a new 
    Expected line every 3 minutes (every 5 minutes before this update, and every 2 minutes before 0.0.6; 0.0.7+ appends `; recheck N looked, N update msg, N re-sent`):
 
    ```
-   poll: 12 subs, 3 users, N fetched, 0 sent, N seen, 0 failed, N bootstrapped
+   poll: 19 subs, 3 users, N fetched, 0 sent, N seen, 0 failed, N bootstrapped
    ```
 
    `bootstrapped` is non-zero only on the first poll after a target was added. From then on
@@ -246,8 +250,9 @@ Subreddit menu on `r/GamingExpressRelay` (`…` → **[Gaming Express] Poll now*
 
 - **Pause / resume:** `npx devvit settings set relayEnabled` → `false` / `true`. The CLI
   stores the typed text; 0.0.3+ understands `false`, `0`, `no`, `off`, `paused`.
-- **Add or remove a subreddit / account:** `npx devvit settings set subreddits` (or
-  `officialUsers`) with the full comma-separated list. Effective on the next poll.
+- **Add or remove a subreddit / account:** set both `subreddits` and
+  `subredditsAdditional` with `npx devvit settings set` (each string must be at most 250
+  characters); set `officialUsers` for publisher accounts. Effective on the next poll.
 - **Stop completely:** `npx devvit uninstall GamingExpressRelay`.
 - **Directory page** (`developers.reddit.com/apps/gaming-express`): the app is unpublished
   and installed only on the private subreddit. Keep the listing generic — the readme names

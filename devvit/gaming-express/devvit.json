@@ -21,8 +21,13 @@
       },
       "subreddits": {
         "type": "string",
-        "label": "Subreddits to relay (comma separated, no r/)",
-        "defaultValue": "AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_,SilverPalaceLeak,NTELeaks,ArknightsEndfieldLeak,Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima,AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield,ArknightsEndfield"
+        "label": "Subreddits to relay (part 1; comma separated, no r/)",
+        "defaultValue": "AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_,SilverPalaceLeak,NTELeaks,ArknightsEndfieldLeak,Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima"
+      },
+      "subredditsAdditional": {
+        "type": "string",
+        "label": "Additional subreddits to relay (part 2; comma separated, no r/)",
+        "defaultValue": "AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield,ArknightsEndfield"
       },
       "officialUsers": {
         "type": "string",
