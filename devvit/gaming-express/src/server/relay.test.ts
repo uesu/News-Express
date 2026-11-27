@@ -260,7 +260,7 @@ test('parseUsers: strips u/ and user/, de-dups, keeps Reddit-legal names only', 
   assert.deepEqual(parseUsers(''), [])
 })
 
-test('settings defaults: the twelve subreddits and three verified publisher accounts parse untouched', () => {
+test('settings defaults: the nineteen News- and Game-Express subreddits and three verified publisher accounts parse untouched', () => {
   const cfg = JSON.parse(
     readFileSync(new URL('../../devvit.json', import.meta.url), 'utf8'),
   ) as {
@@ -269,7 +269,7 @@ test('settings defaults: the twelve subreddits and three verified publisher acco
   }
   const subs = cfg.settings.global.subreddits?.defaultValue ?? ''
   const users = cfg.settings.global.officialUsers?.defaultValue ?? ''
-  assert.equal(parseSubreddits(subs).length, 12)
+  assert.equal(parseSubreddits(subs).length, 19)
   assert.deepEqual(parseSubreddits(subs), subs.split(','))
   // Game-Express sources (config/games.json → reddit.subreddits / reddit.official).
   for (const s of [
@@ -279,7 +279,14 @@ test('settings defaults: the twelve subreddits and three verified publisher acco
     'WutheringWaves',
     'HonkaiNexusAnima',
     'AnantaOfficial',
+    'NevernessToEverness',
+    'SilverPalaceOfficial',
+    'Endfield',
+    'ArknightsEndfield',
   ])
+    assert.ok(parseSubreddits(subs).includes(s), s)
+  // News-Express-specific additions stay in the shared relay configuration too.
+  for (const s of ['SilverPalaceLeak', 'NTELeaks', 'ArknightsEndfieldLeak'])
     assert.ok(parseSubreddits(subs).includes(s), s)
   // Verified + active only (Arctic Shift audit 2026-11-02). u/ZZZ_Official (one post,
   // 2024-04) and u/AnantaOfficial (one post, 2024-12, removed) are dormant; their
