@@ -341,7 +341,7 @@ News-Express Reddit targets or three new X accounts. Create those six source-rou
 GitHub Actions Secrets before expecting Discord delivery, or deliberately configure a catch-all
 webhook. Existing `ACCOUNTS` / `SUBREDDITS` values are preserved and the News-Express additions
 are appended if absent. Separately, the shared Devvit relay now includes the four Game-Express
-communities (`NevernessToEverness`, `SilverPalaceOfficial`, `Endfield`, `ArknightsEndfield`)
+communities (`NevernessToEverness`, `SilverPalaceOfficial`, `Endfield`)
 plus the three News-Express communities. Explicitly update the live Devvit installation's
 persistent `subreddits` and `subredditsAdditional` settings; the CLI limits each string setting
 to 250 characters. Changing manifest defaults alone does not rewrite an existing installation.
