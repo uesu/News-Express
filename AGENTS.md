@@ -140,8 +140,8 @@ leftovers. Never advise deleting the "other" platform's files.
   Section thumbnail, never a gallery tile; card-only tweets keep the tile.
 - `testing area/reddit_signals.py` — pure decision logic (gates, tombstones).
 - `testing area/reddit_proxy.py`, `twitter_proxy.py` — proxy-service parsers.
-- `testing area/*_v1.py`, `*_v2*.py`, `video_diag.py` — maintained fallback
-  engines, switchable via one commented line in the workflows. NOT dead code.
+- `testing area/video_diag.py` — local X video diagnostic tool; not a scheduled
+  monitor. The scheduled X and Reddit engines are the V3 scripts above.
 - `tests/test_smoke.py` — the main suite; every past bug is a named guard
   (`rNN: ...`). `tests/test_reddit_signals.py` — gate-logic suite.
   `tests/test_twitter_media.py` — focused X media suite (canonical media
@@ -236,9 +236,8 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
    the sister monitor on the same runners, usually measures it first).
    Members are demoted, not deleted (a blocked host moves back up the day it
    answers the runners). The smoke suite pins the exact order, so every
-   re-rank updates the guard in the same commit; V1/V2 keep their own,
-   separately pinned lists. Reddit's `REDDIT_RSS_INSTANCES` is audited by
-   body too — 28-member fleet as of 2026-10-27 (dual-path + listing-only reserves + tail restores + 6 appended tail mirrors per live #9283 + 3 appended 2026-10-27; see `testing area/reddit_main_v3.py` for exact order).
+   re-rank updates the guard in the same commit. Only the active V3 source
+   list is pinned. Reddit's `REDDIT_RSS_INSTANCES` is audited by body too — 28-member fleet as of 2026-10-27 (dual-path + listing-only reserves + tail restores + 6 appended tail mirrors per live #9283 + 3 appended 2026-10-27; see `testing area/reddit_main_v3.py` for exact order).
 
 ## Landmines — things that LOOK like bugs but are deliberate
 
@@ -272,8 +271,6 @@ record, (2) a `docs/CHANGELOG.md` entry, (3) named smoke guards (`rNN: ...`).
   continuation `-# 📜 Page n/N`). Single-page posts stay byte-identical — no
   `Page 1/1`. It is a footer, not a heading; do not extend continuations with
   any other generated text.
-- The engine versions v1/v2 are documented fallbacks, enrolled in the
-  smoke suite. Not stale code.
 - Blocked or walled nitter hosts at the bottom of `RSS_INSTANCES` (kareem,
   xcopy, netbub, jaydenha…) are deliberate: demoted, not deleted (invariant
   9). A 403 is a fast fail in the serial chain; deleting a member loses the

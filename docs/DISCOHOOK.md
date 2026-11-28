@@ -24,8 +24,7 @@ website, and their **public API** (no key, no account) can:
 
 ## 2. Exactly what the monitor uses it for (round 12+)
 
-After each **successful** Discord post, the Reddit V3 script (and the
-Twitter V2/V3 scripts' preview equivalent) does one best-effort call:
+After each **successful** Discord post, the Reddit and Twitter V3 scripts do one best-effort call:
 
 ```
 POST https://discohook.app/api/v1/share
@@ -89,5 +88,5 @@ separate, explicit change — not something this repo quietly depends on.
 
 ---
 
-*Files involved: `create_discohook_share()` in the Reddit V3 / X V2/V3
+*Files involved: `create_discohook_share()` in the Reddit and Twitter V3
 scripts, `DISCOHOOK_PREVIEW` switch, `DISCOHOOK_SHARE_*` constants.*
