@@ -18,7 +18,7 @@ clickable buttons, and automatic **English translation** for non-English tweets.
 
 **No bot token. No gateway. No server. Just GitHub Actions + Discord webhooks.**
 
-[Quick start](#-quick-start) · [Features](#-features) · [Configuration](#-configuration) · [Engines](#-engines-v1v2v3) · [Testing](#-testing--verification) · [Troubleshooting](#-troubleshooting) · [Changelog](#-changelog)
+[Quick start](#-quick-start) · [Features](#-features) · [Configuration](#-configuration) · [Engines](#-engines) · [Testing](#-testing--verification) · [Troubleshooting](#-troubleshooting) · [Changelog](#-changelog)
 
 </div>
 
@@ -28,7 +28,7 @@ clickable buttons, and automatic **English translation** for non-English tweets.
 
 | | | |
 |---|---|---|
-| [How it works](#-how-it-works) | [Features](#-features) | [Engines (V1/V2/V3)](#-engines-v1v2v3) |
+| [How it works](#-how-it-works) | [Features](#-features) | [Engines](#-engines) |
 | [Repository contents](#-repository-contents) | [Quick start](#-quick-start) | [Configuration](#-configuration) |
 | [Reddit delivery pipeline](#-reddit-delivery-pipeline) | [Testing & verification](#-testing--verification) | [Integrations](#-integrations) |
 | [Troubleshooting](#-troubleshooting) | [Credits](#-credits--acknowledgments) | [Docs index](#-docs-index) |
@@ -109,43 +109,16 @@ flowchart LR
 
 ---
 
-## 🔀 Engines (V1/V2/V3)
+## 🔀 Engines
 
-Both monitors ship **three interchangeable engines** — same monitoring, same
-routing, different Discord rendering. Switch by editing one `run:` line in the
-workflow; all engines are enrolled in the smoke suite and stay working.
+Both production workflows run the V3 implementation. The older Reddit V1/V2
+and Twitter V1/V2 scripts have been removed; the workflows, tests, and setup
+documentation now describe only the maintained engines.
 
-**X (Twitter)** — edit `.github/workflows/twitter_monitor.yml`:
-
-| | `twitter_v1.py` | `twitter_v2_button_outside.py` | `twitter_v3.py` — **active** |
-|---|---|---|---|
-| Look | Plain text + fxtwitter link (Discord auto-unfurls) | Components V2 card, buttons **outside** | Components V2 card, buttons **inside** |
-| Cost | Free | Free | Free |
-
-```yaml
-# run: python "testing area/twitter_v1.py"               # V1
-# run: python "testing area/twitter_v2_button_outside.py" # V2
-run: python "testing area/twitter_v3.py"                 # V3 (active)
-```
-
-**Reddit** — edit `.github/workflows/reddit_monitor.yml`:
-
-| | `reddit_main.py` (V1, inactive) | `reddit_main_v2_embedez.py` (V2, inactive) | `reddit_main_v3.py` (V3 — **active**) |
-|---|---|---|---|
-| Status | Retained for historical/local comparison; not selected by the production workflow | Retained for local card-layout comparison; not selected by the production workflow | The only Reddit engine selected by `reddit_monitor.yml` |
-| Cost | **Free, no API key** | EmbedEZ API key (paid credits; limited preview without one) | **Free, no API key** |
-| Look | `redditez.com` link, Discord auto-embeds | Components V2 card, updated to V3's section order and multi-gallery layout | Components V2 card from Reddit's own URLs |
-| Media | whatever the mirror unfurls | EmbedEZ media, grouped into photo galleries and a separate video gallery | every photo, video-only video posts, native video chain |
-
-```yaml
-# run: python "testing area/reddit_main.py"             # V1
-# run: python "testing area/reddit_main_v2_embedez.py"  # V2
-run: python "testing area/reddit_main_v3.py"            # V3 (active)
-```
-
-> The V1/V2 Reddit scripts are inactive legacy renderers; uncommenting one is a manual local choice, not a production setting. The production workflow continues to run V3 only. Twitter engine selection is independent.
-
----
+| Monitor | Active implementation | Workflow |
+|---|---|---|
+| X (Twitter) | `testing area/twitter_v3.py` | `.github/workflows/twitter_monitor.yml` |
+| Reddit | `testing area/reddit_main_v3.py` | `.github/workflows/reddit_monitor.yml` |
 
 ## 🗂 Repository contents
 
@@ -167,9 +140,9 @@ run: python "testing area/reddit_main_v3.py"            # V3 (active)
 ├── devvit/                        # the Devvit relay (Reddit → Discord intake channel)
 ├── docs/                          # decision records + guides (see Docs index below)
 ├── testing area/                  # the engines (see Testing)
-│   ├── twitter_v1.py · twitter_v2_button_outside.py · twitter_v3.py
+│   ├── twitter_v3.py
 │   ├── twitter_proxy.py           # X tweet-data fallback chain
-│   ├── reddit_main.py · reddit_main_v2_embedez.py · reddit_main_v3.py
+│   ├── reddit_main_v3.py
 │   ├── reddit_proxy.py            # Reddit proxy services + health state
 │   ├── reddit_signals.py          # pure Reddit gate/decision functions
 │   └── video_diag.py              # X video tile diagnostic
@@ -333,7 +306,6 @@ schedule `*/10 * * * *`, and add the same environment variables there.
 | `REDDIT_FEED_TOKEN` *(optional — **recommended**)* | Your personal Reddit feed token: `old.reddit.com/prefs/feeds` → copy any feed link **exactly as shown** — the full private RSS URL `https://old.reddit.com/.rss?feed=<40-char-key>&user=<username>` works, and so do `https://www.reddit.com/.rss?feed=…`, `https://reddit.com/.rss?feed=…`, `https://old.reddit.com/?feed=…`, `?feed=<key>&user=<username>`, `<key>&user=<username>`, or bare `<key>` (query-only, host/path-agnostic). Moves RSS requests to the logged-in rate tier (429s essentially stop) |
 | `DISCORD_BOT_TOKEN` *(round 101)* | Bot token of a Discord application that is in your server with **View Channels** + **Read Message History** on the intake channel and the **Message Content Intent** enabled. Lets the engine read the Devvit relay channel; without it (or `INTAKE_CHANNEL_ID`) the engine runs the RSS/redlib/archive chain as before |
 | `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` *(optional — V3)* | Reddit **script app** (reddit.com/prefs/apps → type "script" → redirect `http://localhost`). Enables V3 **FULL MODE** (stats, crosspost embeds) via OAuth. V3 works without it; drop both secrets in whenever the app exists and FULL MODE turns on with no code change |
-| `EMBEDEZ_API_KEY` | **V2 only** — from your embedez.com dashboard |
 | `DISCORD_WEBHOOK_URL` *(optional)* | Catch-all fallback |
 
 The supplied production inventory does not list dedicated webhook secrets for the three new
@@ -363,7 +335,6 @@ Upload the updated manifest to set defaults for future installations.
 | `PROXY_MAX_CONCURRENCY` | `8` | global cap on in-flight proxy requests |
 | `YOUTUBE_LINK_MESSAGE` | `1` | `0` = don't post the second bare YouTube link (playable embed) after the card |
 | `DISCOHOOK_PREVIEW` | `on` | `0` = don't create/log the per-card Discohook share-link preview |
-| `REDDIT_MIRROR` *(V1 only)* | `redditez.com` | embed mirror host: `embeddit.deltandy.me` or `vxreddit.com` |
 
 **Reddit V3 — delivery & gates**
 
@@ -652,8 +623,6 @@ See [`docs/PYTHON_RUNTIME.md`](docs/PYTHON_RUNTIME.md) for the full policy and
 * **No run at 10-minute marks** — GitHub's native cron is best-effort; that's
   why cron-job.org does the triggering. It's also immune to GitHub's 60-day
   schedule auto-disable.
-* **Reddit V2 posts "Limited preview" cards** — missing/invalid
-  `EMBEDEZ_API_KEY` or out of credits; switch to free V1/V3.
 * **First run posts only one item per account** — intentional anti-flood
   behavior; backfill starts on subsequent runs.
 * **A big video shows as a thumbnail / "smaller version" note (X)** — the
@@ -703,9 +672,10 @@ services — please support them:
 | **FxTwitter / FxEmbed** by [@dangered wolf](https://github.com/dangeredwolf) | Rich X/Twitter embeds + the free API — primary tweet-data source (round 11) used for media, stats, translation, GIF re-rendering and the video proxy | [fxtwitter.com](https://fxtwitter.com) · [docs.fxembed.com](https://docs.fxembed.com/) · 💖 [Sponsor](https://github.com/sponsors/dangeredwolf) |
 | **Vercel `react-tweet`** | Open-source reference for the public X syndication token formula used by the poll-art fallback; News Express does not depend on this package | [Source](https://github.com/vercel/react-tweet/blob/main/packages/react-tweet/src/api/fetch-tweet.ts) |
 | **vxtwitter (BetterTwitFix / fixvx)** | Backup tweet-data API (round 11) + its **gifconvert** GIF converter | [vxtwitter.com](https://vxtwitter.com) · [API docs](https://vxtwitter.com/api.md) |
-| **EmbedEZ** | Rich Reddit embeds (redditez.com mirror) + the provider API used by Reddit V2 + last-resort tweet-data source (round 11) | [embedez.com](https://embedez.com/) · [API docs](https://embedez.com/docs) |
-| **Embeddit** by [@DeltAndy123](https://github.com/DeltAndy123) | Alternative Reddit embed mirror (credited — its button was removed in the 2026-09-11 trim) | [GitHub](https://github.com/DeltAndy123/Embeddit) |
-| **vxReddit** by [@dylanpdx](https://github.com/dylanpdx) | Alternative Reddit embed mirror (credited — its button was removed in the 2026-09-11 trim) | [vxreddit.com](https://vxreddit.com) · [GitHub](https://github.com/dylanpdx/vxreddit) |
+| **EmbedEZ** | Keyless Reddit media/post-data fallback and last-resort X tweet-data source | [embedez.com](https://embedez.com/) · [API docs](https://embedez.com/docs) |
+| **RedditEZ** | Reddit proxy/media service used by the active Reddit V3 fallback chain | [RedditEZ](https://www.redditez.com/) |
+| **Embeddit** by [@DeltAndy123](https://github.com/DeltAndy123) | Reddit V3 media fallback provider | [GitHub](https://github.com/DeltAndy123/Embeddit) |
+| **vxReddit** by [@dylanpdx](https://github.com/dylanpdx) | Reddit V3 media fallback provider | [vxreddit.com](https://vxreddit.com) · [GitHub](https://github.com/dylanpdx/vxreddit) |
 | **Redlib** (community instances) | Reddit front-end mirrors — **28-member fleet refreshed 2026-10-27** (`REDDIT_RSS_INSTANCES`): `www.reddit.com` + `old.reddit.com` + token-gated `redlib.miningtcup.me` + 8 verified dual-path hosts (`catsarch`, `privacyredirect`, `snoo.habedieeh.re`, `tiekoetter.com`, `nohost.network`, `privadency 1/2`, `idevicehacked`) + 5 listing-only reserves (`artemislena`, `awy.one`, `kylrth.com`, `freedit.eu`, `utilibre.org`) + 3 tail restores (`privadency.com`, `safereddit.com`, `nadeko.net`; kept per live #9283 partial success) + 6 appended tail mirrors (`redlib.mint.lgbt`, `reddit.jeremyh.xyz`, `redlib.jeikobu.net`, `redlib.vanillax.me`, `redlib.reallyaweso.me`, `redlib.ducks.party`) + 3 round-92 tail mirrors (`r.naa.gg`, `redlib.thepixora.com`, `redlib.r4fo.com` — sibling-reported, not probed from CI), with `redlib.cow.rip` deliberately excluded for its Cloudflare interstitial. Post-page enrichment probes the 10 verified post-page-capable mirrors first and only falls back to the remaining 18 when that wave misses | [redlib-instances](https://github.com/redlib-org/redlib-instances) · [redlib](https://github.com/redlib-org/redlib) · [mitchross/redlib](https://github.com/mitchross/redlib) |
 | **Arctic Shift** by [@ArthurHeitmann](https://github.com/ArthurHeitmann) | Optional Reddit archive JSON for V3 crosspost originals, ordered galleries, text/media fallbacks, and the per-subreddit search backup feed (round 17). Archive freshness varies — archived counts are labelled on the card | [GitHub](https://github.com/ArthurHeitmann/arctic_shift) · [Website](https://arctic-shift.photon-reddit.com/) · [Download tool](https://arctic-shift.photon-reddit.com/download-tool) |
 | **cron-job.org** | Free external scheduler that triggers the workflows reliably every 10 minutes | [cron-job.org](https://cron-job.org) |
@@ -808,7 +778,7 @@ Historical records are preserved in
 
 ## 📄 Final notes
 
-* All engines are independent — mix and match freely (e.g. X on V3, Reddit on V1).
+* The X and Reddit V3 monitors run independently in their respective workflows.
 * The project docs include the [Privacy Policy](PRIVACY_POLICY.md) and
   [Terms of Service](TERMS_OF_SERVICE.md).
 * Be nice to the free services this project uses: keep the cron interval

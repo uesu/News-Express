@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — retire legacy Reddit and Twitter engines
+
+Remove the unused Reddit V1/V2 and Twitter V1/V2 scripts and their legacy-only
+settings, workflow switch instructions, parity tests, and setup guidance. The
+Reddit V3 and Twitter V3 workflows and implementations remain the only supported
+engines. Update current repository, privacy, service, and operator documentation
+to match; retain the dated history archive as historical record. Preserve the
+active V3 fallback integrations and the EmbedEZ and RedditEZ credits. This is
+source and documentation housekeeping only: no active engine logic, runtime
+behavior, scheduling, cache formats, or production settings are changed. The older
+unreleased notes below preserve the context of those changes before this retirement.
+
 ## Unreleased — remove r/ArknightsEndfield from the shared Devvit relay
 
 Remove `ArknightsEndfield` from the relay's default target list following the
@@ -11,8 +23,9 @@ from manifest defaults.
 
 ## Unreleased — add News-Express sources and shared Game-Express relay targets
 
-Add the News-Express Reddit communities `SilverPalaceLeak`, `NTELeaks`, and
-`ArknightsEndfieldLeak` to all three Reddit engines. Add the separate
+At that time, add the News-Express Reddit communities `SilverPalaceLeak`,
+`NTELeaks`, and `ArknightsEndfieldLeak` to the then-present Reddit engine files
+(the V1/V2 comparison scripts have since been retired). Add the separate
 Game-Express communities `NevernessToEverness`, `SilverPalaceOfficial`,
 `Endfield`, and `ArknightsEndfield` to the shared Devvit relay's target list
 only. Add X accounts `NTE_GL`, `AKEndfield`, and `SilverPalace_EN` to the
@@ -32,8 +45,8 @@ supplied production inventory did not list them. Game-Express's own per-game
 
 ## Unreleased — Relay-delivered Reddit posts are not age-filtered (Round 120)
 
-The inactive V2 Reddit renderer was also polished to follow the active V3
-Components V2 card order: header/body, media galleries (photos grouped by ten,
+At the time of this change, the inactive V2 Reddit renderer was also polished
+to follow the active V3 Components V2 card order: header/body, media galleries (photos grouped by ten,
 video kept separate), stats, action row, and support footer. This is presentation
 parity for local comparison only; it does not activate the legacy script or
 change the production workflow, intake selection, discovery policy, or the

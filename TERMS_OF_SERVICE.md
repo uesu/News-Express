@@ -67,10 +67,9 @@ may include the current 28-member fleet: `redlib.catsarch.com`, `redlib.privacyr
 (arctic-shift.photon-reddit.com — Reddit archive: crosspost originals and, since round 17, a
 per-subreddit search backup feed), the independent "fastgif" GIF converter
 (fastgif-production.up.railway.app, used only as a probe-verified last-resort fallback — offline as
-of 2026-09-17), EmbedEZ (Reddit V2, redditez.com, and — since round 11 — last-resort tweet data via
-twitterez.com), the redditez.com /
-Embeddit (embeddit.deltandy.me) / vxReddit (vxreddit.com) Reddit-embed mirrors (V1 switchable; also
-Reddit V3 proxy-media sources fetched directly for public post data),
+of 2026-09-17), EmbedEZ (the RedditEZ-backed Reddit V3 proxy-media source and — since round 11 — last-resort
+tweet data via twitterez.com), Embeddit (embeddit.deltandy.me) and vxReddit (vxreddit.com) as
+Reddit V3 proxy-media sources fetched directly for public post data,
 reddit.com RSS and Reddit's own media CDNs (i.redd.it / preview.redd.it / v.redd.it), the
 proxy.embedez.com / vxreddit.com video-muxing fallbacks (Reddit V3, used only when Reddit's own
 video files are unavailable), i.ytimg.com (YouTube thumbnails), discohook.app (optional per-card share-link preview, on by

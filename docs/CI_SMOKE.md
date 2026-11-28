@@ -97,10 +97,9 @@ production repositories), and manual review for new minor series such as Python
 * **Offline by design** — it must run on GitHub runners and on any machine
   without the real environment: `aiohttp`, `feedparser` and `dotenv` are
   stubbed if not installed, and no check opens a connection.
-* **Import gate for every engine** — all monitor scripts
-  (`testing area/twitter_v1.py`, the X V2/V3 test copies + the
-  `testing area/twitter_proxy.py` fallback module, Reddit V1/V2/V3,
-  `testing area/video_diag.py`) must import without error.
+* **Import gate for maintained scripts** — the active Reddit and X V3
+  engines, their proxy/signal helpers, and `testing area/video_diag.py` must
+  import without error.
   This is the check that fails on a mangled paste or a breaking dependency
   bump.
 * **Pipeline checks** — the Reddit V3 card logic is exercised with fixtures

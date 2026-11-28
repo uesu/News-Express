@@ -12,7 +12,10 @@ topic guides in [`docs/`](../) stay focused on the current shipped behavior.
 
 Rounds 63+ are summarized in [`docs/CHANGELOG.md`](../CHANGELOG.md) (moved out
 of the README on 2026-10-06; the README's Changelog section is now a short
-pointer to that file and to this archive).
+pointer to that file and to this archive). The dated records are preserved as
+historical snapshots; old engine paths and configuration notes in them do not
+represent the current supported setup. Legacy Reddit V1/V2 and Twitter V1/V2
+implementations were retired in the current cleanup; V3 remains active.
 Moved here on 2026-10-05 (README restructure); stale deployment artifacts of
 already-merged rounds (`round_46b.patch`, `bump_3.14.8.patch` — superseded by
 the automated `python_version_bump.yml` workflow — and the copy-paste PR
