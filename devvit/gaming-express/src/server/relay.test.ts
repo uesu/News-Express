@@ -271,7 +271,7 @@ test('parseUsers: strips u/ and user/, de-dups, keeps Reddit-legal names only', 
   assert.deepEqual(parseUsers(''), [])
 })
 
-test('settings defaults: the nineteen News- and Game-Express subreddits and three verified publisher accounts parse untouched', () => {
+test('settings defaults: the eighteen News- and Game-Express subreddits and three verified publisher accounts parse untouched', () => {
   const cfg = JSON.parse(
     readFileSync(new URL('../../devvit.json', import.meta.url), 'utf8'),
   ) as {
@@ -285,7 +285,7 @@ test('settings defaults: the nineteen News- and Game-Express subreddits and thre
   const users = cfg.settings.global.officialUsers?.defaultValue ?? ''
   assert.ok(subs.length <= 250)
   assert.ok(additionalSubs.length <= 250)
-  assert.equal(allSubs.length, 19)
+  assert.equal(allSubs.length, 18)
   assert.deepEqual(allSubs, [...subs.split(','), ...additionalSubs.split(',')])
   // Game-Express sources (config/games.json → reddit.subreddits / reddit.official).
   for (const s of [
@@ -298,9 +298,9 @@ test('settings defaults: the nineteen News- and Game-Express subreddits and thre
     'NevernessToEverness',
     'SilverPalaceOfficial',
     'Endfield',
-    'ArknightsEndfield',
   ])
     assert.ok(allSubs.includes(s), s)
+  assert.ok(!allSubs.includes('ArknightsEndfield'))
   // News-Express-specific additions stay in the shared relay configuration too.
   for (const s of ['SilverPalaceLeak', 'NTELeaks', 'ArknightsEndfieldLeak'])
     assert.ok(allSubs.includes(s), s)

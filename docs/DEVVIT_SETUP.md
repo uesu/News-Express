@@ -84,13 +84,13 @@ Messages are sent with `allowed_mentions: {parse: []}`, so a title can never pin
 | Setting | Default |
 | --- | --- |
 | `subreddits` | First 14 targets (240 characters; kept below the Devvit CLI's 250-character setting limit): `AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_,SilverPalaceLeak,NTELeaks,ArknightsEndfieldLeak,Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima` |
-| `subredditsAdditional` | Final five targets: `AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield,ArknightsEndfield` — combined with `subreddits` for 19 total |
+| `subredditsAdditional` | Final four targets: `AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield` — combined with `subreddits` for 18 total |
 | `officialUsers` | `genshinimpact,HonkaiStarRail,HonkaiNexusAnima` — the verified accounts that actually post (audit below). Optional: every one of them posts only into its own subreddit, which is already in `subreddits`, so this is a second path, not the only one. May be left empty. |
 | `relayEnabled` | `true` |
 
-19 subreddit calls + 3 account calls every 3 minutes = about 7.3 listing requests/min. At the
-20-post re-check cap, the theoretical total is at most 42 Reddit calls per 3-minute poll
-(14/min), still well inside the platform's 100 requests/min budget. The relay keeps its
+18 subreddit calls + 3 account calls every 3 minutes = 7 listing requests/min. At the
+20-post re-check cap, the theoretical total is at most 41 Reddit calls per 3-minute poll
+(13.7/min), still well inside the platform's 100 requests/min budget. The relay keeps its
 15-send per-poll cap (up to 5 sends/min when continuously saturated); overflow waits for the next
 tick. The first re-check remains due at 5 minutes and is picked up on the next 3-minute poll.
 The News-Express Discord reader's own schedule is separate and is not changed by this Devvit poll
@@ -214,7 +214,7 @@ below. The portal screenshot's 0.15.6 notice is cleared only by uploading a new 
    npx devvit settings set subreddits
    → AnantaLeaks,Genshin_Impact_Leaks,HonkaiNexusAnimaLeaks,HonkaiStarRail_leaks,WutheringWavesLeaks,Zenlesszonezeroleaks_,SilverPalaceLeak,NTELeaks,ArknightsEndfieldLeak,Genshin_Impact,HonkaiStarRail,ZZZ_Official,WutheringWaves,HonkaiNexusAnima
    npx devvit settings set subredditsAdditional
-   → AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield,ArknightsEndfield
+   → AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield
    npx devvit settings set officialUsers
    → genshinimpact,HonkaiStarRail,HonkaiNexusAnima
    npx devvit settings set relayEnabled
@@ -224,7 +224,7 @@ below. The portal screenshot's 0.15.6 notice is cleared only by uploading a new 
 
    `settings list` shows the keys, labels and types only — never the values — so a changed
    webhook is confirmed by the next record arriving in the new channel, not by the CLI.
-   Newly added targets are bootstrapped silently on their first poll (remembered, not sent). All seven new communities (three News-Express and four Game-Express) must be included here on the existing installation; changing `devvit.json` only changes the default captured by new installs.
+   Newly added targets are bootstrapped silently on their first poll (remembered, not sent). All six new communities (three News-Express and three Game-Express) must be included here on the existing installation; changing `devvit.json` only changes the default captured by new installs.
 
 6. Watch two or three polls, then `Ctrl+C` → `Y`:
 

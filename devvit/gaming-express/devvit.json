@@ -27,7 +27,7 @@
       "subredditsAdditional": {
         "type": "string",
         "label": "Additional subreddits to relay (part 2; comma separated, no r/)",
-        "defaultValue": "AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield,ArknightsEndfield"
+        "defaultValue": "AnantaOfficial,NevernessToEverness,SilverPalaceOfficial,Endfield"
       },
       "officialUsers": {
         "type": "string",

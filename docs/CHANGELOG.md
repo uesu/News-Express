@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — remove r/ArknightsEndfield from the shared Devvit relay
+
+Remove `ArknightsEndfield` from the relay's default target list following the
+subreddit removal request. The matching News-Express leak community
+`ArknightsEndfieldLeak` remains configured; it is a separate subreddit. Existing
+installations must update the persisted `subredditsAdditional` setting after
+uploading the new app version because Devvit does not overwrite saved settings
+from manifest defaults.
+
 ## Unreleased — add News-Express sources and shared Game-Express relay targets
 
 Add the News-Express Reddit communities `SilverPalaceLeak`, `NTELeaks`, and
